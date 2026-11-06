@@ -54,10 +54,29 @@ func tick(delta: float) -> void:
 			_respawn.erase(w)
 			w.revive()
 
+const SPACING := 22.0
+
 func step_all(delta: float, h: Hero) -> void:
 	for w in wolves:
 		w.step(delta, h)
+	_separate()
 	tick(delta)
+
+## Keep live wolves from stacking on one spot (they do not collide with each other).
+func _separate() -> void:
+	for i in wolves.size():
+		for j in range(i + 1, wolves.size()):
+			var a: Wolf = wolves[i]
+			var b: Wolf = wolves[j]
+			if not a.is_alive() or not b.is_alive(): continue
+			if a.state in ["bite", "lunge_warn", "lunge"] or b.state in ["bite", "lunge_warn", "lunge"]: continue
+			var d := b.position - a.position
+			var dist := d.length()
+			if dist < SPACING:
+				var dir := d.normalized() if dist > 0.01 else Vector2.RIGHT
+				var push := dir * minf((SPACING - dist) * 0.5, 1.5)
+				a.push(-push)
+				b.push(push)
 
 func _physics_process(delta: float) -> void:
 	step_all(delta, hero)

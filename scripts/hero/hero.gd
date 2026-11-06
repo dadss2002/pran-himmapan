@@ -6,6 +6,7 @@ extends CharacterBody2D
 signal shot(arrow: Arrow)
 signal died()
 signal respawned()
+signal rolled(dir: Vector2)
 
 const MANIFEST := "res://assets/hero/manifest.json"
 const ARROW_SCENE := preload("res://scenes/arrow.tscn")
@@ -85,6 +86,7 @@ func try_dodge(dir: Vector2) -> bool:
 	_released = true          # a shot in progress is cancelled: no arrow later
 	state = "roll"
 	_t = 0.0
+	rolled.emit(_roll_dir)
 	_refresh(true)
 	return true
 

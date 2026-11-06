@@ -203,7 +203,7 @@ func _chase(delta: float) -> void:
 	# run toward a slot around the hero so the pack spreads out
 	var slot := Vector2.ZERO
 	if pack and pack.wolves.size() > 1:
-		slot = Vector2(16, 0).rotated(TAU * pack.wolves.find(self) / pack.wolves.size())
+		slot = Vector2(26, 0).rotated(TAU * pack.wolves.find(self) / pack.wolves.size())
 	var to := _hpos() + slot - _pos()
 	var stop := n("bite_range") * 0.8
 	if to.length() > stop:
@@ -237,7 +237,7 @@ func _show_telegraph(on: bool, at := Vector2.ZERO) -> void:
 	if on:
 		if _telegraph == null:
 			_telegraph = FxSprite.make("lunge_warning", true)
-			_telegraph.z_index = -1
+			_telegraph.show_behind_parent = true   # under the wolf, above the floor
 			_telegraph.modulate = Color(1.25, 0.75, 0.75)
 			add_child(_telegraph)
 		_telegraph.position = at - _pos()
@@ -266,6 +266,9 @@ func _move(v: Vector2, dt: float) -> void:
 	_face(v)
 	if is_inside_tree(): move_and_collide(v * dt)
 	else: position += v * dt
+
+func push(v: Vector2) -> void:
+	_push(v)
 
 func _push(v: Vector2) -> void:
 	if is_inside_tree(): move_and_collide(v)
