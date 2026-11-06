@@ -33,3 +33,11 @@ static func build(manifest_path: String) -> SpriteFrames:
 static func anchor(manifest_path: String, anim: String) -> Vector2:
 	var a: Array = _manifest(manifest_path)["anchor"][anim]
 	return Vector2(a[0], a[1])
+
+## Every animation's feet anchor (cells may differ per animation, e.g. 64 vs 80 px canvases).
+static func anchors(manifest_path: String) -> Dictionary:
+	var out := {}
+	var a: Dictionary = _manifest(manifest_path)["anchor"]
+	for anim in a:
+		out[anim] = Vector2(a[anim][0], a[anim][1])
+	return out

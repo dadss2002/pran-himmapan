@@ -234,8 +234,10 @@ func _release() -> void:
 
 # ---------- visuals ----------
 
+const ANIM_OF_STATE := {"dead": "death"}
+
 func _anim_for(s: String) -> String:
-	var name := "%s_%s" % [s, Combat.DIRS[facing]]
+	var name := "%s_%s" % [ANIM_OF_STATE.get(s, s), Combat.DIRS[facing]]
 	if body.sprite_frames.has_animation(name):
 		return name
 	# fallbacks until the art exists: hurt/roll show idle/walk

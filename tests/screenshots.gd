@@ -89,7 +89,7 @@ func _run() -> void:
 		for w in p1.wolves:
 			if w.state == "dead" and w.body.modulate.a > 0.5: return true
 		return false, 900)
-	await _frames(8)
+	await _frames(36)   # let the fall-over clip finish before the fade
 	await _snap("m2a_wolf_death.png")
 	print("wolf death seen: ", died)
 	Input.action_release("attack")

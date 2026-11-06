@@ -13,6 +13,22 @@
     "pose": [
       64,
       64
+    ],
+    "run": [
+      80,
+      80
+    ],
+    "bite": [
+      80,
+      80
+    ],
+    "lunge": [
+      80,
+      80
+    ],
+    "death": [
+      80,
+      80
     ]
   },
   "frames": {
@@ -25,15 +41,75 @@
       "north-west": 1,
       "west": 1,
       "south-west": 1
+    },
+    "run": {
+      "south": 8,
+      "south-east": 8,
+      "east": 8,
+      "north-east": 8,
+      "north": 8,
+      "north-west": 8,
+      "west": 8,
+      "south-west": 8
+    },
+    "bite": {
+      "south": 6,
+      "south-east": 6,
+      "east": 6,
+      "north-east": 6,
+      "north": 6,
+      "north-west": 6,
+      "west": 6,
+      "south-west": 6
+    },
+    "lunge": {
+      "south": 8,
+      "south-east": 8,
+      "east": 8,
+      "north-east": 8,
+      "north": 8,
+      "north-west": 8,
+      "west": 8,
+      "south-west": 8
+    },
+    "death": {
+      "south": 8,
+      "south-east": 8,
+      "east": 8,
+      "north-east": 8,
+      "north": 8,
+      "north-west": 8,
+      "west": 8,
+      "south-west": 8
     }
   },
   "fps": {
-    "pose": 1
+    "pose": 1,
+    "run": 14,
+    "bite": 17,
+    "lunge": 27,
+    "death": 12
   },
   "anchor": {
     "pose": [
       32,
       54
+    ],
+    "run": [
+      40,
+      63
+    ],
+    "bite": [
+      40,
+      63
+    ],
+    "lunge": [
+      40,
+      63
+    ],
+    "death": [
+      40,
+      63
     ]
   }
 }

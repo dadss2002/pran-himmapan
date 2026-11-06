@@ -54,7 +54,7 @@ func tick(delta: float) -> void:
 			_respawn.erase(w)
 			w.revive()
 
-const SPACING := 22.0
+const SPACING := 26.0
 
 func step_all(delta: float, h: Hero) -> void:
 	for w in wolves:
@@ -69,7 +69,7 @@ func _separate() -> void:
 			var a: Wolf = wolves[i]
 			var b: Wolf = wolves[j]
 			if not a.is_alive() or not b.is_alive(): continue
-			if a.state in ["bite", "lunge_warn", "lunge"] or b.state in ["bite", "lunge_warn", "lunge"]: continue
+			if a.state in ["lunge_warn", "lunge"] or b.state in ["lunge_warn", "lunge"]: continue
 			var d := b.position - a.position
 			var dist := d.length()
 			if dist < SPACING:

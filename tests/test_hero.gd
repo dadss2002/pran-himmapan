@@ -245,7 +245,10 @@ func test_death_and_respawn():
 	h.receive_hit(500, 1.0, Vector2.ZERO)
 	var r := ""
 	if h.state != "dead": r = "state %s != dead" % h.state
-	_run(h, 1.45)
+	elif not String(h.body.animation).begins_with("death_"): r = "dead hero plays %s, not the death clip" % h.body.animation
+	_run(h, 0.5)
+	if r == "" and not String(h.body.animation).begins_with("death_"): r = "death clip replaced by %s while dead" % h.body.animation
+	_run(h, 0.95)
 	if r == "" and _respawns != 0: r = "respawned too early"
 	_run(h, 0.1)
 	if r == "" and _respawns != 1: r = "respawned %d times" % _respawns

@@ -31,6 +31,7 @@ var _flash := 0.0
 var _hero: Hero = null
 var _telegraph: FxSprite = null
 var _setup_done := false
+var _anchors := {}
 
 func _ready() -> void:
 	setup()
@@ -43,7 +44,7 @@ func setup() -> void:
 	if shape == null: shape = $Feet
 	body.sprite_frames = SpriteSet.build(MANIFEST)
 	body.centered = false
-	body.offset = -SpriteSet.anchor(MANIFEST, body.sprite_frames.get_animation_names()[0].get_slice("_", 0))
+	_anchors = SpriteSet.anchors(MANIFEST)
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/flash.gdshader")
 	mat.set_shader_parameter("flash_color", Color.WHITE)
@@ -298,6 +299,7 @@ func _refresh(restart := false) -> void:
 	var a := _anim_for()
 	if restart or body.animation != a[0]:
 		body.play(a[0])
+		body.offset = -_anchors.get(String(a[0]).get_slice("_", 0), Vector2(32, 54))
 	body.speed_scale = a[1]
 	if state == "lunge_warn":
 		body.pause()
