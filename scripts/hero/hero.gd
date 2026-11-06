@@ -491,7 +491,7 @@ func current_target() -> Node2D:
 	var pts: Array = []
 	var hps: Array = []
 	for e in _enemies():
-		if is_instance_valid(e) and e.is_alive():
+		if is_instance_valid(e) and e.is_alive() and not (e.has_method("is_hidden") and e.is_hidden()):
 			live.append(e)
 			pts.append(e.hurt_point())
 			hps.append(e.hp if "hp" in e else 0)
@@ -504,7 +504,7 @@ func _aim() -> void:
 	var pts: Array = []
 	var hps: Array = []
 	for e in _enemies():
-		if is_instance_valid(e) and e.is_alive():
+		if is_instance_valid(e) and e.is_alive() and not (e.has_method("is_hidden") and e.is_hidden()):
 			live.append(e)
 			pts.append(e.hurt_point())
 			hps.append(e.hp if "hp" in e else 0)

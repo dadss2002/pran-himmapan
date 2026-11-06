@@ -15,6 +15,7 @@ var blocked := Callable()       # the room's blocked_at, for projectiles
 var wolves: Array = []
 var hero: Hero
 var nav: AStarGrid2D = null     # the map's walk grid (PaintedLayout.make_nav), shared by the pack
+var calm := 0.0                 # seconds the group ignores the hero (the room fade-in after a warp)
 var unreachable_at := Vector2.INF   # where the hero was when no route reached him: no re-aggro there
 var _lunger: Wolf = null
 var _respawn := {}      # Wolf -> seconds left
@@ -54,6 +55,7 @@ func _on_wolf_died(w: Wolf) -> void:
 	_respawn[w] = Balance.num("wolf.respawn")
 
 func tick(delta: float) -> void:
+	calm = maxf(0.0, calm - delta)
 	for w in _respawn.keys():
 		_respawn[w] -= delta
 		if _respawn[w] <= 0.0:

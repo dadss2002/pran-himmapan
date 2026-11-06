@@ -233,3 +233,114 @@ func test_rooms_hold_the_spec_monsters():
 		if low != lv[id]: return "%s lowest level %d (spec %d)" % [id, low, lv[id]]
 		if id == "c2r3" and high != 10: return "c2r3 has no Lv10 kongkoi"
 	return ""
+
+## Review fix: a passive monster that was hit fights alone; its calm group-mates stay calm.
+func test_hit_passive_does_not_wake_its_group():
+	var world: Node2D = await _world()
+	var h := _hero(world, Vector2(330, 300))
+	var p := _pack(world, "boar", Vector2(300, 300), 1, 3)
+	await _tick(p, h, 1)
+	var m: Monster = p.wolves[0]
+	m.provoked = true                      # hit while walking home, now idle at home
+	await _tick(p, h, 30)
+	var others := []
+	for w in p.wolves:
+		if w != m: others.append(w.state)
+	var st := m.state
+	_done(world)
+	if st == "idle": return "the provoked boar never went for the hero"
+	return "" if not ("chase" in others or "bite" in others or "lunge_warn" in others) else "group-mates joined: %s" % [others]
+
+## Review fix: the ring warning's fill polygons triangulate (no error spam, the fill shows).
+func test_ring_warning_fill_triangulates():
+	var r: Node2D = load("res://scripts/monsters/ring_warning.gd").new()
+	var tri := Geometry2D.triangulate_polygon(r._ellipse(40.0))
+	var line: PackedVector2Array = r._ellipse(40.0, true)
+	r.free()
+	if tri.is_empty(): return "ring fill does not triangulate"
+	return "" if line[0] == line[line.size() - 1] else "outline not closed"
+
+## Review fix: a hidden viper is not locked on to; once revealed it is.
+func test_hidden_viper_is_not_a_target():
+	var world: Node2D = await _world()
+	var h := _hero(world, Vector2(450, 300))
+	var p := _pack(world, "viper", Vector2(300, 300), 4)
+	await tree.physics_frame
+	var m: Monster = p.wolves[0]
+	m.global_position = Vector2(300, 300)
+	await _tick(p, h, 5)
+	var far: Node2D = h.current_target()
+	h.global_position = Vector2(350, 300)
+	await _tick(p, h, 5)
+	var near: Node2D = h.current_target()
+	_done(world)
+	if far != null: return "a hidden viper 150 px away is the hero's target"
+	return "" if near == m else "a revealed viper 50 px away is not targeted"
+
+## Review fix: a deer that stops fleeing inside its leash walks home without healing.
+func test_deer_flee_does_not_heal_inside_leash():
+	var world: Node2D = await _world()
+	var h := _hero(world, Vector2(330, 300))
+	var p := _pack(world, "deer", Vector2(300, 300), 3)
+	await _tick(p, h, 1)
+	var m: Monster = p.wolves[0]
+	m.global_position = Vector2(300, 300)
+	m.receive_hit(20, 1.0, h.global_position)
+	var hurt := m.health.hp
+	await _tick(p, h, 240, func(): if m.global_position.distance_to(m.home) > 300.0: m.global_position = m.home + (m.global_position - m.home).limit_length(300.0))
+	var hp := m.health.hp
+	var st := m.state
+	_done(world)
+	if hurt >= m.health.max_hp: return "the test hit did no damage"
+	return "" if hp == hurt else "deer healed %d -> %d after fleeing inside the leash (state %s)" % [hurt, hp, st]
+
+## Review fix (spec §2): the macaque hops back once, about hop_back px, when the hero is under 50 px.
+func test_macaque_hops_back_once():
+	var world: Node2D = await _world()
+	var h := _hero(world, Vector2(330, 300))
+	var p := _pack(world, "macaque", Vector2(300, 300), 3)
+	await _tick(p, h, 1)
+	var m: Monster = p.wolves[0]
+	m.global_position = Vector2(300, 300)
+	m.start_chase(h)
+	h.global_position = Vector2(330, 300)
+	var start := m.global_position
+	var hopped := [false]
+	await _tick(p, h, 16, func(): if m.state == "hop": hopped[0] = true)
+	var moved := m.global_position.distance_to(start)
+	_done(world)
+	if not hopped[0]: return "no hop with the hero 30 px away"
+	return "" if moved >= 45.0 and moved <= 75.0 else "hop moved %d px (want ~60)" % moved
+
+## Review fix: right after a warp (screen fading in) a group does not notice the hero.
+func test_group_calm_during_fade():
+	var world: Node2D = await _world()
+	var h := _hero(world, Vector2(380, 300))
+	var p := _pack(world, "wolf", Vector2(300, 300), 1, 1)
+	await tree.physics_frame
+	p.wolves[0].global_position = Vector2(300, 300)
+	p.calm = 0.3
+	await _tick(p, h, 10)
+	var during: String = p.wolves[0].state
+	await _tick(p, h, 20)
+	var after: String = p.wolves[0].state
+	_done(world)
+	if during != "idle": return "wolf %s during the fade" % during
+	return "" if after != "idle" else "wolf never noticed the hero after the fade"
+
+## Review fix: no group that attacks first has its home within its aggro range of a warp arrival.
+func test_no_aggressive_home_by_an_arrival():
+	var rooms := RoomSet.open()
+	var bad := []
+	for id in rooms.ids():
+		for m in rooms.room(id).get("monsters", []):
+			var k := String(m.kind)
+			var t := "aggressive" if k == "wolf" else String(Balance._lookup("monsters.%s.temper" % k))
+			if t != "aggressive" and t != "ambush": continue
+			var path := "monsters.%s.aggro" % k
+			var aggro := Balance.num(path) if Balance.has(path) else Balance.num("wolf.aggro")
+			var home := Vector2(m.at[0], m.at[1])
+			for w in rooms.room(id).warps:
+				var d := rooms.arrival(id, w.id).distance_to(home)
+				if d <= aggro: bad.append("%s %s by %s arrival: %d px (aggro %d)" % [id, k, w.id, d, aggro])
+	return "" if bad.is_empty() else ", ".join(bad)

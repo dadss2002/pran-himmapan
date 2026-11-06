@@ -24,13 +24,15 @@ func _process(delta: float) -> void:
 func progress() -> float:
 	return _t / warn
 
-func _ellipse(r: float) -> PackedVector2Array:
+## 32 points for the fills (an open polygon triangulates); closed=true repeats the first for the outline.
+func _ellipse(r: float, closed := false) -> PackedVector2Array:
 	var pts := PackedVector2Array()
-	for i in 33: pts.append(Vector2(r, 0).rotated(TAU * i / 32) * Vector2(1, SQUASH))
+	for i in 32: pts.append(Vector2(r, 0).rotated(TAU * i / 32) * Vector2(1, SQUASH))
+	if closed: pts.append(pts[0])
 	return pts
 
 func _draw() -> void:
 	var fill := Color(color, 0.22)
 	draw_colored_polygon(_ellipse(radius), fill)
 	draw_colored_polygon(_ellipse(maxf(1.0, radius * progress())), Color(color, 0.4))
-	draw_polyline(_ellipse(radius), Color(color, 0.95), 1.5)
+	draw_polyline(_ellipse(radius, true), Color(color, 0.95), 1.5)

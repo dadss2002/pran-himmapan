@@ -78,7 +78,13 @@ func manifest_path() -> String:
 ## Whether the idle wolf starts a chase with the hero this far away.
 func _wants_aggro(dist: float) -> bool:
 	var walled_off := pack != null and pack.unreachable_at.distance_to(_hpos()) < 24.0
-	return dist <= n("aggro") and not walled_off
+	var calm := pack != null and pack.calm > 0.0
+	return dist <= n("aggro") and not walled_off and not calm
+
+## The idle wolf saw the hero: the whole pack joins in.
+func _start_aggro() -> void:
+	if pack: pack.alert(_hero)
+	else: start_chase(_hero)
 
 ## Hit while idle: the whole pack joins in.
 func _on_provoked() -> void:
@@ -206,8 +212,7 @@ func step(delta: float, hero: Hero) -> void:
 			visible = body.modulate.a > 0.0
 		"idle":
 			if alive_hero and _wants_aggro(_pos().distance_to(_hpos())):
-				if pack: pack.alert(_hero)
-				else: start_chase(_hero)
+				_start_aggro()
 				if state == "chase":
 					_chase(delta)   # react on the same frame
 			else:

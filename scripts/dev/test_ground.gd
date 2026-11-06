@@ -12,6 +12,7 @@ var room_id := ""
 var warps: Array = []
 var cam: Camera2D
 var fade: ColorRect
+const FADE := 0.3
 var _navs := {}
 var layout: PaintedLayout
 var forest: PaintedMap
@@ -112,7 +113,8 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		_add_group(m, _navs[id])
 	if with_fade and is_inside_tree():
 		fade.color.a = 1.0
-		create_tween().tween_property(fade, "color:a", 0.0, 0.3)
+		create_tween().tween_property(fade, "color:a", 0.0, FADE)
+		for p in packs: p.calm = FADE        # nobody notices the hero while the screen is still dark
 	save_now()
 	room_changed.emit(id)
 

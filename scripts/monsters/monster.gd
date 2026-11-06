@@ -17,6 +17,9 @@ var _ring_cd := 0.0
 var _throw_cd := 0.0
 var _flee_left := 0.0
 var _ring: Node2D
+var _retreating := false
+var _hop_dir := Vector2.RIGHT
+const HOP_TIME := 0.25
 const RING_SCENE := preload("res://scripts/monsters/ring_warning.gd")
 
 func cfg(key: String):
@@ -77,6 +80,11 @@ func _wants_aggro(dist: float) -> bool:
 			return provoked and super._wants_aggro(dist)
 	return false
 
+## A passive monster that was hit fights alone: its group-mates were not hit and stay calm.
+func _start_aggro() -> void:
+	if temper() == "passive": start_chase(_hero)
+	else: super._start_aggro()
+
 func _on_provoked() -> void:
 	match temper():
 		"flee":
@@ -105,8 +113,27 @@ func _go_home() -> void:
 	provoked = false
 	super._go_home()
 
+## Ends a flee: walks home, healing only past the leash like any wolf (spec §1), not just for running.
+func _walk_home() -> void:
+	if _pos().distance_to(home) > n("leash"):
+		_go_home()
+		return
+	_end_lunge()
+	provoked = false
+	state = "return"
+	_t = 0.0
+
+## Backing away from the hero (macaque) is not a stuck chase, even against a wall: no heal-and-reset.
+func _stuck(delta: float) -> bool:
+	if _retreating:
+		_retreating = false
+		_stuck_t = 0.0
+		_stuck_from = _pos()
+		return false
+	return super._stuck(delta)
+
 func _fight_states() -> Array:
-	return ["chase", "bite", "lunge_warn", "lunge", "ring_warn"]
+	return ["chase", "bite", "lunge_warn", "lunge", "ring_warn", "hop"]
 
 # ---------- custom states ----------
 
@@ -121,12 +148,18 @@ func _step_custom(delta: float) -> void:
 		"flee":
 			_flee_left -= delta
 			if _flee_left <= 0.0 or _hero == null:
-				_go_home()
+				_walk_home()
 				return
 			var away := _pos() - _hpos()
 			var goal := _pos() + (away.normalized() if away.length() > 0.1 else Vector2.RIGHT) * 48.0
 			var aim := _steer(goal, delta) - _pos()
 			_move(aim.normalized() * n("flee_speed"), delta)
+		"hop":
+			# one quick hop away from the hero: hop_back px in HOP_TIME, then back to keeping distance
+			_move(_hop_dir * n("hop_back") / HOP_TIME, delta)
+			if _t >= HOP_TIME:
+				state = "chase"
+				_t = 0.0
 		"ring_warn":
 			velocity = Vector2.ZERO
 			if _t >= n("ring_warn"):
@@ -170,7 +203,9 @@ func _chase_throw(delta: float) -> void:
 	var d := to_hero.length()
 	_face(to_hero)
 	if d < n("hop_back_under"):
-		_move(-to_hero.normalized() * n("hop_back") / 0.25, delta)    # quick hop back, 60 px in 0.25 s
+		_hop_dir = -to_hero.normalized() if d > 0.1 else Vector2.RIGHT
+		state = "hop"
+		_t = 0.0
 		return
 	if d > n("keep_max"):
 		var aim := _steer(_hpos(), delta) - _pos()
@@ -180,6 +215,7 @@ func _chase_throw(delta: float) -> void:
 			return
 		_move(aim.normalized() * n("run"), delta)
 	elif d < n("keep_min"):
+		_retreating = true
 		_move(-to_hero.normalized() * n("run") * 0.6, delta)
 	else:
 		velocity = Vector2.ZERO
