@@ -5,9 +5,10 @@ extends RefCounted
 ## Pure rules, no scene access: what blocks, and whether places can reach each other on foot.
 
 const PATH := "res://data/map_painted.json"
-## Free cells a body needs around its feet cell (x: ±1, y: -1..0): about the hero's 20×16 box.
+## Free cells a body needs around its feet cell (x: ±1, y: -2..0): the hero's 20×16 feet box sits at
+## y-14..y+2, so it can touch three rows.
 const CLEAR_X := 1
-const CLEAR_UP := 1
+const CLEAR_UP := 2
 
 var size := Vector2.ZERO
 var cell := 8
@@ -86,6 +87,21 @@ func reachable(a: Vector2, b: Vector2) -> bool:
 			seen[n.y * cols + n.x] = 1
 			queue.append(n)
 	return false
+
+## A walk grid for route finding: a cell is solid unless a hero-sized body fits with its feet there.
+func make_nav() -> AStarGrid2D:
+	var g := AStarGrid2D.new()
+	g.region = Rect2i(0, 0, cols, rows)
+	g.cell_size = Vector2(cell, cell)
+	g.offset = Vector2(cell, cell) / 2.0
+	g.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	g.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	g.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	g.update()
+	for y in rows:
+		for x in cols:
+			if not roomy(x, y): g.set_point_solid(Vector2i(x, y))
+	return g
 
 ## The points a pack's wolves spawn on (same ring WolfPack.spawn uses).
 static func ring(home: Vector2, count: int) -> Array:

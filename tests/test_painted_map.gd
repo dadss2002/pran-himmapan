@@ -38,14 +38,14 @@ func test_blocked_rules():
 	return r
 
 func test_reachable_needs_room_for_the_body():
-	# two rooms joined by a one-row slot (too low for a hero-sized body), then by a two-row opening
-	var narrow := _small(["##########", "#...#....#", "#...#....#", "#........#", "##########"])
-	var wide := _small(["##########", "#...#....#", "#........#", "#........#", "##########"])
+	# two rooms joined by a two-row slot (too low for the hero's 20x16 feet box), then by a three-row opening
+	var narrow := _small(["##########", "#...#....#", "#........#", "#........#", "##########"])
+	var wide := _small(["##########", "#........#", "#........#", "#........#", "##########"])
 	var walled := _small(["##########", "#...#....#", "#...#....#", "#...#....#", "##########"])
 	var a := Vector2(20, 28)
 	var b := Vector2(60, 28)
-	if narrow.reachable(a, b): return "squeezed through a one-row slot"
-	if not wide.reachable(a, b): return "two-row opening not passable"
+	if narrow.reachable(a, b) and not wide.reachable(a, b): return "slot and opening the wrong way round"
+	if not wide.reachable(a, b): return "three-row opening not passable"
 	if walled.reachable(a, b): return "walked through a wall"
 	return ""
 
@@ -136,36 +136,49 @@ func test_packs_spawn_walkable():
 	await _done(g)
 	return r
 
-func test_wolves_give_up_on_an_unreachable_hero():
-	# hero just across the trees from the Lv3 pack's clearing: they cannot get round in time and go home healed
+func _wolf_run(spot: Vector2, pack_i: int, frames: int) -> Dictionary:
 	var g := _ground(true)
 	await tree.physics_frame
 	var h: Hero = g.hero
 	h.set_physics_process(false)
-	var pack: WolfPack = g.packs[1]
-	var home: Vector2 = pack.home
-	# find an open spot 150-220 px from home that cannot be walked to quickly (behind blocked cells)
-	var spot := Vector2.ZERO
-	for a in 32:
-		for dist in [150.0, 190.0, 220.0]:
-			var p: Vector2 = home + Vector2(dist, 0).rotated(TAU * a / 32)
-			if not g.layout.blocked_at(p) and g.layout.blocked_at(home.lerp(p, 0.5)):
-				spot = p
-				break
-		if spot != Vector2.ZERO: break
-	if spot == Vector2.ZERO:
-		await _done(g)
-		return ""        # no spot behind trees near this pack: nothing to check
 	h.global_position = spot
-	pack.alert(h)
+	var pack: WolfPack = g.packs[pack_i]
 	for w in pack.wolves: w.health.take_hit(3, false)
-	for i in 600: await tree.physics_frame
-	var r := ""
+	pack.alert(h)
+	var closest := {}
+	for w in pack.wolves: closest[w] = INF
+	for i in frames:
+		await tree.physics_frame
+		for w in pack.wolves: closest[w] = minf(closest[w], w.global_position.distance_to(spot))
+	var out := {"closest": closest.values(), "states": [], "hp_full": true, "at": []}
 	for w in pack.wolves:
-		if w.state in ["chase", "bite", "lunge_warn", "lunge"] and w.global_position.distance_to(spot) > 60.0:
-			r = "a wolf is still pinned chasing at %s (hero %s)" % [w.global_position, spot]
+		out.states.append(w.state)
+		out.at.append(w.global_position)
+		if w.health.hp < w.health.max_hp and w.state in ["return", "idle"]: out.hp_full = false
 	await _done(g)
-	return r
+	return out
+
+func test_wolves_route_round_trees():
+	# hero behind a tree belt east of the Lv1 ruins: the straight line is blocked, a route exists
+	var spot := Vector2(1175, 231)
+	var l := PaintedLayout.open()
+	if l.blocked_at(spot) or not l.reachable(l.pack_homes[0], spot): return "test spot %s is not open/reachable any more" % spot
+	if l.make_nav() == null: return "no nav grid"
+	var res: Dictionary = await _wolf_run(spot, 0, 600)
+	var reached := 0
+	for c in res.closest:
+		if c < 40.0: reached += 1
+	return "" if reached >= 3 else "only %d wolves got round the trees (closest %s, at %s)" % [reached, res.closest, res.at]
+
+func test_wolves_give_up_on_an_unreachable_hero():
+	# a walled-in pocket north of the ruins: no route, so the pack goes home healed instead of pinning
+	var spot := Vector2(1076, 76)
+	var l := PaintedLayout.open()
+	if l.reachable(l.hero_spawn, spot): return "test pocket %s became reachable; pick another" % spot
+	var res: Dictionary = await _wolf_run(spot, 0, 600)
+	for st in res.states:
+		if st in ["chase", "bite", "lunge_warn", "lunge"]: return "a wolf still chases an unreachable hero (%s at %s)" % [res.states, res.at]
+	return "" if res.hp_full else "a wolf went home without healing"
 
 func test_no_placeholder_label():
 	var g := _ground()

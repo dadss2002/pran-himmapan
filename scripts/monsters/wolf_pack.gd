@@ -11,6 +11,8 @@ const WOLF_SCENE := preload("res://scenes/wolf.tscn")
 
 var wolves: Array = []
 var hero: Hero
+var nav: AStarGrid2D = null     # the map's walk grid (PaintedLayout.make_nav), shared by the pack
+var unreachable_at := Vector2.INF   # where the hero was when no route reached him: no re-aggro there
 var _lunger: Wolf = null
 var _respawn := {}      # Wolf -> seconds left
 

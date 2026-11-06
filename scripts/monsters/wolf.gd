@@ -28,6 +28,10 @@ var _lunge_from := Vector2.ZERO
 var _lunge_hit := false
 var _wander_to := Vector2.ZERO
 var _flash := 0.0
+var _path := PackedVector2Array()     # route round trees/water when the straight line is blocked
+var _path_goal := Vector2.INF
+var _path_t := 0.0
+var _no_route := false
 var _wanted_move := false          # set by _move this step; stuck checks only count frames spent trying
 var _stuck_t := 0.0
 var _stuck_from := Vector2.ZERO
@@ -179,7 +183,8 @@ func step(delta: float, hero: Hero) -> void:
 			body.modulate.a = 1.0 - clampf((_t - death_len) / n("death_fade"), 0.0, 1.0)
 			visible = body.modulate.a > 0.0
 		"idle":
-			if alive_hero and _pos().distance_to(_hpos()) <= n("aggro"):
+			var walled_off := pack != null and pack.unreachable_at.distance_to(_hpos()) < 24.0
+			if alive_hero and _pos().distance_to(_hpos()) <= n("aggro") and not walled_off:
 				if pack: pack.alert(_hero)
 				else: start_chase(_hero)
 				if state == "chase":
@@ -226,7 +231,8 @@ func step(delta: float, hero: Hero) -> void:
 				_wander_to = home
 				velocity = Vector2.ZERO
 			else:
-				_move(to_home.normalized() * n("run"), minf(delta, to_home.length() / n("run")))
+				var aim := _steer(home, delta) - _pos()
+				_move(aim.normalized() * n("run"), minf(delta, aim.length() / n("run")))
 	# Blocked by water or a trunk: a chase that makes no headway gives up (back home at full HP, so
 	# an unreachable hero can't farm the pack); a return that makes no headway snaps home.
 	if state in ["chase", "return"] and _stuck(delta):
@@ -276,9 +282,58 @@ func _chase(delta: float) -> void:
 		velocity = Vector2.ZERO
 		_face(_hpos() - _pos())
 		return
-	var to := _hpos() + slot - _pos()
+	var goal := _hpos() + slot
+	if (goal - _pos()).length() < 1.0: goal = _hpos()
+	var to := _steer(goal, delta) - _pos()
+	if _no_route:
+		# no way round (hero walled in or across water): go home healed, and don't re-aggro on
+		# the same spot, so a walled-off hero can't farm the pack
+		if pack: pack.unreachable_at = _hpos()
+		_go_home()
+		return
 	if to.length() < 1.0: to = _hpos() - _pos()
 	_move(to.normalized() * n("run"), minf(delta, maxf(to.length(), d - stop) / n("run")))
+
+## The point to run at on the way to goal: goal itself when the straight line is open, else the next
+## corner of a grid route (pack.nav, built from the map). No map or no route: goal (the stuck check
+## then sends the wolf home).
+func _steer(goal: Vector2, delta: float) -> Vector2:
+	_no_route = false
+	var nav: AStarGrid2D = pack.nav if pack != null else null
+	if nav == null or not is_inside_tree(): return goal
+	var from := _pos()
+	if _line_clear(nav, from, goal):
+		_path.clear()
+		return goal
+	_path_t -= delta
+	if _path.is_empty() or _path_t <= 0.0 or _path_goal.distance_to(goal) > 24.0:
+		_path_t = 0.3
+		_path_goal = goal
+		var a := _open_cell(nav, from)
+		var b := _open_cell(nav, goal)
+		_path = nav.get_point_path(a, b) if a.x >= 0 and b.x >= 0 else PackedVector2Array()
+		_no_route = _path.is_empty()
+	while _path.size() > 1 and (from.distance_to(_path[0]) < 6.0 or _line_clear(nav, from, _path[1])):
+		_path.remove_at(0)
+	return _path[0] if not _path.is_empty() else goal
+
+static func _line_clear(nav: AStarGrid2D, a: Vector2, b: Vector2) -> bool:
+	var steps := int(a.distance_to(b) / 4.0) + 1
+	for i in steps + 1:
+		var c := Vector2i((a.lerp(b, float(i) / steps) / nav.cell_size).floor())
+		if not nav.is_in_boundsv(c) or nav.is_point_solid(c): return false
+	return true
+
+## The cell under p, or the nearest open one within 3 cells (a wolf brushing a trunk stands in a
+## cell that is too tight to be open). Vector2i(-1, -1) when none.
+static func _open_cell(nav: AStarGrid2D, p: Vector2) -> Vector2i:
+	var c := Vector2i((p / nav.cell_size).floor())
+	for r in 4:
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var q := c + Vector2i(dx, dy)
+				if nav.is_in_boundsv(q) and not nav.is_point_solid(q): return q
+	return Vector2i(-1, -1)
 
 func _wander(delta: float) -> void:
 	var to := _wander_to - _pos()

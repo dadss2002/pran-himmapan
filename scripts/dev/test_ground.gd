@@ -57,6 +57,7 @@ func build() -> void:
 	cam.limit_right = int(layout.size_px().x)
 	cam.limit_bottom = int(layout.size_px().y)
 	hero.add_child(cam)
+	var nav := layout.make_nav()
 	var specs: Array = Balance.data()["packs"]
 	for i in specs.size():
 		var spec: Dictionary = specs[i]
@@ -64,6 +65,7 @@ func build() -> void:
 		pack.level = int(spec.level)
 		pack.count = int(spec.count)
 		pack.home = layout.pack_homes[i]
+		pack.nav = nav
 		pack.y_sort_enabled = true
 		pack.hero = hero
 		world.add_child(pack)
