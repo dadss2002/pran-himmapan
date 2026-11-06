@@ -80,3 +80,47 @@ func test_no_stray_specks():
 				if l.cell_blocked(x + 1, y) and l.cell_blocked(x - 1, y) and l.cell_blocked(x, y + 1) and l.cell_blocked(x, y - 1):
 					return "%s: lone walkable cell at %d,%d" % [id, x, y]
 	return ""
+
+## The hero (real physics, real feet shape) follows the walk route from the spawn to every warp and
+## between every pair of warps, in every room; it must get there in time and never stay stuck.
+func test_hero_walks_every_route():
+	var rs := RoomSet.open()
+	var hero: Hero = load("res://scenes/hero.tscn").instantiate()
+	var speed := Balance.num("hero.walk")
+	var fails := []
+	for id in rs.ids():
+		var root := Node2D.new()
+		tree.root.add_child(root)
+		var l := rs.layout(id)
+		var m := PaintedMap.new()
+		root.add_child(m)
+		m.build(l)
+		var h: Hero = load("res://scenes/hero.tscn").instantiate()
+		root.add_child(h)
+		h.set_physics_process(false)
+		var nav := l.make_nav()
+		var points := [l.hero_spawn]
+		for w in rs.room(id).warps: points.append(rs.warp_at(id, w.id))
+		for a in points:
+			for b in points:
+				if a == b: continue
+				h.global_position = a
+				await tree.physics_frame
+				var path := nav.get_point_path(Vector2i((a / 8.0).floor()), Vector2i((b / 8.0).floor()))
+				var length := 0.0
+				for i in range(1, path.size()): length += path[i].distance_to(path[i - 1])
+				var frames := int((length / speed * 1.6 + 1.0) * 60.0)
+				var k := 1
+				for f in frames:
+					while k < path.size() - 1 and h.global_position.distance_to(path[k]) < 6.0: k += 1
+					var target: Vector2 = path[mini(k, path.size() - 1)] if not path.is_empty() else b
+					var dir := target - h.global_position
+					if h.global_position.distance_to(b) < 12.0: break
+					h.step(1.0 / 60.0, dir.normalized() if dir.length() > 1.0 else Vector2.ZERO)
+					await tree.physics_frame
+				if h.global_position.distance_to(b) >= 12.0:
+					fails.append("%s %s->%s stopped at %s" % [id, a, b, h.global_position])
+		root.queue_free()
+		await tree.process_frame
+	hero.free()
+	return "" if fails.is_empty() else "%d routes failed, e.g. %s" % [fails.size(), fails.slice(0, 3)]

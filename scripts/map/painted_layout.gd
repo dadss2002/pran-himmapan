@@ -1,10 +1,9 @@
 class_name PaintedLayout
 extends RefCounted
-## The painted forest map as data (res://data/map_painted.json, written by tools/painted_map.py):
+## One painted forest room as data (a room of res://data/rooms.json, built by RoomSet.layout):
 ## PixelLab scene chunks, an 8 px blocked grid, leaf overlays, spawn and pack homes.
 ## Pure rules, no scene access: what blocks, and whether places can reach each other on foot.
 
-const PATH := "res://data/map_painted.json"
 ## Free cells a body needs around its feet cell (x: ±1, y: -2..0): the hero's 20×16 feet box sits at
 ## y-14..y+2, so it can touch three rows.
 const CLEAR_X := 1
@@ -22,7 +21,7 @@ var pack_homes: Array = []    # [Vector2]
 var from_room := false          # built from one room: packs are checked against its own homes only
 var _blocked := PackedByteArray()
 
-static func open(path := PATH) -> PaintedLayout:
+static func open(path: String) -> PaintedLayout:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null: return null
 	return from_dict(JSON.parse_string(f.get_as_text()))

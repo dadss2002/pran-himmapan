@@ -137,6 +137,11 @@ def main():
             hint = rs.get("hints", {}).get(side, [fx * SIZE[0], fy * SIZE[1]])
             warps.append({"id": side, "at": nearest_roomy(roomy, hint), "to": to, "to_warp": to_side})
         spawn = nearest_roomy(roomy, rs["spawn"]) if "spawn" in rs else None
+        monsters = []
+        for m in rs.get("monsters", []):
+            m = dict(m)
+            m["at"] = nearest_roomy(roomy, m["at"])   # a group's home on the main open ground
+            monsters.append(m)
         over = overlay(rgb, walk)
         ov_file = None
         if over.any():
@@ -145,7 +150,7 @@ def main():
                 f"{ROOT}/assets/map/painted/rooms/overlay_{rid}.png")
         room = {"image": f"res://assets/map/painted/raw/{rid}.png", "overlay": ov_file,
                 "blocked": ["".join("." if v else "#" for v in row) for row in walk],
-                "warps": warps, "fx": rs.get("fx", []), "monsters": rs.get("monsters", [])}
+                "warps": warps, "fx": rs.get("fx", []), "monsters": monsters}
         if spawn: room["spawn"] = spawn
         rooms[rid] = room
         # debug tile

@@ -383,7 +383,17 @@
 }
 ],
 "fx": [],
-"monsters": []
+"monsters": [
+{
+"kind": "wolf",
+"level": 1,
+"count": 4,
+"at": [
+332,
+196
+]
+}
+]
 },
 "c1r1": {
 "image": "res://assets/map/painted/raw/c1r1.png",
@@ -548,7 +558,17 @@
 }
 ],
 "fx": [],
-"monsters": []
+"monsters": [
+{
+"kind": "wolf",
+"level": 5,
+"count": 4,
+"at": [
+332,
+212
+]
+}
+]
 },
 "c1r3": {
 "image": "res://assets/map/painted/raw/c1r3.png",
@@ -851,7 +871,17 @@
 }
 ],
 "fx": [],
-"monsters": []
+"monsters": [
+{
+"kind": "wolf",
+"level": 3,
+"count": 3,
+"at": [
+300,
+188
+]
+}
+]
 },
 "c2r3": {
 "image": "res://assets/map/painted/raw/c2r3.png",
