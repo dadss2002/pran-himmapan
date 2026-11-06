@@ -26,10 +26,15 @@ static func facing_from_vector(v: Vector2, last: int) -> int:
 	return (idx + 8) % 8
 
 ## Roll the 0.9–1.1 factor and crit (5%), then apply `damage`. Monsters pass can_crit = false.
-static func roll_damage(atk: float, mult: float, def: float, can_crit: bool = true) -> Dictionary:
-	var crit := can_crit and rng.randf() < Balance.num("crit.chance")
+## crit_chance / crit_mult < 0 mean the base numbers (crit.chance, crit.mult); gear raises them.
+static func roll_damage(atk: float, mult: float, def: float, can_crit: bool = true, crit_chance := -1.0, crit_mult := -1.0) -> Dictionary:
+	var chance := crit_chance if crit_chance >= 0.0 else Balance.num("crit.chance")
+	var crit := can_crit and rng.randf() < chance
 	var roll := rng.randf_range(0.9, 1.1)
-	return {"amount": damage(atk, mult, def, crit, roll), "crit": crit}
+	var amount := damage(atk, mult, def, crit, roll)
+	if crit and crit_mult >= 0.0:
+		amount = max(1, int(round(float(amount) * crit_mult / Balance.num("crit.mult"))))
+	return {"amount": amount, "crit": crit}
 
 ## Index of the nearest target within max_range (ties within 0.5 px → lower hp), or -1.
 static func pick_target(origin: Vector2, positions: Array, hps: Array, max_range: float) -> int:

@@ -59,3 +59,13 @@
 | ช่องล็อก / ช่องว่าง | slot_locked.png / slot_empty.png | — |
 - ไอคอนทุกอันต้องมีพื้นในกรอบเป็นสีทึบ ห้ามมีส่วนโปร่งใส ให้รัน `tools/fill_icon_bg.py` ก่อนใช้
 - ในเกมให้ตัดไอคอนเป็นวงกลมแบบปุ่ม ROV ส่วนในหน้าต้นสกิลแสดงเป็นสี่เหลี่ยมเต็ม
+
+## ไอคอนอุปกรณ์ (M2c)
+| ชิ้น | ไฟล์ | หมายเหตุ |
+|---|---|---|
+| ธนูไม้ไผ่ / ธนูเขาควาย | bow_bamboo.png / bow_buffalo_horn.png | ใช้ทั้งไอคอนและธนูในมือ |
+| ชุดพรานฝึกหัด | outfit_green_hunter.png | |
+| ชุดหนังหมาป่า | outfit_silver_fur.png | |
+| แหวน | ring_silver_ruby.png | PixelLab batch2 (เจ้าของอนุมัติ 2026-11-06) · สำรอง: alt/ring_gold_emerald, alt/ring_silver_sapphire |
+| สร้อย | necklace_gold_amulet.png | PixelLab batch2 · สำรอง: alt/necklace_tiger_tooth, alt/necklace_jade |
+| เจม 10 แบบ | gem_<id>.png (split ricochet pierce homing multiply execute element expand extend leech) | PixelLab batch2 · สีตามกลุ่ม ฟ้า=ลูกศร แดง=ดาเมจ เขียว=พื้นที่/เวลา/ฟื้นเลือด |

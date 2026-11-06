@@ -27,12 +27,22 @@ static func num(path: String) -> float:
 	assert(v != null, "balance.json has no key " + path)
 	return float(v)
 
+## Level stats without any gear.
+static func hero_base(level: int) -> Dictionary:
+	var l := level - 1
+	return {
+		"hp": int(num("hero.hp_base") + num("hero.hp_per_level") * l),
+		"atk": int(num("hero.atk_base") + num("hero.atk_per_level") * l),
+		"def": int(num("hero.def_base") + num("hero.def_per_level") * l),
+	}
+
+## Level stats with the starting kit (bamboo bow + trainee armor), as in spec-numbers §2.
 static func hero(level: int) -> Dictionary:
 	var l := level - 1
 	return {
-		"hp": int(num("hero.hp_base") + num("hero.hp_per_level") * l + num("gear.trainee_armor.hp")),
-		"atk": int(num("hero.atk_base") + num("hero.atk_per_level") * l + num("gear.bamboo_bow.atk")),
-		"def": int(num("hero.def_base") + num("hero.def_per_level") * l + num("gear.trainee_armor.def")),
+		"hp": int(num("hero.hp_base") + num("hero.hp_per_level") * l + num("gear.armor_trainee.hp")),
+		"atk": int(num("hero.atk_base") + num("hero.atk_per_level") * l + num("gear.bow_bamboo.atk")),
+		"def": int(num("hero.def_base") + num("hero.def_per_level") * l + num("gear.armor_trainee.def")),
 	}
 
 static func wolf(level: int) -> Dictionary:

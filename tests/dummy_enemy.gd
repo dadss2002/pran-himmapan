@@ -11,6 +11,6 @@ func is_alive() -> bool:
 func hurt_point() -> Vector2:
 	return position + Vector2(0, -14)
 
-func receive_hit(atk: float, mult: float, from: Vector2) -> int:
+func receive_hit(atk: float, mult: float, from: Vector2, _crit_chance := -1.0, _crit_mult := -1.0) -> int:
 	hits.append([atk, mult, from])
 	return 1

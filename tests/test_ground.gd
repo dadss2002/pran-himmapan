@@ -90,3 +90,19 @@ func test_ground_loads_and_autosaves():
 	g.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
 	return r
+
+func test_load_with_hp_gear_starts_full():
+	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	var eq := SaveGame.start_equipped()
+	eq.ring = {"base": "ring", "rarity": "rare", "level": 3, "opts": [{"k": "hp", "v": 18}, {"k": "mp", "v": 9}]}
+	SaveGame.save({"level": 3, "exp": 0, "inventory": Inventory.new().to_dict(), "equipped": eq}, TMP_SAVE)
+	var g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = TMP_SAVE
+	g.build()
+	var h: Hero = g.hero
+	var r := ""
+	if h.health.hp != h.health.max_hp or h.health.max_hp != h.stats().hp: r = "HP %d/%d, stats %d" % [h.health.hp, h.health.max_hp, h.stats().hp]
+	elif absf(h.mp - h.max_mp()) > 0.01: r = "MP %.1f/%d" % [h.mp, h.max_mp()]
+	g.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	return r

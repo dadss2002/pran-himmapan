@@ -10,6 +10,7 @@ signal rolled(dir: Vector2)
 signal leveled_up(level: int)
 signal exp_changed()
 signal skill_released(id: String, at: Vector2)
+signal gear_changed()
 
 const MANIFEST := "res://assets/hero/manifest.json"
 const ARROW_SCENE := preload("res://scenes/arrow.tscn")
@@ -28,8 +29,11 @@ var spawn_point := Vector2.ZERO
 var external_input := Vector2.ZERO   # touch joystick, added to keyboard input
 var test_enemies: Array = []  # used instead of the "enemies" group when not in a tree
 var inventory := Inventory.new()
+var equipped := SaveGame.start_equipped()   # bow, armor, ring, necklace → item or null
 var _skill_cd := {}
 var _pending_skill := ""
+var _exp_carry := 0.0          # fractional EXP from bonus %, kept so +2.4% is never rounded away
+var _gold_carry := 0.0
 var _queued_skill := ""      # pressed during a basic shot; starts once that arrow is out
 var _potion_cd := 0.0
 
@@ -65,13 +69,14 @@ func setup_sprites() -> void:
 	mat.shader = preload("res://shaders/flash.gdshader")
 	mat.set_shader_parameter("flash_color", HURT_RED)
 	body.material = mat
-	health.setup(Balance.hero(level).hp)
+	health.setup(stats().hp)
 	mp = max_mp()
+	_show_bow()
 	health.died.connect(_on_died)
 	_refresh()
 
 func max_mp() -> int:
-	return Balance.mp(level)
+	return stats().mp
 
 ## Sets level and stats without effects (loading a save).
 func set_progress(new_level: int, new_exp: int) -> void:
@@ -83,7 +88,17 @@ func set_progress(new_level: int, new_exp: int) -> void:
 
 func on_kill(monster_exp: int, monster_level: int) -> void:
 	if state == "dead": return     # an arrow still flying after death earns nothing
-	gain_exp(Progression.kill_exp(monster_exp, monster_level, level))
+	var raw: float = Progression.kill_exp(monster_exp, monster_level, level) * stats().exp_mult + _exp_carry
+	var whole := int(floor(raw + 1e-6))
+	_exp_carry = raw - whole
+	gain_exp(whole)
+
+## Gold from a drop with the gear bonus; the fraction carries to the next drop.
+func bonus_gold(amount: int) -> int:
+	var raw: float = amount * stats().gold_mult + _gold_carry
+	var whole := int(floor(raw + 1e-6))
+	_gold_carry = raw - whole
+	return whole
 
 ## Adds EXP; each level gained heals HP/MP fully and emits leveled_up once.
 func gain_exp(amount: int) -> void:
@@ -96,18 +111,79 @@ func gain_exp(amount: int) -> void:
 	exp = r.exp
 	exp_changed.emit()
 
+# ---------- equipment ----------
+
+## Wears the item in bag slot i; whatever was worn goes into that same bag slot.
+## Returns "" on success, otherwise the reason shown to the player.
+func equip(slot_index: int) -> String:
+	if slot_index < 0 or slot_index >= inventory.slots.size(): return "ไม่มีของ"
+	var entry: Dictionary = inventory.slots[slot_index]
+	if not entry.has("item"): return "สวมไม่ได้"
+	var it: Dictionary = entry.item
+	if level < Gear.req_level(it.base): return "ต้องเลเวล %d" % Gear.req_level(it.base)
+	var slot := Gear.slot_of(it.base)
+	if slot == "": return "สวมไม่ได้"
+	var old = equipped.get(slot)
+	equipped[slot] = it
+	if old == null: inventory.slots.remove_at(slot_index)
+	else: inventory.slots[slot_index] = {"id": String(old.base), "count": 1, "item": old}
+	_on_gear_changed()
+	return ""
+
+func unequip(slot: String) -> String:
+	if equipped.get(slot) == null: return "ไม่ได้สวม"
+	if slot == "bow": return "ต้องถือธนูไว้"     # arrows need a bow: swap it instead
+	if not inventory.add_item(equipped[slot]): return "กระเป๋าเต็ม"
+	equipped[slot] = null
+	_on_gear_changed()
+	return ""
+
+func set_equipped(eq: Dictionary) -> void:
+	equipped = eq.duplicate(true)
+	_on_gear_changed()
+
+## Gear changes max HP/MP without healing; current values clamp to the new max.
+func _on_gear_changed() -> void:
+	if health:
+		var hp := health.hp
+		health.max_hp = stats().hp
+		health.hp = mini(hp, health.max_hp)
+	mp = minf(mp, max_mp())
+	_show_bow()
+	gear_changed.emit()
+
+func _show_bow() -> void:
+	if bow and equipped.get("bow") != null: bow.set_bow(String(equipped.bow.base))
+
 func dodge_cooldown_left() -> float:
 	return _dodge_cd
 
+## Everything that depends on level and gear (M2c). Base numbers from balance.json.
 func stats() -> Dictionary:
-	return Balance.hero(level)
+	var b := Balance.hero_base(level)
+	var t := Gear.totals(equipped)
+	return {
+		"hp": b.hp + t.hp,
+		"atk": (b.atk + t.atk) * (1.0 + t.atk_pct),   # float: small ATK% must still count
+		"def": b.def + t.def,
+		"mp": Balance.mp(level) + t.mp,
+		"crit": Balance.num("crit.chance") + t.crit,
+		"crit_mult": Balance.num("crit.mult") + t.crit_dmg,
+		"shot_cd": Balance.num("shot.cooldown") / (1.0 + t.atk_speed),
+		"walk": Balance.num("hero.walk") * (1.0 + t.move_speed),
+		"skill_cd_cut": t.skill_cd,
+		"mp_regen": Balance.num("mp.regen") + t.mp_regen,
+		"exp_mult": 1.0 + t.exp_pct,
+		"gold_mult": 1.0 + t.gold_pct,
+		"element_dmg": t.element_dmg,   # no elements in M2: shown, no effect yet
+	}
 
 # ---------- actions ----------
 
 func try_shoot() -> bool:
 	if cooldown > 0.0 or state in ["roll", "hurt", "dead", "shoot"]:
 		return false
-	cooldown = Balance.num("shot.cooldown")
+	cooldown = stats().shot_cd
 	_pending_skill = ""
 	state = "shoot"
 	_t = 0.0
@@ -210,7 +286,7 @@ func step(delta: float, input: Vector2) -> void:
 	for k in _skill_cd: _skill_cd[k] = maxf(0.0, _skill_cd[k] - delta)
 	health.tick(delta)
 	if state != "dead":
-		mp = minf(max_mp(), mp + Balance.num("mp.regen") * delta)
+		mp = minf(max_mp(), mp + stats().mp_regen * delta)
 	_flash = maxf(0.0, _flash - delta)
 	_t += delta
 	match state:
@@ -240,7 +316,7 @@ func step(delta: float, input: Vector2) -> void:
 			if input.length() > 0.01:
 				facing = Combat.facing_from_vector(input, facing)
 				state = "walk"
-				velocity = input.normalized() * Balance.num("hero.walk")
+				velocity = input.normalized() * stats().walk
 				if is_inside_tree(): move_and_slide()     # slide along posts while walking
 				else: position += velocity * delta
 			else:
@@ -351,7 +427,7 @@ func _release() -> void:
 			_pending_skill = ""
 			return
 		mp -= Skills.mp_cost(id)
-		_skill_cd[id] = Skills.cooldown(id, level)
+		_skill_cd[id] = Skills.cooldown(id, level, stats().skill_cd_cut)
 		skill_released.emit(id, start)
 	match _pending_skill:
 		"piercing":
@@ -368,7 +444,10 @@ func _release() -> void:
 func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1.0) -> void:
 	var a: Arrow = ARROW_SCENE.instantiate()
 	a.position = start
-	a.launch(v, stats().atk, _enemies(), mult, pierce, range_px)
+	var st := stats()
+	a.launch(v, st.atk, _enemies(), mult, pierce, range_px)
+	a.crit_chance = st.crit
+	a.crit_mult = st.crit_mult
 	if is_inside_tree():
 		get_parent().add_child(a)
 	shot.emit(a)

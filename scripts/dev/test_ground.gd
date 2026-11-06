@@ -39,8 +39,10 @@ func build() -> void:
 	world.add_child(hero)
 	hero.setup_sprites()
 	var state := SaveGame.load_or_new(save_path)
+	hero.set_equipped(state.equipped)          # before set_progress, which fills HP/MP to the geared max
 	hero.set_progress(int(state.level), int(state.exp))
 	hero.inventory.from_dict(state.inventory)
+	hero.gear_changed.connect(func(): save_now())
 	hero.leveled_up.connect(func(_l): save_now())
 	hero.skill_released.connect(_on_skill_released)
 	hero.shot.connect(_on_arrow)
@@ -94,7 +96,7 @@ func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_fx("hit_spark", w.hurt_point())
 
 func save_now() -> bool:
-	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict()}, save_path)
+	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped}, save_path)
 
 func tick_autosave(delta: float) -> void:
 	_autosave_t += delta
@@ -121,9 +123,11 @@ func _on_wolf_died(w: Wolf) -> void:
 	hero.on_kill(w.stats().exp, w.level)
 	var at := w.global_position if w.is_inside_tree() else w.position
 	var items := Loot.roll("wolf", w.level, loot_rng)
+	for it in items:
+		if it.id == "gold": it.count = hero.bonus_gold(it.count)   # gear "ทอง +%"
 	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)
 	for i in items.size():
-		var d := LootDrop.make(items[i].id, items[i].count)
+		var d := LootDrop.make_item(items[i].item) if items[i].has("item") else LootDrop.make(items[i].id, items[i].count)
 		d.pop_out(at, spots[i])
 		d.collected.connect(func(id, n):
 			_fx("pickup_pop", hero.global_position + Vector2(0, -20))

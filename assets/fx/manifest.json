@@ -125,5 +125,19 @@
     ],
     "loop": true,
     "pixellab": "2d184b0f-8a29-42f0-917e-41a2d198c81f"
+  },
+  "rarity_beam": {
+    "cell": [
+      36,
+      43
+    ],
+    "frames": 12,
+    "fps": 12,
+    "anchor": [
+      18,
+      34
+    ],
+    "loop": true,
+    "pixellab": "240f3478-446c-4234-9727-4baf51c41117"
   }
 }

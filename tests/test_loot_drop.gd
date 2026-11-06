@@ -74,8 +74,14 @@ func test_drop_scatter_not_inside_walls():
 
 func test_icon_for_items():
 	var r := ""
-	for id in ["gold", "ore_himmapan", "gem_split", "gem_multiply", "gem_leech"]:
-		if LootDrop.icon_path(id) == "" or not ResourceLoader.exists(LootDrop.icon_path(id)): r = "no icon for %s" % id
+	var ids := ["gold", "ore_himmapan", "potion_hp", "potion_mp"]
+	for g in Balance.data()["gems"]: ids.append("gem_" + g)
+	var seen := {}
+	for id in ids:
+		var p := LootDrop.icon_path(id)
+		if not ResourceLoader.exists(p): r = "no icon for %s (%s)" % [id, p]
+		elif id.begins_with("gem_") and seen.has(p): r = "%s shares its icon with %s" % [id, seen[p]]
+		seen[p] = id
 	return r
 
 func test_bag_full_notice_clears_when_away():
@@ -98,4 +104,45 @@ func test_gems_glint_ore_does_not():
 	if gem.glint == null or gem.glint.animation != "item_glint": r = "gem drop has no item_glint"
 	elif ore.glint != null: r = "ore should not glint"
 	gem.free(); ore.free()
+	return r
+
+func _gear(base: String, rarity: String) -> Dictionary:
+	return {"base": base, "rarity": rarity, "level": Gear.req_level(base), "opts": []}
+
+func test_beam_only_rare_and_up():
+	var r := ""
+	for rar in ["common", "good", "rare", "epic", "legend"]:
+		var d := LootDrop.make_item(_gear("ring", rar))
+		var want: bool = rar in ["rare", "epic", "legend"]
+		if (d.beam != null) != want: r = "%s beam %s" % [rar, d.beam != null]
+		elif want and not Color(d.beam.modulate, 1.0).is_equal_approx(Gear.rarity_color(rar)): r = "%s beam colour %s" % [rar, d.beam.modulate]
+		d.free()
+		if r != "": break
+	return r
+
+func test_gear_pickup_needs_free_slot():
+	var h := _hero(Vector2.ZERO)
+	var inv := Inventory.new()
+	for i in 24: inv.add("junk_%d" % i, 1)
+	var d := LootDrop.make_item(_gear("bow_buffalo_horn", "rare"))
+	d.position = Vector2(20, 0)
+	d.settle()
+	var got := false
+	for i in 60: got = d.step(DT, h, inv) or got
+	var r := ""
+	if got or d.expired: r = "picked up into a full bag"
+	elif not d.bag_full_notice: r = "no bag-full notice"
+	inv.slots.pop_back()
+	for i in 60: got = d.step(DT, h, inv) or got
+	if r == "" and not got: r = "not picked up after a slot freed"
+	elif r == "" and inv.slots.back().get("item", {}).get("rarity", "") != "rare": r = "bag %s" % [inv.slots.back()]
+	if is_instance_valid(d) and not d.is_queued_for_deletion(): d.free()
+	h.free()
+	return r
+
+func test_icon_for_gear():
+	var r := ""
+	for base in Balance.data()["gear"]:
+		var p := LootDrop.icon_path(base)
+		if not ResourceLoader.exists(p): r = "%s icon missing: %s" % [base, p]
 	return r

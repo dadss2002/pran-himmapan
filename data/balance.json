@@ -16,12 +16,49 @@
     "respawn_iframe": 2.0
   },
   "gear": {
-    "bamboo_bow": {
-      "atk": 8
+    "bow_bamboo": {
+      "slot": "bow",
+      "level": 1,
+      "atk": 8,
+      "name": "ธนูไม้ไผ่",
+      "icon": "bow_bamboo"
     },
-    "trainee_armor": {
+    "bow_buffalo_horn": {
+      "slot": "bow",
+      "level": 5,
+      "atk": 16,
+      "name": "ธนูเขาควาย",
+      "icon": "bow_buffalo_horn"
+    },
+    "armor_trainee": {
+      "slot": "armor",
+      "level": 1,
       "def": 4,
-      "hp": 20
+      "hp": 20,
+      "name": "ชุดพรานฝึกหัด",
+      "icon": "outfit_green_hunter"
+    },
+    "armor_wolf_leather": {
+      "slot": "armor",
+      "level": 4,
+      "def": 10,
+      "hp": 40,
+      "name": "ชุดหนังหมาป่า",
+      "icon": "outfit_silver_fur"
+    },
+    "ring": {
+      "slot": "ring",
+      "level": 1,
+      "from_source": true,
+      "name": "แหวน",
+      "icon": "ring_silver_ruby"
+    },
+    "necklace": {
+      "slot": "necklace",
+      "level": 1,
+      "from_source": true,
+      "name": "สร้อย",
+      "icon": "necklace_gold_amulet"
     }
   },
   "shot": {
@@ -145,7 +182,8 @@
       "gold_min": 3,
       "gold_max": 6,
       "ore": 0.25,
-      "gem": 0.01
+      "gem": 0.01,
+      "gear": 0.06
     }
   },
   "gems": [
@@ -160,18 +198,6 @@
     "leech",
     "element"
   ],
-  "gem_icon_group": {
-    "split": "blue",
-    "ricochet": "blue",
-    "pierce": "blue",
-    "homing": "blue",
-    "multiply": "red",
-    "execute": "red",
-    "element": "red",
-    "expand": "green",
-    "extend": "green",
-    "leech": "green"
-  },
   "pickup": {
     "magnet": 64,
     "speed": 260,
@@ -208,5 +234,141 @@
   },
   "save": {
     "autosave_every": 30
+  },
+  "start_gear": {
+    "bow": "bow_bamboo",
+    "armor": "armor_trainee"
+  },
+  "rarity": [
+    {
+      "id": "common",
+      "name": "ธรรมดา",
+      "color": "#9aa0a6",
+      "chance": 0.6,
+      "options": 0
+    },
+    {
+      "id": "good",
+      "name": "ดี",
+      "color": "#5fc46a",
+      "chance": 0.28,
+      "options": 1
+    },
+    {
+      "id": "rare",
+      "name": "หายาก",
+      "color": "#4aa3ff",
+      "chance": 0.09,
+      "options": 2
+    },
+    {
+      "id": "epic",
+      "name": "มหากาพย์",
+      "color": "#b469ff",
+      "chance": 0.027,
+      "options": 3
+    },
+    {
+      "id": "legend",
+      "name": "ตำนาน",
+      "color": "#ffc83d",
+      "chance": 0.003,
+      "options": 4
+    }
+  ],
+  "beam_from_rarity": "rare",
+  "options": {
+    "atk_pct": {
+      "min": 0.03,
+      "max": 0.08,
+      "name": "ATK",
+      "pct": true
+    },
+    "crit": {
+      "min": 0.02,
+      "max": 0.05,
+      "name": "คริ",
+      "pct": true
+    },
+    "crit_dmg": {
+      "min": 0.08,
+      "max": 0.2,
+      "name": "ดาเมจคริ",
+      "pct": true
+    },
+    "atk_speed": {
+      "min": 0.04,
+      "max": 0.1,
+      "name": "ความเร็วยิง",
+      "pct": true
+    },
+    "hp": {
+      "min": 20,
+      "max": 60,
+      "name": "HP",
+      "pct": false
+    },
+    "def": {
+      "min": 3,
+      "max": 8,
+      "name": "DEF",
+      "pct": false
+    },
+    "move_speed": {
+      "min": 0.03,
+      "max": 0.08,
+      "name": "ความเร็วเดิน",
+      "pct": true
+    },
+    "skill_cd": {
+      "min": 0.03,
+      "max": 0.08,
+      "name": "คูลดาวน์สกิล",
+      "pct": true,
+      "minus": true
+    },
+    "element_dmg": {
+      "min": 0.05,
+      "max": 0.12,
+      "name": "ดาเมจธาตุ",
+      "pct": true
+    },
+    "exp_pct": {
+      "min": 0.03,
+      "max": 0.08,
+      "name": "EXP",
+      "pct": true
+    },
+    "gold_pct": {
+      "min": 0.05,
+      "max": 0.15,
+      "name": "ทอง",
+      "pct": true
+    },
+    "mp": {
+      "min": 10,
+      "max": 30,
+      "name": "MP",
+      "pct": false
+    },
+    "mp_regen": {
+      "min": 0.5,
+      "max": 1.5,
+      "name": "ฟื้น MP",
+      "pct": false,
+      "suffix": "/วิ"
+    }
+  },
+  "option_ref_level": 10,
+  "option_floor": 0.3,
+  "gear_pool": {
+    "wolf": [
+      "bow_bamboo",
+      "bow_buffalo_horn",
+      "armor_trainee",
+      "armor_wolf_leather",
+      "ring",
+      "necklace"
+    ]
   }
 }

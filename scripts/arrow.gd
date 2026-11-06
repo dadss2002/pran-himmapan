@@ -10,6 +10,8 @@ var spent := false
 var targets: Array = []
 var mult := 1.0
 var pierce := false     # ศรทะลวง: hits every enemy in its line once and keeps flying
+var crit_chance := -1.0  # set by the hero from gear; < 0 = base crit numbers
+var crit_mult := -1.0
 var max_range := 0.0    # px; shot.range unless the skill sets its own
 var _hit := {}
 
@@ -31,7 +33,7 @@ func advance(delta: float) -> void:
 	travelled += stepd
 	for t in targets:
 		if is_instance_valid(t) and t.is_alive() and not _hit.has(t) and _pos().distance_to(t.hurt_point()) <= radius:
-			t.receive_hit(atk, mult, _pos())
+			t.receive_hit(atk, mult, _pos(), crit_chance, crit_mult)
 			if not pierce:
 				_finish()
 				return
