@@ -43,7 +43,7 @@ func test_walk_speed_and_facing():
 	h.step(1.0, Vector2(1, 0))
 	var res := ""
 	if h.state != "walk": res = "state should be walk, got " + h.state
-	elif absf(h.velocity.length() - Combat.WALK_SPEED) > 0.01: res = "speed %.2f != 110" % h.velocity.length()
+	elif absf(h.velocity.length() - Balance.num("hero.walk")) > 0.01: res = "speed %.2f != 110" % h.velocity.length()
 	elif h.facing != 2: res = "moving right should face 2 east, got %d" % h.facing
 	else:
 		h.step(0.1, Vector2.ZERO)
@@ -58,7 +58,7 @@ func test_diagonal_not_faster():
 	h.step(0.1, Vector2(1, -1))
 	var sp := h.velocity.length()
 	h.free()
-	return "" if absf(sp - Combat.WALK_SPEED) < 0.01 else "diagonal speed %.2f should be 110" % sp
+	return "" if absf(sp - Balance.num("hero.walk")) < 0.01 else "diagonal speed %.2f should be 110" % sp
 
 func test_no_walking_while_shooting():
 	var h := _hero()
@@ -102,4 +102,4 @@ func test_arrow_frees_after_range():
 	var travelled := a.travelled
 	a.free()
 	if steps >= 1000: return "arrow never finished"
-	return "" if absf(travelled - Combat.SHOT_RANGE) < 0.01 else "arrow travelled %.1f, expected 220" % travelled
+	return "" if absf(travelled - Balance.num("shot.range")) < 0.01 else "arrow travelled %.1f, expected 220" % travelled

@@ -33,7 +33,7 @@ func setup_sprites() -> void:
 
 func try_shoot() -> bool:
 	if cooldown > 0.0: return false
-	cooldown = Combat.SHOT_COOLDOWN
+	cooldown = Balance.num("shot.cooldown")
 	state = "shoot"
 	_released = false
 	velocity = Vector2.ZERO
@@ -49,7 +49,7 @@ func step(delta: float, input: Vector2) -> void:
 			_release()
 		return
 	if input.length() > 0.01:
-		velocity = input.normalized() * Combat.WALK_SPEED
+		velocity = input.normalized() * Balance.num("hero.walk")
 		facing = Combat.facing_from_vector(input, facing)
 		state = "walk"
 	else:

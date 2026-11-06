@@ -1,8 +1,7 @@
 class_name Arrow
 extends Node2D
-## A basic shot: flies straight along its direction, gone after Combat.SHOT_RANGE px.
+## A basic shot: flies straight along its direction, gone after Balance.num("shot.range") px.
 
-const SPEED := 360.0
 
 var dir := Vector2.RIGHT
 var travelled := 0.0
@@ -14,10 +13,10 @@ func launch(direction: Vector2) -> void:
 
 func advance(delta: float) -> void:
 	if spent: return
-	var stepd := minf(SPEED * delta, Combat.SHOT_RANGE - travelled)
+	var stepd := minf(Balance.num("shot.arrow_speed") * delta, Balance.num("shot.range") - travelled)
 	position += dir * stepd
 	travelled += stepd
-	if travelled >= Combat.SHOT_RANGE - 0.0001:
+	if travelled >= Balance.num("shot.range") - 0.0001:
 		spent = true
 		if is_inside_tree():
 			queue_free()

@@ -1,0 +1,42 @@
+{
+  "_doc": "All tuning numbers. Source: docs/spec-numbers.md + docs/superpowers/specs/2026-11-06-m2-design.md (approved 2026-11-06). Change numbers only with owner approval.",
+  "hero": {
+    "hp_base": 100, "hp_per_level": 12,
+    "atk_base": 10, "atk_per_level": 2,
+    "def_base": 2, "def_per_level": 1,
+    "walk": 110,
+    "hurt_knockback": 8, "hurt_iframe": 0.5, "hurt_lock": 0.25, "hurt_flash": 0.1,
+    "death_delay": 1.5, "respawn_iframe": 2.0
+  },
+  "gear": {
+    "bamboo_bow": {"atk": 8},
+    "trainee_armor": {"def": 4, "hp": 20}
+  },
+  "shot": {"range": 220, "cooldown": 0.8, "arrow_speed": 360, "arrow_hit_radius": 10},
+  "crit": {"chance": 0.05, "mult": 1.5},
+  "dodge": {
+    "upgrade_level": 5,
+    "lv1": {"distance": 64, "duration": 0.25, "iframe": 0.2, "cooldown": 1.5},
+    "lv5": {"distance": 96, "duration": 0.3, "iframe": 0.3, "cooldown": 1.5}
+  },
+  "wolf": {
+    "hp_base": 40, "hp_per_level": 18,
+    "atk_base": 6, "atk_per_level": 2,
+    "def_base": 2, "def_per_level": 1,
+    "exp_base": 8, "exp_per_level": 5,
+    "aggro": 160, "leash": 320,
+    "wander_speed": 50, "wander_radius": 48,
+    "run": 140,
+    "bite_range": 22, "bite_hit_range": 30, "bite_windup": 0.35, "bite_mult": 1.0, "bite_cooldown": 1.2,
+    "lunge_min": 60, "lunge_max": 130, "lunge_warn": 0.5, "lunge_distance": 140, "lunge_time": 0.3,
+    "lunge_mult": 1.5, "lunge_cooldown": 5.0, "lunge_hit_radius": 20,
+    "hit_knockback": 6, "hit_flash": 0.1, "death_fade": 0.6, "respawn": 20
+  },
+  "packs": [
+    {"level": 1, "count": 4, "at": [480, 320]},
+    {"level": 3, "count": 3, "at": [1440, 320]},
+    {"level": 5, "count": 4, "at": [960, 1040]}
+  ],
+  "hero_spawn": [960, 560],
+  "map_size": [1920, 1280]
+}
