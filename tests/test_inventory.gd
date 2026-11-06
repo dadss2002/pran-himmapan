@@ -123,3 +123,30 @@ func test_load_bad_slots_starts_fresh():
 	_cleanup()
 	if s.level != 1: return "bad bag should start fresh, got %s" % s
 	return "" if kept else "the broken file should be kept as .bad.json"
+
+func _save_with(eq: Dictionary, slots: Array) -> Dictionary:
+	_cleanup()
+	SaveGame.save({"level": 3, "exp": 0, "inventory": {"gold": 0, "slots": slots}, "equipped": eq}, TMP)
+	var s := SaveGame.load_or_new(TMP)
+	_cleanup()
+	return s
+
+func test_save_needs_a_bow_and_item_entries():
+	var eq := SaveGame.start_equipped()
+	eq.bow = null
+	var r := ""
+	if _save_with(eq, []).level != 1: r = "a save with no bow should start fresh"
+	elif _save_with(SaveGame.start_equipped(), [{"id": "ring", "count": 5}]).level != 1: r = "gear id without item data should be rejected"
+	return r
+
+func test_save_clamps_item_level_and_options():
+	var eq := SaveGame.start_equipped()
+	eq.ring = {"base": "ring", "rarity": "good", "level": 99, "opts": [{"k": "crit", "v": 9.0}]}
+	var s := _save_with(eq, [])
+	var r := ""
+	if s.level != 3: r = "should load, got %s" % s
+	elif s.equipped.ring.level != 10: r = "ring level %s, want clamped to 10" % s.equipped.ring.level
+	elif absf(float(s.equipped.ring.opts[0].v) - 0.05) > 1e-6: r = "crit %.3f, want clamped to the Lv10 max 0.05" % s.equipped.ring.opts[0].v
+	eq.ring = {"base": "ring", "rarity": "rare", "level": 3, "opts": [{"k": "hp", "v": 5}, {"k": "hp", "v": 5}]}
+	if r == "" and _save_with(eq, []).level != 1: r = "duplicate option keys should be rejected"
+	return r

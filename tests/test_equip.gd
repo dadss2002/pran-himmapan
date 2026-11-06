@@ -78,7 +78,7 @@ func _wear(h: Hero, slot: String, it) -> void:
 func test_each_option_changes_its_stat():
 	var r := ""
 	var cases := [
-		["atk_pct", 0.10, "atk", func(a, b): return b.atk == int(round(a.atk * 1.10))],
+		["atk_pct", 0.10, "atk", func(a, b): return is_equal_approx(b.atk, a.atk * 1.10)],
 		["crit", 0.04, "crit", func(a, b): return is_equal_approx(b.crit, a.crit + 0.04)],
 		["crit_dmg", 0.20, "crit_mult", func(a, b): return is_equal_approx(b.crit_mult, a.crit_mult + 0.20)],
 		["atk_speed", 0.10, "shot_cd", func(a, b): return is_equal_approx(b.shot_cd, a.shot_cd / 1.10)],
@@ -153,5 +153,22 @@ func test_arrow_carries_crit_stats():
 	if arrows.size() != 1: r = "%d arrows" % arrows.size()
 	elif not is_equal_approx(arrows[0].crit_chance, h.stats().crit): r = "arrow crit %.3f, want %.3f" % [arrows[0].crit_chance, h.stats().crit]
 	for a in arrows: a.free()
+	h.free()
+	return r
+
+func test_small_percent_bonuses_still_count():
+	var h := _hero()
+	_wear(h, "ring", _item("ring", "good", [{"k": "atk_pct", "v": 0.009}]))
+	var r := ""
+	if absf(h.stats().atk - 18.0 * 1.009) > 0.001: r = "ATK %.3f, want 18.162 (+0.9%% must not round away)" % h.stats().atk
+	_wear(h, "ring", _item("ring", "good", [{"k": "exp_pct", "v": 0.024}]))
+	h.set_progress(9, 0)                       # no level-up in between (Lv9 bar is long)
+	_wear(h, "ring", _item("ring", "good", [{"k": "exp_pct", "v": 0.024}]))
+	for i in 10: h.on_kill(13, 9)
+	if r == "" and h.exp != 133: r = "EXP after 10 kills %d, want 133 (130 × 1.024, remainder carried)" % h.exp
+	_wear(h, "ring", _item("ring", "good", [{"k": "gold_pct", "v": 0.045}]))
+	var gold := 0
+	for i in 20: gold += h.bonus_gold(10)
+	if r == "" and gold != 209: r = "gold from 20 × 10 %d, want 209 (200 × 1.045, remainder carried)" % gold
 	h.free()
 	return r

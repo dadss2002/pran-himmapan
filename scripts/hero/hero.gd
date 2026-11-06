@@ -32,6 +32,8 @@ var inventory := Inventory.new()
 var equipped := SaveGame.start_equipped()   # bow, armor, ring, necklace → item or null
 var _skill_cd := {}
 var _pending_skill := ""
+var _exp_carry := 0.0          # fractional EXP from bonus %, kept so +2.4% is never rounded away
+var _gold_carry := 0.0
 var _queued_skill := ""      # pressed during a basic shot; starts once that arrow is out
 var _potion_cd := 0.0
 
@@ -86,7 +88,17 @@ func set_progress(new_level: int, new_exp: int) -> void:
 
 func on_kill(monster_exp: int, monster_level: int) -> void:
 	if state == "dead": return     # an arrow still flying after death earns nothing
-	gain_exp(int(round(Progression.kill_exp(monster_exp, monster_level, level) * stats().exp_mult)))
+	var raw: float = Progression.kill_exp(monster_exp, monster_level, level) * stats().exp_mult + _exp_carry
+	var whole := int(floor(raw + 1e-6))
+	_exp_carry = raw - whole
+	gain_exp(whole)
+
+## Gold from a drop with the gear bonus; the fraction carries to the next drop.
+func bonus_gold(amount: int) -> int:
+	var raw: float = amount * stats().gold_mult + _gold_carry
+	var whole := int(floor(raw + 1e-6))
+	_gold_carry = raw - whole
+	return whole
 
 ## Adds EXP; each level gained heals HP/MP fully and emits leveled_up once.
 func gain_exp(amount: int) -> void:
@@ -152,7 +164,7 @@ func stats() -> Dictionary:
 	var t := Gear.totals(equipped)
 	return {
 		"hp": b.hp + t.hp,
-		"atk": int(round((b.atk + t.atk) * (1.0 + t.atk_pct))),
+		"atk": (b.atk + t.atk) * (1.0 + t.atk_pct),   # float: small ATK% must still count
 		"def": b.def + t.def,
 		"mp": Balance.mp(level) + t.mp,
 		"crit": Balance.num("crit.chance") + t.crit,

@@ -21,6 +21,7 @@ const ITEMS_PATH := "res://data/items.json"
 var hero: Hero
 var tab := 0
 var _sel := {}                     # {"bag": index} or {"worn": slot}
+var _notice := ""                  # why the last action was refused; cleared on the next selection
 var _items := {}
 var _root: Control
 var _panel: PanelContainer
@@ -83,6 +84,7 @@ func _unhandled_input(e: InputEvent) -> void:
 
 func set_tab(i: int) -> void:
 	tab = i
+	if _sel.has("bag") and not (int(_sel.bag) in visible_cells()): _select_first()
 	refresh()
 
 ## Bag indices shown under the current tab, in bag order.
@@ -98,10 +100,12 @@ func visible_cells() -> Array:
 
 func select(bag_index: int) -> void:
 	_sel = {"bag": bag_index}
+	_notice = ""
 	refresh()
 
 func select_worn(slot: String) -> void:
 	_sel = {"worn": slot}
+	_notice = ""
 	refresh()
 
 func _kind(s: Dictionary) -> String:
@@ -109,7 +113,7 @@ func _kind(s: Dictionary) -> String:
 	return String(_items_text().get(String(s.id), {}).get("kind", "material"))
 
 func _sel_valid() -> bool:
-	if _sel.has("bag"): return int(_sel.bag) < hero.inventory.slots.size()
+	if _sel.has("bag"): return int(_sel.bag) < hero.inventory.slots.size() and int(_sel.bag) in visible_cells()
 	if _sel.has("worn"): return hero.equipped.get(String(_sel.worn)) != null
 	return false
 
@@ -122,6 +126,11 @@ func _select_first() -> void:
 func selected_detail() -> Dictionary:
 	var d := {"name": "", "color": TEXT, "sub": "", "main": "", "lines": [], "action": "", "action_ok": false, "icon": ""}
 	if hero == null or not _sel_valid(): return d
+	_detail_body(d)
+	if _notice != "": d.lines.append({"text": _notice, "color": DOWN})
+	return d
+
+func _detail_body(d: Dictionary) -> void:
 	if _sel.has("worn"):
 		var it: Dictionary = hero.equipped[String(_sel.worn)]
 		_gear_detail(d, it)
@@ -132,7 +141,7 @@ func selected_detail() -> Dictionary:
 		else:
 			d.action = "ถอด"
 			d.action_ok = true
-		return d
+		return
 	var s: Dictionary = hero.inventory.slots[int(_sel.bag)]
 	d.icon = LootDrop.icon_path(String(s.id))
 	if s.has("item"):
@@ -146,7 +155,7 @@ func selected_detail() -> Dictionary:
 		else:
 			d.action = "สวมใส่"
 			d.action_ok = true
-		return d
+		return
 	var t: Dictionary = _items_text().get(String(s.id), {})
 	d.name = String(t.get("name", s.id))
 	d.sub = "%s · มี %d" % [t.get("sub", ""), int(s.count)]
@@ -161,7 +170,6 @@ func selected_detail() -> Dictionary:
 		d.main = String(t.get("main", ""))
 		if String(s.id).begins_with("gem_"):
 			d.lines.append({"text": "ใส่เจมในสกิลได้ในเฟสถัดไป", "color": DIM_TEXT})
-	return d
 
 func _gear_detail(d: Dictionary, it: Dictionary) -> void:
 	var base := String(it.base)
@@ -189,6 +197,11 @@ func _compare(d: Dictionary, it: Dictionary) -> void:
 	if worn == null:
 		d.lines.append({"text": "ช่อง%sยังว่าง" % SLOT_NAMES.get(slot, ""), "color": UP})
 		return
+	if Gear.base(String(it.base)).get("from_source", false):      # ring/necklace: options only
+		var parts: Array = []
+		for o in worn.get("opts", []): parts.append(Gear.describe_option(o))
+		d.lines.append({"text": "ที่ใส่อยู่: " + (", ".join(parts) if not parts.is_empty() else "ไม่มีออฟชั่น"), "color": DIM_TEXT})
+		return
 	var a := Gear.base(String(it.base))
 	var b := Gear.base(String(worn.base))
 	for k in ["atk", "def", "hp"]:
@@ -206,7 +219,9 @@ func press_action() -> String:
 	if _sel.has("worn"):
 		var slot := String(_sel.worn)
 		res = hero.unequip(slot)
-		if res == "": _sel = {"bag": hero.inventory.slots.size() - 1}
+		if res == "":
+			_sel = {"bag": hero.inventory.slots.size() - 1}
+			if not (int(_sel.bag) in visible_cells()): tab = 0     # show where it went
 	else:
 		var i := int(_sel.bag)
 		var s: Dictionary = hero.inventory.slots[i]
@@ -218,6 +233,7 @@ func press_action() -> String:
 		elif d.action == "ใช้":
 			res = "" if hero.try_potion(String(s.id).trim_prefix("potion_")) else "ใช้ตอนนี้ไม่ได้"
 	if not _sel_valid(): _select_first()
+	_notice = res
 	refresh()
 	return res
 
@@ -415,7 +431,7 @@ func refresh() -> void:
 	_who.text = "พราน · Lv %d" % hero.level
 	for c in _stats.get_children(): c.free()
 	var st := hero.stats()
-	for pair in [["HP", str(st.hp)], ["MP", str(st.mp)], ["ATK", str(st.atk)], ["DEF", str(st.def)],
+	for pair in [["HP", str(st.hp)], ["MP", str(st.mp)], ["ATK", str(int(round(st.atk)))], ["DEF", str(st.def)],
 			["คริ", "%s%%" % Gear._trim(st.crit * 100.0)], ["ยิง", "%s/วิ" % Gear._trim(1.0 / st.shot_cd)]]:
 		var row := HBoxContainer.new()
 		row.add_child(_label(pair[0], 9, Color("#e8e2d4")))

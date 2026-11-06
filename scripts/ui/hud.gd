@@ -166,6 +166,7 @@ func open_bag() -> void:
 	if hero == null or bag_panel.is_open(): return
 	joystick.release_all()
 	buttons.release_all()
+	hero.external_input = Vector2.ZERO
 	bag_panel.open(hero)
 	refresh()
 

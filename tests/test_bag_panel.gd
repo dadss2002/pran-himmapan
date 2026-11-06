@@ -127,3 +127,51 @@ func test_hud_bag_button_opens_and_releases_touch():
 	hud.free(); h.free()
 	return r
 
+
+func test_refusal_reason_shown():
+	var h := _hero()
+	for i in 22: h.inventory.add("junk_%d" % i, 1)
+	var p := _panel(h)
+	p.select_worn("armor")
+	p.press_action()
+	var d := p.selected_detail()
+	var r := ""
+	if _find(d.lines, "กระเป๋าเต็ม").is_empty(): r = "full-bag refusal not shown: %s" % [d.lines]
+	elif not Color(_find(d.lines, "กระเป๋าเต็ม").color).is_equal_approx(BagPanel.DOWN): r = "refusal not red"
+	p.select(0)
+	if r == "" and not _find(p.selected_detail().lines, "กระเป๋าเต็ม").is_empty(): r = "old refusal stuck after selecting something else"
+	p.free(); h.free()
+	return r
+
+func test_selection_follows_tab_and_used_up_potion():
+	var h := _hero(5)
+	h.inventory.add_item(_horn())
+	var p := _panel(h)
+	p.select(h.inventory.slots.size() - 1)
+	p.set_tab(2)                                   # ยา: the bow is hidden
+	var r := ""
+	if not (p.selected_detail().name in ["ยาฟื้น HP", "ยาฟื้น MP"]): r = "potion tab still shows %s" % p.selected_detail().name
+	h.inventory.remove("potion_hp", 4)             # one left
+	h.health.take_hit(50, false)
+	for i in h.inventory.slots.size():
+		if h.inventory.slots[i].id == "potion_hp": p.select(i)
+	p.press_action()                               # last HP potion used: slot disappears
+	if r == "" and p.selected_detail().name == "ธนูเขาควาย": r = "selection jumped to a hidden item"
+	p.set_tab(1)
+	p.select(p.visible_cells()[0])
+	p.select_worn("armor")
+	p.press_action()                               # armor goes to the bag, tab อุปกรณ์ shows it
+	if r == "" and p.selected_detail().name != "ชุดพรานฝึกหัด": r = "after ถอด selection %s" % p.selected_detail().name
+	p.free(); h.free()
+	return r
+
+func test_ring_compare_lists_worn_options():
+	var h := _hero()
+	h.set_equipped({"bow": Gear.new_item("bow_bamboo"), "armor": null, "necklace": null,
+		"ring": {"base": "ring", "rarity": "good", "level": 2, "opts": [{"k": "crit", "v": 0.01}]}})
+	h.inventory.add_item({"base": "ring", "rarity": "good", "level": 2, "opts": [{"k": "hp", "v": 8}]})
+	var p := _panel(h)
+	p.select(h.inventory.slots.size() - 1)
+	var r := "" if not _find(p.selected_detail().lines, "ที่ใส่อยู่: คริ +1%").is_empty() else "no worn-ring line: %s" % [p.selected_detail().lines]
+	p.free(); h.free()
+	return r

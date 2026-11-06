@@ -20,11 +20,14 @@ static func start_equipped() -> Dictionary:
 	return eq
 
 ## Item with JSON floats turned back into ints where the game expects them.
+## Levels clamp to 1..option_ref_level and option values to their range at Lv10.
 static func clean_item(it: Dictionary) -> Dictionary:
+	var lvl := clampi(int(it.level), 1, int(Balance.num("option_ref_level")))
 	var opts: Array = []
 	for o in it.get("opts", []):
-		opts.append({"k": String(o.k), "v": float(o.v)})
-	return {"base": String(it.base), "rarity": String(it.rarity), "level": int(it.level), "opts": opts}
+		var top := Gear.option_range(String(o.k), int(Balance.num("option_ref_level")))
+		opts.append({"k": String(o.k), "v": clampf(float(o.v), 0.0, top.y)})
+	return {"base": String(it.base), "rarity": String(it.rarity), "level": lvl, "opts": opts}
 
 static func _item_ok(it, slot := "") -> bool:
 	if typeof(it) != TYPE_DICTIONARY: return false
@@ -36,13 +39,17 @@ static func _item_ok(it, slot := "") -> bool:
 	if not (typeof(it.get("level")) in [TYPE_INT, TYPE_FLOAT]): return false
 	var opts = it.get("opts", [])
 	if typeof(opts) != TYPE_ARRAY: return false
+	var seen := {}
 	for o in opts:
 		if typeof(o) != TYPE_DICTIONARY or not Balance.data()["options"].has(String(o.get("k", ""))): return false
 		if not (typeof(o.get("v")) in [TYPE_INT, TYPE_FLOAT]): return false
+		if seen.has(o.k): return false
+		seen[o.k] = true
 	return true
 
 static func _equipped_ok(eq) -> bool:
 	if typeof(eq) != TYPE_DICTIONARY: return false
+	if eq.get("bow") == null: return false          # arrows need a bow
 	for s in Gear.SLOTS:
 		if eq.get(s) != null and not _item_ok(eq.get(s), s): return false
 	return true
@@ -94,4 +101,5 @@ static func _inventory_ok(inv) -> bool:
 		if not (typeof(s.get("count")) in [TYPE_INT, TYPE_FLOAT]): return false
 		if int(s.count) < 1 or int(s.count) > int(Balance.num("bag.stack")): return false
 		if s.has("item") and (int(s.count) != 1 or not _item_ok(s.item) or String(s.item.base) != String(s.id)): return false
+		if not s.has("item") and Gear.is_gear(String(s.id)): return false     # gear must carry its item data
 	return true

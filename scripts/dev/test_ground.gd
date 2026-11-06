@@ -39,9 +39,9 @@ func build() -> void:
 	world.add_child(hero)
 	hero.setup_sprites()
 	var state := SaveGame.load_or_new(save_path)
+	hero.set_equipped(state.equipped)          # before set_progress, which fills HP/MP to the geared max
 	hero.set_progress(int(state.level), int(state.exp))
 	hero.inventory.from_dict(state.inventory)
-	hero.set_equipped(state.equipped)
 	hero.gear_changed.connect(func(): save_now())
 	hero.leveled_up.connect(func(_l): save_now())
 	hero.skill_released.connect(_on_skill_released)
@@ -124,7 +124,7 @@ func _on_wolf_died(w: Wolf) -> void:
 	var at := w.global_position if w.is_inside_tree() else w.position
 	var items := Loot.roll("wolf", w.level, loot_rng)
 	for it in items:
-		if it.id == "gold": it.count = int(round(it.count * hero.stats().gold_mult))   # gear "ทอง +%"
+		if it.id == "gold": it.count = hero.bonus_gold(it.count)   # gear "ทอง +%"
 	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)
 	for i in items.size():
 		var d := LootDrop.make_item(items[i].item) if items[i].has("item") else LootDrop.make(items[i].id, items[i].count)
