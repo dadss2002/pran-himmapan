@@ -47,11 +47,11 @@
 - Produces: `Gem.roll(type: String, rng, rarity := "") -> Dictionary` (level 1, exp 0, opts, element for "element") · `Gem.effect(gem: Dictionary) -> float` (main value at its level) · `Gem.mp_mult(type) -> float` · `Gem.option(gem, key) -> float` (the rolled value; 0 if absent) · `Gem.exp_to_next(level) -> int` · `Gem.add_exp(gem, amount) -> int` (levels gained, caps at 20) · `Gem.fits(type, skill_id) -> bool` · `Gem.slots_for(skill_level) -> int` · `Gem.is_plain(gem) -> bool`.
 - Produces: `SkillBuild.of(skill_id: String, char_level: int, gems: Array, hero_stats: Dictionary) -> Dictionary` with `mp: float, dmg_mult: float, crit: float, cooldown: float, arrows: int, fan_deg: float, arrow_mult: float, pierce_all: bool, pierce_extra: int, bounces: int, bounce_mult: float, homing: bool, homing_mult: float, leech: float, element: String, element_mult: float`.
 
-- [ ] **Step 1: Failing tests** `test_gem_level_scaling` (ทวีคูณ Lv1 1.35, Lv3 1.37, Lv20 1.54) · `test_gem_exp_curve` (Lv1 150, Lv5 2314, Lv10 7518; cap 20) · `test_gem_options_fixed` (cd option 0.06 stays 0.06 at Lv10 and Lv20; roll stays in 0.03–0.08) · `test_fits_by_label` (ขยาย fits neither arrow skill; ทวีคูณ fits both) · `test_slots_by_level` (1→1, 9→1, 10→2) · `test_build_split_piercing` (arrows 3, fan 24°, each 0.6 × 1.8; MP 8×1.4 = 11.2) · `test_build_split_spread` (arrows 7, fan 63°, each 0.7×0.6) · `test_build_example_from_gems_md` (piercing + แยกศร + ทวีคูณ: arrow mult 1.8×0.81, MP 16.8) · `test_build_cooldown_cap` (cut never > 30% with level+gear+option) · `test_build_crit_adds`.
-- [ ] **Step 2: Run** `$G --headless --path . --script tests/run_tests.gd` → new tests fail.
-- [ ] **Step 3: Implement** data + `gem.gd` + `skill_build.gd` (pure, no scene access).
-- [ ] **Step 4: Run** → pass, existing 143 still pass.
-- [ ] **Step 5: Commit** `M3a Task 1: gem and skill-build rules`.
+- [x] **Step 1: Failing tests** `test_gem_level_scaling` (ทวีคูณ Lv1 1.35, Lv3 1.37, Lv20 1.54) · `test_gem_exp_curve` (Lv1 150, Lv5 2314, Lv10 7518; cap 20) · `test_gem_options_fixed` (cd option 0.06 stays 0.06 at Lv10 and Lv20; roll stays in 0.03–0.08) · `test_fits_by_label` (ขยาย fits neither arrow skill; ทวีคูณ fits both) · `test_slots_by_level` (1→1, 9→1, 10→2) · `test_build_split_piercing` (arrows 3, fan 24°, each 0.6 × 1.8; MP 8×1.4 = 11.2) · `test_build_split_spread` (arrows 7, fan 63°, each 0.7×0.6) · `test_build_example_from_gems_md` (piercing + แยกศร + ทวีคูณ: arrow mult 1.8×0.81, MP 16.8) · `test_build_cooldown_cap` (cut never > 30% with level+gear+option) · `test_build_crit_adds`.
+- [x] **Step 2: Run** `$G --headless --path . --script tests/run_tests.gd` → new tests fail.
+- [x] **Step 3: Implement** data + `gem.gd` + `skill_build.gd` (pure, no scene access).
+- [x] **Step 4: Run** → pass, existing 143 still pass.
+- [x] **Step 5: Commit** `M3a Task 1: gem and skill-build rules`.
 
 ### Task 2: Enhancement rules and gear stats with plus
 

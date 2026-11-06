@@ -370,5 +370,174 @@
       "ring",
       "necklace"
     ]
+  },
+  "gem_effects": {
+    "split": {
+      "labels": [
+        "arrow"
+      ],
+      "mp": 1.4,
+      "value": 0.6,
+      "per_level": 0.01,
+      "extra_arrows": 2
+    },
+    "ricochet": {
+      "labels": [
+        "arrow"
+      ],
+      "mp": 1.3,
+      "value": 0.8,
+      "per_level": 0.01,
+      "bounces": 1,
+      "bounces_at_10": 2
+    },
+    "pierce": {
+      "labels": [
+        "arrow"
+      ],
+      "mp": 1.2,
+      "value": 0,
+      "per_level": 0,
+      "extra": 2,
+      "extra_at_10": 3
+    },
+    "homing": {
+      "labels": [
+        "arrow"
+      ],
+      "mp": 1.2,
+      "value": 0.9,
+      "per_level": 0.005
+    },
+    "multiply": {
+      "labels": [
+        "any"
+      ],
+      "mp": 1.5,
+      "value": 1.35,
+      "per_level": 0.01
+    },
+    "expand": {
+      "labels": [
+        "area"
+      ],
+      "mp": 1.3,
+      "value": 0.3,
+      "per_level": 0.01
+    },
+    "extend": {
+      "labels": [
+        "dot",
+        "trap"
+      ],
+      "mp": 1.2,
+      "value": 0.3,
+      "per_level": 0.01
+    },
+    "execute": {
+      "labels": [
+        "any"
+      ],
+      "mp": 1.2,
+      "value": 0.15,
+      "per_level": 0.005
+    },
+    "leech": {
+      "labels": [
+        "any"
+      ],
+      "mp": 1.2,
+      "value": 0.03,
+      "per_level": 0.001
+    },
+    "element": {
+      "labels": [
+        "any"
+      ],
+      "mp": 1.3,
+      "value": 1.1,
+      "per_level": 0.01
+    }
+  },
+  "skill_labels": {
+    "piercing": [
+      "arrow"
+    ],
+    "spread": [
+      "arrow"
+    ],
+    "arrow_rain": [
+      "area",
+      "dot"
+    ]
+  },
+  "gem_slots": [
+    1,
+    10,
+    30,
+    50
+  ],
+  "gem_exp": {
+    "base": 150,
+    "power": 1.7,
+    "cap": 20
+  },
+  "gem_options": {
+    "dmg_pct": {
+      "min": 0.03,
+      "max": 0.08,
+      "name": "ดาเมจสกิลนี้"
+    },
+    "cd_cut": {
+      "min": 0.03,
+      "max": 0.08,
+      "name": "คูลดาวน์สกิลนี้",
+      "minus": true
+    },
+    "mp_cut": {
+      "min": 0.04,
+      "max": 0.1,
+      "name": "MP สกิลนี้",
+      "minus": true
+    },
+    "crit": {
+      "min": 0.02,
+      "max": 0.05,
+      "name": "คริสกิลนี้"
+    },
+    "gem_exp": {
+      "min": 0.1,
+      "max": 0.25,
+      "name": "EXP ของเจมนี้"
+    }
+  },
+  "gem_split": {
+    "piercing_step_deg": 12,
+    "spread_fan_deg": 63
+  },
+  "ricochet": {
+    "range": 120
+  },
+  "homing": {
+    "turn_deg": 180,
+    "search": 220
+  },
+  "elements": {
+    "fire": {
+      "name": "ไฟ",
+      "burn_frac": 0.2,
+      "tick": 1.0,
+      "duration": 3.0
+    },
+    "ice": {
+      "name": "น้ำแข็ง",
+      "slow": 0.4,
+      "duration": 3.0
+    },
+    "lightning": {
+      "name": "สายฟ้า",
+      "range": 120,
+      "mult": 0.8
+    }
   }
 }
