@@ -59,3 +59,26 @@ func test_roll_stops_at_collider():
 	await tree.process_frame
 	if x <= 40.5: return "hero did not roll at all (x %.1f)" % x
 	return "" if x < 84.0 else "rolled into/through the post: x %.1f (post edge 93, hero half-width 10)" % x
+
+const TMP_SAVE := "user://test_ground_save.json"
+
+func test_ground_loads_and_autosaves():
+	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	var inv := Inventory.new()
+	inv.add("gold", 77)
+	SaveGame.save({"level": 4, "exp": 100, "inventory": inv.to_dict()}, TMP_SAVE)
+	var g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = TMP_SAVE
+	g.build()
+	var r := ""
+	if g.hero.level != 4 or g.hero.exp != 100 or g.hero.inventory.gold != 77: r = "loaded L%d exp %d gold %d" % [g.hero.level, g.hero.exp, g.hero.inventory.gold]
+	g.hero.inventory.add("gold", 3)
+	g.tick_autosave(29.0)
+	if r == "" and SaveGame.load_or_new(TMP_SAVE).inventory.gold != 77: r = "saved before 30 s"
+	g.tick_autosave(1.1)
+	if r == "" and SaveGame.load_or_new(TMP_SAVE).inventory.gold != 80: r = "autosave after 30 s missing"
+	g.hero.gain_exp(1000)
+	if r == "" and SaveGame.load_or_new(TMP_SAVE).level != g.hero.level: r = "level-up did not save"
+	g.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	return r

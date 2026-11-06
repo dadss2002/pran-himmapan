@@ -17,6 +17,9 @@ var loot_rng := RandomNumberGenerator.new()
 var _built := false
 var _bag_full_cd := 0.0
 var lock_ring: FxSprite
+var save_path := SaveGame.PATH
+const AUTOSAVE_EVERY := 30.0
+var _autosave_t := 0.0
 
 func _ready() -> void:
 	build()
@@ -36,6 +39,12 @@ func build() -> void:
 	hero.position = hero.spawn_point
 	world.add_child(hero)
 	hero.setup_sprites()
+	var state := SaveGame.load_or_new(save_path)
+	hero.set_progress(int(state.level), int(state.exp))
+	hero.inventory.from_dict(state.inventory)
+	hero.leveled_up.connect(func(_l): save_now())
+	hero.skill_released.connect(_on_skill_released)
+	hero.shot.connect(_on_arrow)
 	hero.health.damaged.connect(func(a, c): _number(hero.global_position + Vector2(0, -40), a, c, true))
 	hero.rolled.connect(func(_d): _fx("roll_dust", hero.global_position))
 	hero.leveled_up.connect(_on_level_up)
@@ -85,6 +94,29 @@ func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30), amount, crit, false)
 	_fx("hit_spark", w.hurt_point())
 
+func save_now() -> bool:
+	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict()}, save_path)
+
+func tick_autosave(delta: float) -> void:
+	_autosave_t += delta
+	if _autosave_t >= AUTOSAVE_EVERY:
+		_autosave_t = 0.0
+		save_now()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and hero:
+		save_now()
+
+func _on_arrow(a: Arrow) -> void:
+	if a.pierce and is_inside_tree():
+		var trail := FxSprite.make("piercing_trail", true)
+		trail.show_behind_parent = true
+		a.add_child(trail)
+		trail.play("piercing_trail")
+
+func _on_skill_released(id: String, at: Vector2) -> void:
+	if id == "spread": _fx("spread_burst", at)
+
 func _on_wolf_died(w: Wolf) -> void:
 	hero.on_kill(w.stats().exp, w.level)
 	var at := w.global_position if w.is_inside_tree() else w.position
@@ -93,7 +125,9 @@ func _on_wolf_died(w: Wolf) -> void:
 	for i in items.size():
 		var d := LootDrop.make(items[i].id, items[i].count)
 		d.pop_out(at, spots[i])
-		d.collected.connect(func(id, n): _fx("pickup_pop", hero.global_position + Vector2(0, -20)))
+		d.collected.connect(func(id, n):
+			_fx("pickup_pop", hero.global_position + Vector2(0, -20))
+			save_now())
 		drops.append(d)
 		if world: world.add_child(d)
 
@@ -109,6 +143,7 @@ func _blocked(p: Vector2) -> bool:
 	return false
 
 func _physics_process(delta: float) -> void:
+	tick_autosave(delta)
 	_bag_full_cd = maxf(0.0, _bag_full_cd - delta)
 	for d in drops.duplicate():
 		if not is_instance_valid(d) or d.expired:

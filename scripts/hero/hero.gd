@@ -9,6 +9,7 @@ signal respawned()
 signal rolled(dir: Vector2)
 signal leveled_up(level: int)
 signal exp_changed()
+signal skill_released(id: String, at: Vector2)
 
 const MANIFEST := "res://assets/hero/manifest.json"
 const ARROW_SCENE := preload("res://scenes/arrow.tscn")
@@ -327,6 +328,8 @@ func _release() -> void:
 	var v := _aim_vec
 	if is_instance_valid(_aim_target) and _aim_target.is_alive():
 		v = (_aim_target.hurt_point() - start).normalized()
+	if _pending_skill != "":
+		skill_released.emit(_pending_skill, start)
 	match _pending_skill:
 		"piercing":
 			_fire(start, v, Skills.damage_mult("piercing", level), true)
