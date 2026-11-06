@@ -16,6 +16,8 @@ var provoked := false
 var _ring_cd := 0.0
 var _throw_cd := 0.0
 var _flee_left := 0.0
+var _ring: Node2D
+const RING_SCENE := preload("res://scripts/monsters/ring_warning.gd")
 
 func cfg(key: String):
 	var path := "monsters.%s.%s" % [kind, key]
@@ -199,6 +201,25 @@ func _on_died() -> void:
 		var dmg := maxi(1, int(round(stats().atk * n("ring_mult") * n("poison_frac"))))
 		c.setup(_pos(), n("cloud_radius"), n("cloud_time"), dmg, n("poison_time"), _hero)
 		get_parent().add_child(c)
+
+## Ring attacks draw their own warning: the hit ellipse filling up over the warning time (poison
+## rings purple, plain stomps red). Lunges keep the wolf's warning.
+func _show_telegraph(on: bool, at := Vector2.ZERO) -> void:
+	if attack_kind() != "ring":
+		super._show_telegraph(on, at)
+		return
+	if on:
+		if _ring == null:
+			_ring = RING_SCENE.new()
+			_ring.show_behind_parent = true
+			add_child(_ring)
+		var poison := Balance.has("monsters.%s.poison_frac" % kind) and n("poison_frac") > 0.0
+		_ring.start(n("ring_radius"), n("ring_warn"), Color(0.75, 0.35, 0.95) if poison else Color(1.0, 0.3, 0.25))
+	elif _ring:
+		_ring.visible = false
+
+func telegraph_visible() -> bool:
+	return super.telegraph_visible() or (_ring != null and _ring.visible)
 
 ## Ambushers stay faint until the hero is within their aggro range (or they are already fighting).
 func _update_hidden() -> void:

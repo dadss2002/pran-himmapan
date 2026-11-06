@@ -1,6 +1,6 @@
 extends SceneTree
 ## Gameplay demo recorder (not a test): xvfb-run -a godot --path . --rendering-driver opengl3 --script tools/demo_video.gd
-## Plays the test ground with scripted input and writes every 2nd physics frame to /tmp/pran_demo/f_#####.png.
+## Plays the test ground (M3c rooms, M3d monsters) with scripted input and writes every 2nd physics frame to /tmp/pran_demo/f_#####.png.
 ## Build the video afterwards with ffmpeg (see docs or the PR). Uses a throwaway save.
 
 const DIR := "/tmp/pran_demo/"
@@ -35,18 +35,34 @@ func _walk(dir: Vector2, count: int) -> void:
 	await _frames(count)
 	hero.external_input = Vector2.ZERO
 
-func _route(points: Array, max_each := 240) -> void:
-	for t in points:
-		for i in max_each:
-			var to: Vector2 = t - hero.global_position
-			if to.length() < 10: break
-			hero.external_input = to.normalized()
-			await _frames(1)
+## Walk along the room's walk grid (8 px cells) to `to`.
+func _go(to: Vector2, max_frames := 600) -> void:
+	var nav: AStarGrid2D = g._navs[g.room_id]
+	var path := nav.get_point_path(Vector2i((hero.global_position / 8.0).floor()), Vector2i((to / 8.0).floor()))
+	var k := 1
+	var room: String = g.room_id
+	for f in max_frames:
+		if hero.global_position.distance_to(to) < 10.0 or g.room_id != room: break
+		while k < path.size() - 1 and hero.global_position.distance_to(path[k]) < 6.0: k += 1
+		var target: Vector2 = path[mini(k, path.size() - 1)] if path.size() > 1 else to
+		hero.external_input = (target - hero.global_position).normalized()
+		await _frames(1)
 	hero.external_input = Vector2.ZERO
 
-func _pack(level: int) -> WolfPack:
+## Walk onto a warp and wait until the next room is in.
+func _through(warp_id: String) -> void:
+	var from: String = g.room_id
+	await _go(g.rooms.warp_at(from, warp_id), 900)
+	for i in 120:
+		if g.room_id != from: break
+		hero.external_input = (g.rooms.warp_at(from, warp_id) - hero.global_position).normalized()
+		await _frames(1)
+	hero.external_input = Vector2.ZERO
+	await _frames(30)
+
+func _pack(kind: String) -> WolfPack:
 	for p in g.packs:
-		if p.level == level: return p
+		if p.kind == kind: return p
 	return null
 
 func _alive(p: WolfPack) -> int:
@@ -54,6 +70,11 @@ func _alive(p: WolfPack) -> int:
 	for w in p.wolves:
 		if w.state != "dead": c += 1
 	return c
+
+func _fight_for(p: WolfPack, frames: int) -> void:
+	Input.action_press("attack")
+	await _frames(frames)
+	Input.action_release("attack")
 
 func _fight(p: WolfPack, max_frames: int) -> void:
 	Input.action_press("attack")
@@ -91,19 +112,28 @@ func _run() -> void:
 	hero = g.hero
 	hero.set_progress(12, 0)               # skills unlocked so both skill buttons show
 	await _frames(40)
-	var p1 := _pack(1)
-	# from the plaza up the north trail to the ruins (Lv1 pack)
-	await _route([hero.global_position + Vector2(-70, -10), Vector2(965, 470), Vector2(1030, 380), p1.home + Vector2(60, 90)])
-	await _fight(p1, 900)
+	# start room: hit a deer, it runs away
+	var deer := _pack("deer")
+	await _go(deer.home + Vector2(-60, 30))
+	await _fight_for(deer, 150)
+	await _frames(40)
+	# west to the boars: they leave you alone until you shoot one
+	await _through("west")
+	var boars := _pack("boar")
+	await _go(boars.home + Vector2(90, 40))
+	await _frames(60)
+	await _fight(boars, 1200)
 	await _frames(30)
 	await _collect_drops(300)
-	await _frames(20)
 	g.hud.open_bag()
 	await _idle(90)
 	g.hud.bag_panel.close()
 	await _idle(10)
-	# back down past the plaza and west along the trail to the stone road
-	await _route([Vector2(1030, 380), Vector2(965, 470), Vector2(880, 575), Vector2(640, 576), Vector2(470, 600), Vector2(410, 760)], 300)
-	await _frames(40)
+	# south to the pond: poison mushrooms and a hidden viper
+	await _through("south")
+	var shrooms := _pack("shroom")
+	await _go(shrooms.home + Vector2(-90, 0))
+	await _fight(shrooms, 900)
+	await _frames(60)
 	print("DEMO frames=%d" % n)
 	quit(0)
