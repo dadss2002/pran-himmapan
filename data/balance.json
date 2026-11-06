@@ -121,7 +121,9 @@
     "stop_factor": 0.8,
     "wander_pause": 1.5,
     "pack_spacing": 20,
-    "pack_ring": 26
+    "pack_ring": 26,
+    "stuck_time": 1.5,
+    "stuck_distance": 8
   },
   "packs": [
     {

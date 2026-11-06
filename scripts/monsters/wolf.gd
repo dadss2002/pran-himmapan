@@ -28,6 +28,9 @@ var _lunge_from := Vector2.ZERO
 var _lunge_hit := false
 var _wander_to := Vector2.ZERO
 var _flash := 0.0
+var _wanted_move := false          # set by _move this step; stuck checks only count frames spent trying
+var _stuck_t := 0.0
+var _stuck_from := Vector2.ZERO
 var _hero: Hero = null
 var _telegraph: FxSprite = null
 var _setup_done := false
@@ -166,6 +169,7 @@ func step(delta: float, hero: Hero) -> void:
 	_bite_cd = maxf(0.0, _bite_cd - delta)
 	_lunge_cd = maxf(0.0, _lunge_cd - delta)
 	_t += delta
+	_wanted_move = false
 	var alive_hero := _hero != null and is_instance_valid(_hero) and _hero.state != "dead"
 	if state in ["chase", "bite", "lunge_warn", "lunge"] and not alive_hero:
 		_go_home()
@@ -223,7 +227,29 @@ func step(delta: float, hero: Hero) -> void:
 				velocity = Vector2.ZERO
 			else:
 				_move(to_home.normalized() * n("run"), minf(delta, to_home.length() / n("run")))
+	# Blocked by water or a trunk: a chase that makes no headway gives up (back home at full HP, so
+	# an unreachable hero can't farm the pack); a return that makes no headway snaps home.
+	if state in ["chase", "return"] and _stuck(delta):
+		if state == "chase":
+			_go_home()
+		else:
+			_set_pos(home)
+			state = "idle"
+			_wander_to = home
+			velocity = Vector2.ZERO
 	_refresh()
+
+func _stuck(delta: float) -> bool:
+	if not _wanted_move:
+		_stuck_t = 0.0
+		_stuck_from = _pos()
+		return false
+	_stuck_t += delta
+	if _stuck_t < n("stuck_time"): return false
+	var moved := _pos().distance_to(_stuck_from)
+	_stuck_t = 0.0
+	_stuck_from = _pos()
+	return moved < n("stuck_distance")
 
 func _chase(delta: float) -> void:
 	var d := _pos().distance_to(_hpos())
@@ -307,7 +333,11 @@ func _move(v: Vector2, dt: float) -> void:
 	v *= status.speed_mult()         # ice gem slow: walk, run and lunge
 	velocity = v
 	_face(v)
-	if is_inside_tree(): move_and_collide(v * dt)
+	if v.length() > 1.0: _wanted_move = true
+	if is_inside_tree():
+		var hit := move_and_collide(v * dt)
+		if hit:                                    # slide along trunks and shores instead of stopping dead
+			move_and_collide(hit.get_remainder().slide(hit.get_normal()))
 	else: position += v * dt
 
 func push(v: Vector2) -> void:

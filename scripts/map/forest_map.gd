@@ -102,17 +102,21 @@ func _build_blockers() -> void:
 	blockers = StaticBody2D.new()
 	blockers.name = "Blockers"
 	add_child(blockers)
+	# merge neighbouring cells in a row that block the same part of the cell (full, top half, ...)
 	var t := float(ForestLayout.TILE)
 	for y in layout.rows:
-		var x := 0
-		while x < layout.cols:
-			if not layout.cell_blocked(x, y):
-				x += 1
+		var run := Rect2()
+		var key := Rect2()
+		for x in layout.cols + 1:
+			var r := layout.cell_block_rect(x, y) if x < layout.cols else Rect2()
+			var k := Rect2(r.position - Vector2(x * t, y * t), r.size) if r.size != Vector2.ZERO else Rect2()
+			if run.size != Vector2.ZERO and k == key and is_equal_approx(r.position.x, run.end.x):
+				run = run.merge(r)
 				continue
-			var x0 := x
-			while x < layout.cols and layout.cell_blocked(x, y): x += 1
-			for part in _minus_walk(Rect2(x0 * t, y * t, (x - x0) * t, t)):
-				_box(part)
+			if run.size != Vector2.ZERO:
+				for part in _minus_walk(run): _box(part)
+			run = r
+			key = k
 	var sz := layout.size_px()
 	_box(Rect2(-BORDER, -BORDER, sz.x + 2 * BORDER, BORDER))
 	_box(Rect2(-BORDER, sz.y, sz.x + 2 * BORDER, BORDER))

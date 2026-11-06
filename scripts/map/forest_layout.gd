@@ -117,16 +117,25 @@ func in_walk(p: Vector2) -> bool:
 		if r.has_point(p): return true
 	return false
 
-## Water blocks a cell when two or more of its corners are water (the bridge deck is cut out
-## of this by blocked_at and by ForestMap's colliders, not here).
+## The part of cell x, y that water blocks (empty Rect2 = walkable). A cell with two water corners on
+## one side blocks only that half, so the hero stops at the drawn shore; a single water corner (a
+## sliver of a bend) blocks nothing; three or four corners, or two diagonal ones, block the whole cell.
+func cell_block_rect(x: int, y: int) -> Rect2:
+	var c := cell(x, y)
+	if c.terrain != "water": return Rect2()
+	var t := float(TILE)
+	var o := Vector2(x * t, y * t)
+	match int(c.mask):
+		12: return Rect2(o, Vector2(t, t / 2))                          # NW+NE: top half
+		3: return Rect2(o + Vector2(0, t / 2), Vector2(t, t / 2))       # SW+SE: bottom half
+		10: return Rect2(o, Vector2(t / 2, t))                          # NW+SW: left half
+		5: return Rect2(o + Vector2(t / 2, 0), Vector2(t / 2, t))       # NE+SE: right half
+		1, 2, 4, 8: return Rect2()
+	return Rect2(o, Vector2(t, t))
+
 func cell_blocked(x: int, y: int) -> bool:
 	if x < 0 or y < 0 or x >= cols or y >= rows: return true
-	var c := cell(x, y)
-	if c.terrain != "water": return false
-	var n := 0
-	for i in 4:
-		if int(c.mask) & (1 << i): n += 1
-	return n >= 2
+	return cell_block_rect(x, y).size != Vector2.ZERO
 
 ## The blocking box of a prop, or an empty Rect2 when it has none: spans `foot` up from its feet.
 func foot_rect(p: Dictionary) -> Rect2:
@@ -139,7 +148,7 @@ func foot_rect(p: Dictionary) -> Rect2:
 func blocked_at(p: Vector2) -> bool:
 	var sz := size_px()
 	if p.x < 0 or p.y < 0 or p.x >= sz.x or p.y >= sz.y: return true
-	if not in_walk(p) and cell_blocked(int(p.x) / TILE, int(p.y) / TILE): return true
+	if not in_walk(p) and cell_block_rect(int(p.x) / TILE, int(p.y) / TILE).has_point(p): return true
 	for pr in props:
 		var r := foot_rect(pr)
 		if r.size != Vector2.ZERO and r.has_point(p): return true

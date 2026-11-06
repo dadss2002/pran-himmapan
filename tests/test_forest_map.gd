@@ -150,3 +150,61 @@ func test_fx_points_play():
 			if s.position != g.layout.fx[i].at or not s.keep: r = "ripple %d at %s keep %s" % [i, s.position, s.keep]
 	await _done(g)
 	return r
+
+func test_wolves_give_up_when_water_is_between():
+	# hero north of the stream, Lv5 pack south of it: the wolves pile up on the shore, then go home healed
+	var g := _ground(true)
+	await tree.physics_frame
+	var h: Hero = g.hero
+	h.set_physics_process(false)
+	h.global_position = Vector2(1080, 905)
+	var pack: WolfPack = g.packs[2]
+	pack.alert(h)
+	for w in pack.wolves: w.health.take_hit(3, false)
+	for i in 360: await tree.physics_frame
+	var r := ""
+	for w in pack.wolves:
+		if w.state in ["chase", "bite", "lunge_warn", "lunge"]: r = "a wolf still chases across the water from %s" % w.global_position
+		elif w.health.hp < w.health.max_hp: r = "a wolf went home without healing"
+	await _done(g)
+	return r
+
+func test_stuck_return_snaps_home():
+	var g := _ground(true)
+	await tree.physics_frame
+	g.hero.set_physics_process(false)
+	g.hero.global_position = Vector2(200, 700)       # far from every pack
+	var pack: WolfPack = g.packs[2]
+	var w: Wolf = pack.wolves[0]
+	w.global_position = Vector2(1100, 880)           # north of the stream, home is south of it
+	w._go_home()
+	for i in 480: await tree.physics_frame
+	var at := w.global_position
+	var home := w.home
+	await _done(g)
+	return "" if at.distance_to(home) < 60.0 else "returning wolf stuck at %s (home %s)" % [at, home]
+
+func test_colliders_match_blocked_at():
+	# every point the drop rules call blocked is solid for the hero, and the other way round
+	var g := _ground(true)
+	await tree.physics_frame
+	await tree.physics_frame
+	var space: PhysicsDirectSpaceState2D = g.get_world_2d().direct_space_state
+	var q := PhysicsPointQueryParameters2D.new()
+	q.collision_mask = 1
+	var r := ""
+	var y := 1.5
+	while y < 1280.0 and r == "":
+		var x := 1.5
+		while x < 1920.0:
+			q.position = Vector2(x, y)
+			var solid := false
+			for hit in space.intersect_point(q, 4):
+				if hit.collider is StaticBody2D: solid = true
+			if solid != g.layout.blocked_at(q.position):
+				r = "at %s physics %s, blocked_at %s" % [q.position, solid, not solid]
+				break
+			x += 6.0
+		y += 6.0
+	await _done(g)
+	return r
