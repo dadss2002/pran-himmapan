@@ -7,6 +7,8 @@ signal shot(arrow: Arrow)
 signal died()
 signal respawned()
 signal rolled(dir: Vector2)
+signal leveled_up(level: int)
+signal exp_changed()
 
 const MANIFEST := "res://assets/hero/manifest.json"
 const ARROW_SCENE := preload("res://scenes/arrow.tscn")
@@ -16,6 +18,8 @@ const SHOOT_FRAMES := 9
 const HURT_RED := Color(1.0, 0.25, 0.2)
 
 var level := 1
+var exp := 0
+var mp := 0.0
 var facing := 0               # index into Combat.DIRS
 var state := "idle"           # idle | walk | shoot | roll | hurt | dead
 var cooldown := 0.0           # shot cooldown
@@ -54,8 +58,34 @@ func setup_sprites() -> void:
 	mat.set_shader_parameter("flash_color", HURT_RED)
 	body.material = mat
 	health.setup(Balance.hero(level).hp)
+	mp = max_mp()
 	health.died.connect(_on_died)
 	_refresh()
+
+func max_mp() -> int:
+	return Balance.mp(level)
+
+## Sets level and stats without effects (loading a save).
+func set_progress(new_level: int, new_exp: int) -> void:
+	level = new_level
+	exp = new_exp
+	health.setup(stats().hp)
+	mp = max_mp()
+	exp_changed.emit()
+
+func on_kill(monster_exp: int, monster_level: int) -> void:
+	gain_exp(Progression.kill_exp(monster_exp, monster_level, level))
+
+## Adds EXP; each level gained heals HP/MP fully and emits leveled_up once.
+func gain_exp(amount: int) -> void:
+	var r := Progression.add_exp(level, exp, amount)
+	for i in r.levels_gained:
+		level += 1
+		health.setup(stats().hp)
+		mp = max_mp()
+		leveled_up.emit(level)
+	exp = r.exp
+	exp_changed.emit()
 
 func dodge_cooldown_left() -> float:
 	return _dodge_cd
@@ -116,6 +146,8 @@ func step(delta: float, input: Vector2) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
 	_dodge_cd = maxf(0.0, _dodge_cd - delta)
 	health.tick(delta)
+	if state != "dead":
+		mp = minf(max_mp(), mp + Balance.num("mp.regen") * delta)
 	_flash = maxf(0.0, _flash - delta)
 	_t += delta
 	match state:
@@ -176,6 +208,8 @@ func _pos() -> Vector2:
 	return global_position if is_inside_tree() else position
 
 func _on_died() -> void:
+	exp = Progression.after_death(level, exp)
+	exp_changed.emit()
 	state = "dead"
 	_t = 0.0
 	_released = true
@@ -187,6 +221,7 @@ func _respawn() -> void:
 	if is_inside_tree(): global_position = spawn_point
 	else: position = spawn_point
 	health.reset_full()
+	mp = max_mp()
 	health.set_invulnerable(Balance.num("hero.respawn_iframe"))
 	state = "idle"
 	_t = 0.0

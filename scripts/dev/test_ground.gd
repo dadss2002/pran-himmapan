@@ -37,6 +37,7 @@ func build() -> void:
 	hero.setup_sprites()
 	hero.health.damaged.connect(func(a, c): _number(hero.global_position + Vector2(0, -40), a, c, true))
 	hero.rolled.connect(func(_d): _fx("roll_dust", hero.global_position))
+	hero.leveled_up.connect(_on_level_up)
 	var cam := Camera2D.new()
 	var size: Array = Balance.data()["map_size"]
 	cam.limit_left = 0
@@ -70,11 +71,16 @@ func build() -> void:
 	hud.add_child(label)
 	queue_redraw()
 
+func _on_level_up(lv: int) -> void:
+	_fx("level_up", hero.global_position)
+	_text(hero.global_position + Vector2(0, -60), "Lv ขึ้น! %d" % lv, Color("#ffd36a"))
+
 func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30), amount, crit, false)
 	_fx("hit_spark", w.hurt_point())
 
 func _on_wolf_died(w: Wolf) -> void:
+	hero.on_kill(w.stats().exp, w.level)
 	var at := w.global_position if w.is_inside_tree() else w.position
 	var items := Loot.roll("wolf", w.level, loot_rng)
 	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)

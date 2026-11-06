@@ -10,6 +10,7 @@ var hero: Hero
 var hp_label: Label
 var hp_bar: ProgressBar
 var mp_bar: ProgressBar
+var mp_label: Label
 var level_label: Label
 var gold_label: Label
 var exp_bar: ProgressBar
@@ -63,9 +64,14 @@ func build() -> void:
 	hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	hp_bar.add_child(hp_label)
-	mp_bar = _bar(Color("#4a8be0"), Color("#13233f"), Vector2(110, 5))
+	mp_bar = _bar(Color("#4a8be0"), Color("#13233f"), Vector2(110, 7))
 	mp_bar.value = 100
 	col.add_child(mp_bar)
+	mp_label = _label("MP 0 / 0", 6, Color.WHITE)
+	mp_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mp_bar.add_child(mp_label)
 
 	# --- top-right: gold, bag (M2c), minimap frame
 	var tr := HBoxContainer.new()
@@ -135,6 +141,11 @@ func refresh() -> void:
 	hp_label.text = "HP %d / %d" % [hp, mx]
 	hp_bar.value = 100.0 * hp / maxf(1.0, mx)
 	level_label.text = "Lv %d" % hero.level
+	mp_label.text = "MP %d / %d" % [int(hero.mp), hero.max_mp()]
+	mp_bar.value = 100.0 * hero.mp / maxf(1.0, hero.max_mp())
+	if hero.level >= Progression.cap(): exp_bar.value = 100.0
+	else: exp_bar.value = 100.0 * hero.exp / float(Progression.exp_to_next(hero.level))
+	gold_label.text = str(hero.inventory.gold)
 	buttons.set_cooldown("shoot", hero.cooldown, Balance.num("shot.cooldown"))
 	buttons.set_cooldown("dodge", hero.dodge_cooldown_left(), Balance.dodge(hero.level).cooldown)
 
