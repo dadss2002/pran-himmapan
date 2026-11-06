@@ -127,7 +127,7 @@ func _on_wolf_died(w: Wolf) -> void:
 		if it.id == "gold": it.count = int(round(it.count * hero.stats().gold_mult))   # gear "ทอง +%"
 	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)
 	for i in items.size():
-		var d := LootDrop.make(items[i].id, items[i].count)
+		var d := LootDrop.make_item(items[i].item) if items[i].has("item") else LootDrop.make(items[i].id, items[i].count)
 		d.pop_out(at, spots[i])
 		d.collected.connect(func(id, n):
 			_fx("pickup_pop", hero.global_position + Vector2(0, -20))

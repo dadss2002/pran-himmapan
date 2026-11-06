@@ -1,5 +1,6 @@
 class_name Loot
-## Drop rolls (docs/spec-numbers.md §5, docs/gems.md §6). Equipment drops arrive in M2c.
+## Drop rolls (docs/spec-numbers.md §5, docs/gems.md §6). Equipment: loot.<kind>.gear chance,
+## base picked evenly from gear_pool.<kind>, rarity and options from Gear.roll_item.
 
 static func roll(kind: String, level: int, rng: RandomNumberGenerator) -> Array:
 	var t := "loot." + kind
@@ -11,4 +12,8 @@ static func roll(kind: String, level: int, rng: RandomNumberGenerator) -> Array:
 	if rng.randf() < Balance.num(t + ".gem"):
 		var gems: Array = Balance.data()["gems"]
 		out.append({"id": "gem_" + gems[rng.randi_range(0, gems.size() - 1)], "count": 1})
+	if Balance.has(t + ".gear") and rng.randf() < Balance.num(t + ".gear"):
+		var pool: Array = Balance.data()["gear_pool"][kind]
+		var base: String = pool[rng.randi_range(0, pool.size() - 1)]
+		out.append({"id": base, "count": 1, "item": Gear.roll_item(base, level, rng)})
 	return out

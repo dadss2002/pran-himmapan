@@ -16,9 +16,12 @@ var _pop_to := Vector2.ZERO
 var _popping := false
 var _icon: Sprite2D
 var glint: FxSprite = null     # gems twinkle (item_glint) so they stand out from ore
+var item: Dictionary = {}      # equipment: {base, rarity, level, opts}; empty for stackables
+var beam: FxSprite = null      # rarity_beam under rare-and-up equipment, tinted by rarity
 
 static func icon_path(id: String) -> String:
 	if id == "gold": return "res://assets/items/coin_gold.png"
+	if Gear.is_gear(id): return "res://assets/items/%s.png" % Gear.icon_name(id)
 	if id.begins_with("gem_"):
 		var group: String = Balance.data()["gem_icon_group"].get(id.trim_prefix("gem_"), "blue")
 		return "res://assets/items/gem_%s.png" % group
@@ -39,6 +42,19 @@ static func make(id: String, n: int) -> LootDrop:
 		d.glint.position = d._icon.position
 		d.add_child(d.glint)
 		d.glint.play("item_glint")
+	return d
+
+## Equipment on the ground. Rare and up stand in a light beam of their rarity colour.
+static func make_item(it: Dictionary) -> LootDrop:
+	var d := make(String(it.base), 1)
+	d.item = it.duplicate(true)
+	if Gear.rarity_rank(String(it.rarity)) >= Gear.rarity_rank(String(Balance.data()["beam_from_rarity"])):
+		d.beam = FxSprite.make("rarity_beam", true)
+		d.beam.modulate = Color(Gear.rarity_color(String(it.rarity)), 0.6)
+		d.beam.show_behind_parent = true
+		d.add_child(d.beam)
+		d.move_child(d.beam, 0)
+		d.beam.play("rarity_beam")
 	return d
 
 ## n spots pickup.scatter_min–scatter_max px from of center, skipping blocked ones (e.g. inside a post).
@@ -81,11 +97,17 @@ func step(delta: float, hero: Hero, inv: Inventory) -> bool:
 	var hp: Vector2 = hero.global_position if hero.is_inside_tree() else hero.position
 	var to := hp - position
 	if to.length() > Balance.num("pickup.magnet"): return false
-	bag_full_notice = inv.is_full_for(item_id)
+	bag_full_notice = (not inv.has_free_slot()) if not item.is_empty() else inv.is_full_for(item_id)
 	if bag_full_notice: return false
 	var stepd := Balance.num("pickup.speed") * delta
 	if to.length() <= maxf(Balance.num("pickup.contact"), stepd):
 		position = hp
+		if not item.is_empty():
+			if not inv.add_item(item): return false
+			collected.emit(item_id, 1)
+			expired = true
+			if is_inside_tree(): queue_free()
+			return true
 		var left := inv.add(item_id, count)
 		if left > 0:          # only part fitted
 			count = left

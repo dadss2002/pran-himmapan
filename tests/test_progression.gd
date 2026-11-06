@@ -47,3 +47,23 @@ func test_loot_rates_seeded():
 	if ore_p < 0.23 or ore_p > 0.27: return "ore rate %.3f" % ore_p
 	if gem_p < 0.007 or gem_p > 0.013: return "gem rate %.4f" % gem_p
 	return ""
+
+func test_gear_drop_rate_seeded():
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 21
+	var n := 40000
+	var gear := 0
+	var by_base := {}
+	for i in n:
+		for it in Loot.roll("wolf", 3, rng):
+			if it.has("item"):
+				gear += 1
+				by_base[it.id] = by_base.get(it.id, 0) + 1
+				if it.item.base != it.id or it.count != 1: return "bad gear entry %s" % it
+	var rate := 100.0 * gear / n
+	if absf(rate - 6.0) > 0.4: return "gear rate %.2f%%, want 6%%" % rate
+	var pool: Array = Balance.data()["gear_pool"]["wolf"]
+	for b in pool:
+		var share: float = float(by_base.get(b, 0)) / gear
+		if absf(share - 1.0 / pool.size()) > 0.03: return "%s share %.3f" % [b, share]
+	return ""

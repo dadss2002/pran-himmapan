@@ -101,12 +101,12 @@
 **Interfaces:**
 - Produces: `Loot.roll()` may add `{id: base, count: 1, item: {...}}` (6%, pool uniform); `LootDrop.make_item(item)`; `LootDrop.beam` (FxSprite, rare and above, tinted to the rarity color); pickup calls `inv.add_item`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   `test_gear_drop_rate_seeded` (≈6%, pool uniform) · `test_beam_only_rare_and_up` · `test_gear_pickup_needs_free_slot` (bag full → stays, notice) · `test_icon_for_gear`.
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement**; make the beam with vfx_workbench (`heal_column` or `sky_beam`, recoloured), export, strip with the same steps as item_glint.
-- [ ] **Step 4: Run** → pass.
-- [ ] **Step 5: Commit** `M2c: equipment drops with rarity beam`.
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement**; make the beam with vfx_workbench (`heal_column` or `sky_beam`, recoloured), export, strip with the same steps as item_glint.
+- [x] **Step 4: Run** → pass.
+- [x] **Step 5: Commit** `M2c: equipment drops with rarity beam`.
 
 ### Task 5: Bag screen
 
