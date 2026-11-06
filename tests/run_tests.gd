@@ -13,7 +13,9 @@ func _run_all() -> void:
 	var dir := DirAccess.open("res://tests")
 	var files := Array(dir.get_files())
 	files.sort()
+	var only := OS.get_environment("TEST_ONLY")      # e.g. TEST_ONLY=test_monsters to run one file
 	for f in files:
+		if only != "" and not f.begins_with(only): continue
 		if f.begins_with("test_") and f.ends_with(".gd"):
 			await _run_file("res://tests/" + f)
 	print("RESULT passed=%d failed=%d" % [passed, failures])

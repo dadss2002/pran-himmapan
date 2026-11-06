@@ -1,10 +1,9 @@
 class_name PaintedLayout
 extends RefCounted
-## The painted forest map as data (res://data/map_painted.json, written by tools/painted_map.py):
+## One painted forest room as data (a room of res://data/rooms.json, built by RoomSet.layout):
 ## PixelLab scene chunks, an 8 px blocked grid, leaf overlays, spawn and pack homes.
 ## Pure rules, no scene access: what blocks, and whether places can reach each other on foot.
 
-const PATH := "res://data/map_painted.json"
 ## Free cells a body needs around its feet cell (x: ±1, y: -2..0): the hero's 20×16 feet box sits at
 ## y-14..y+2, so it can touch three rows.
 const CLEAR_X := 1
@@ -19,9 +18,10 @@ var overlays: Array = []      # [{file, at: Vector2}]
 var fx: Array = []            # [{id, at: Vector2}]
 var hero_spawn := Vector2.ZERO
 var pack_homes: Array = []    # [Vector2]
+var from_room := false          # built from one room: packs are checked against its own homes only
 var _blocked := PackedByteArray()
 
-static func open(path := PATH) -> PaintedLayout:
+static func open(path: String) -> PaintedLayout:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null: return null
 	return from_dict(JSON.parse_string(f.get_as_text()))
@@ -29,8 +29,17 @@ static func open(path := PATH) -> PaintedLayout:
 static func _v(a: Array) -> Vector2:
 	return Vector2(float(a[0]), float(a[1]))
 
+## Either the old whole-map dict or one room of data/rooms.json (image/overlay/spawn/pack_home/
+## monsters; size and cell are copied in by RoomSet).
 static func from_dict(d: Dictionary) -> PaintedLayout:
 	var l := PaintedLayout.new()
+	if d.has("image"):
+		l.from_room = true
+		d = d.duplicate()
+		d["chunks"] = [{"file": d.image, "at": [0, 0]}]
+		d["overlays"] = [{"file": d.overlay, "at": [0, 0]}] if d.get("overlay") != null else []
+		d["hero_spawn"] = d.get("spawn", [0, 0])
+		d["pack_homes"] = [d.pack_home] if d.get("pack_home") != null else []
 	l.size = _v(d.size)
 	l.cell = int(d.get("cell", 8))
 	var grid: Array = d.blocked
@@ -117,6 +126,7 @@ func validate() -> Array[String]:
 		if not ResourceLoader.exists(c.file): errs.append("missing %s" % c.file)
 	if blocked_at(hero_spawn): errs.append("hero spawn blocked")
 	var packs: Array = Balance.data().get("packs", [])
+	if from_room: return errs
 	if pack_homes.size() != packs.size(): errs.append("%d pack homes for %d packs" % [pack_homes.size(), packs.size()])
 	for i in mini(pack_homes.size(), packs.size()):
 		for q in ring(pack_homes[i], int(packs[i].count)):

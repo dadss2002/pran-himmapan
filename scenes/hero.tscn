@@ -5,8 +5,9 @@
 [ext_resource type="Texture2D" path="res://assets/items/bow_bamboo.png" id="3"]
 [ext_resource type="Script" path="res://scripts/actors/health.gd" id="4"]
 
-[sub_resource type="RectangleShape2D" id="feet"]
-size = Vector2(20, 16)
+[sub_resource type="CapsuleShape2D" id="feet"]
+radius = 8.0
+height = 20.0
 
 [node name="Hero" type="CharacterBody2D"]
 collision_layer = 4
@@ -16,6 +17,7 @@ script = ExtResource("1")
 
 [node name="Feet" type="CollisionShape2D" parent="."]
 position = Vector2(0, -6)
+rotation = 1.5707964
 shape = SubResource("feet")
 
 [node name="Body" type="AnimatedSprite2D" parent="."]

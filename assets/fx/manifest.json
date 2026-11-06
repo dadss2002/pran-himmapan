@@ -195,5 +195,33 @@
     ],
     "loop": true,
     "pixellab": "06caf552-1ad5-40f3-9ac3-dc17b7d9f3ec"
+  },
+  "warp_ring": {
+    "cell": [
+      58,
+      26
+    ],
+    "frames": 12,
+    "fps": 12,
+    "anchor": [
+      29,
+      13
+    ],
+    "loop": true,
+    "pixellab": "e07e1dec-1410-4d21-8e19-25a47ae1fccf"
+  },
+  "poison_mist": {
+    "cell": [
+      82,
+      29
+    ],
+    "frames": 32,
+    "fps": 12,
+    "anchor": [
+      41,
+      20
+    ],
+    "loop": true,
+    "pixellab": "f6917167-2fc7-4409-b1b4-7a94dd087c9f"
   }
 }

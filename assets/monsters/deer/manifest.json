@@ -1,0 +1,58 @@
+{
+ "directions": [
+  "south",
+  "south-east",
+  "east",
+  "north-east",
+  "north",
+  "north-west",
+  "west",
+  "south-west"
+ ],
+ "cell": {
+  "pose": [
+   48,
+   48
+  ],
+  "run": [
+   48,
+   48
+  ]
+ },
+ "fps": {
+  "pose": 1,
+  "run": 12
+ },
+ "anchor": {
+  "pose": [
+   24,
+   45
+  ],
+  "run": [
+   24,
+   45
+  ]
+ },
+ "frames": {
+  "pose": {
+   "south": 1,
+   "south-east": 1,
+   "east": 1,
+   "north-east": 1,
+   "north": 1,
+   "north-west": 1,
+   "west": 1,
+   "south-west": 1
+  },
+  "run": {
+   "south": 6,
+   "south-east": 6,
+   "east": 6,
+   "north-east": 6,
+   "north": 6,
+   "north-west": 6,
+   "west": 6,
+   "south-west": 6
+  }
+ }
+}

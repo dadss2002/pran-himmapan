@@ -6,20 +6,26 @@ var tree: SceneTree
 func setup(t: SceneTree) -> void:
 	tree = t
 
-func test_ground_spawns_three_packs():
+func test_ground_wolf_packs_in_their_rooms():
 	var g = load("res://scenes/test_ground.tscn").instantiate()
 	g.save_path = TMP_SAVE          # never touch the player's real save
 	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
 	g.build()
-	var levels := []
-	var total := 0
-	for p in g.packs:
-		levels.append(p.level)
-		total += p.wolves.size()
 	var r := ""
-	if levels != [1, 3, 5]: r = "pack levels %s" % [levels]
-	elif total != 11: r = "%d wolves, expected 11" % total
+	if g.room_id != "c1r1": r = "starts in %s" % g.room_id
 	elif g.hero.spawn_point != g.layout.hero_spawn: r = "hero spawn %s" % g.hero.spawn_point
+	else:
+		for want in [["c1r0", 1, 4], ["c2r2", 3, 3], ["c1r2", 5, 4]]:
+			g.go_to(want[0], "", false)
+			var wolves := 0
+			var levels := []
+			for p in g.packs:
+				if p.kind != "wolf": continue      # other forest monsters share some rooms (spec M3d §3)
+				levels.append(p.level)
+				wolves += p.wolves.size()
+			if levels != [want[1]] or wolves != want[2]:
+				r = "%s: pack levels %s, %d wolves" % [want[0], levels, wolves]
+				break
 	g.free()
 	return r
 

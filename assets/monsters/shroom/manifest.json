@@ -1,0 +1,77 @@
+{
+ "directions": [
+  "south",
+  "south-east",
+  "east",
+  "north-east",
+  "north",
+  "north-west",
+  "west",
+  "south-west"
+ ],
+ "cell": {
+  "pose": [
+   48,
+   48
+  ],
+  "run": [
+   48,
+   48
+  ],
+  "attack": [
+   48,
+   48
+  ]
+ },
+ "fps": {
+  "pose": 1,
+  "run": 8,
+  "attack": 8
+ },
+ "anchor": {
+  "pose": [
+   24,
+   43
+  ],
+  "run": [
+   24,
+   43
+  ],
+  "attack": [
+   24,
+   43
+  ]
+ },
+ "frames": {
+  "pose": {
+   "south": 1,
+   "south-east": 1,
+   "east": 1,
+   "north-east": 1,
+   "north": 1,
+   "north-west": 1,
+   "west": 1,
+   "south-west": 1
+  },
+  "run": {
+   "south": 6,
+   "south-east": 6,
+   "east": 6,
+   "north-east": 6,
+   "north": 6,
+   "north-west": 6,
+   "west": 6,
+   "south-west": 6
+  },
+  "attack": {
+   "south": 5,
+   "south-east": 5,
+   "east": 5,
+   "north-east": 5,
+   "north": 5,
+   "north-west": 5,
+   "west": 5,
+   "south-west": 5
+  }
+ }
+}

@@ -49,9 +49,9 @@ func setup() -> void:
 	if body == null: body = $Body
 	if health == null: health = $Health
 	if shape == null: shape = $Feet
-	body.sprite_frames = SpriteSet.build(MANIFEST)
+	body.sprite_frames = SpriteSet.build(manifest_path())
 	body.centered = false
-	_anchors = SpriteSet.anchors(MANIFEST)
+	_anchors = SpriteSet.anchors(manifest_path())
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/flash.gdshader")
 	mat.set_shader_parameter("flash_color", Color.WHITE)
@@ -69,6 +69,34 @@ var _frost_fx: FxSprite = null
 
 func stats() -> Dictionary:
 	return Balance.wolf(level)
+
+func manifest_path() -> String:
+	return MANIFEST
+
+# ---------- hooks other monsters override (see Monster) ----------
+
+## Whether the idle wolf starts a chase with the hero this far away.
+func _wants_aggro(dist: float) -> bool:
+	var walled_off := pack != null and pack.unreachable_at.distance_to(_hpos()) < 24.0
+	var calm := pack != null and pack.calm > 0.0
+	return dist <= n("aggro") and not walled_off and not calm
+
+## The idle wolf saw the hero: the whole pack joins in.
+func _start_aggro() -> void:
+	if pack: pack.alert(_hero)
+	else: start_chase(_hero)
+
+## Hit while idle: the whole pack joins in.
+func _on_provoked() -> void:
+	if pack and _hero: pack.alert(_hero)
+
+## States that need a live hero (otherwise go home).
+func _fight_states() -> Array:
+	return ["chase", "bite", "lunge_warn", "lunge"]
+
+## States the base step does not know (flee, ring_warn, ...).
+func _step_custom(_delta: float) -> void:
+	pass
 
 ## Gem element effects: "burn" (damage per tick, leech fraction, source hero) or "slow".
 func apply_status(kind: String, value := 0.0, leech := 0.0, source: Object = null) -> void:
@@ -103,8 +131,8 @@ func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, cr
 		var away := _pos() - from
 		if away.length() > 0.01:
 			_push(away.normalized() * n("hit_knockback"))
-	if state == "idle" and pack and _hero:
-		pack.alert(_hero)
+	if state == "idle":
+		_on_provoked()
 	return r.amount
 
 func start_chase(h: Hero) -> void:
@@ -175,7 +203,7 @@ func step(delta: float, hero: Hero) -> void:
 	_t += delta
 	_wanted_move = false
 	var alive_hero := _hero != null and is_instance_valid(_hero) and _hero.state != "dead"
-	if state in ["chase", "bite", "lunge_warn", "lunge"] and not alive_hero:
+	if state in _fight_states() and not alive_hero:
 		_go_home()
 	match state:
 		"dead":
@@ -183,10 +211,8 @@ func step(delta: float, hero: Hero) -> void:
 			body.modulate.a = 1.0 - clampf((_t - death_len) / n("death_fade"), 0.0, 1.0)
 			visible = body.modulate.a > 0.0
 		"idle":
-			var walled_off := pack != null and pack.unreachable_at.distance_to(_hpos()) < 24.0
-			if alive_hero and _pos().distance_to(_hpos()) <= n("aggro") and not walled_off:
-				if pack: pack.alert(_hero)
-				else: start_chase(_hero)
+			if alive_hero and _wants_aggro(_pos().distance_to(_hpos())):
+				_start_aggro()
 				if state == "chase":
 					_chase(delta)   # react on the same frame
 			else:
@@ -233,6 +259,8 @@ func step(delta: float, hero: Hero) -> void:
 			else:
 				var aim := _steer(home, delta) - _pos()
 				_move(aim.normalized() * n("run"), minf(delta, aim.length() / n("run")))
+		_:
+			_step_custom(delta)
 	# Blocked by water or a trunk: a chase that makes no headway gives up (back home at full HP, so
 	# an unreachable hero can't farm the pack); a return that makes no headway snaps home.
 	if state in ["chase", "return"] and _stuck(delta):

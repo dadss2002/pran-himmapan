@@ -1,10 +1,19 @@
 extends Node2D
-## The play ground: the painted PixelLab forest (data/map_painted.json via PaintedLayout/PaintedMap), the hero,
-## three ghost-wolf packs (level/count from balance.json "packs", homes from the map); Y-sorted World.
+## The play ground: the forest rooms (data/rooms.json via RoomSet; one painted room at a time, joined by
+## warps), the hero, and the current room's monsters; Y-sorted World. Walking into a warp swaps the room.
+
+signal room_changed(id: String)
 
 const HERO_SCENE := preload("res://scenes/hero.tscn")
 
 var world: Node2D
+var rooms: RoomSet
+var room_id := ""
+var warps: Array = []
+var cam: Camera2D
+var fade: ColorRect
+const FADE := 0.3
+var _navs := {}
 var layout: PaintedLayout
 var forest: PaintedMap
 var hero: Hero
@@ -27,15 +36,9 @@ func build() -> void:
 	world = Node2D.new()
 	world.name = "World"
 	world.y_sort_enabled = true
-	layout = PaintedLayout.open()
-	forest = PaintedMap.new()
-	add_child(forest)
-	move_child(forest, 0)
+	rooms = RoomSet.open()
 	add_child(world)
-	forest.build(layout)
 	hero = HERO_SCENE.instantiate()
-	hero.spawn_point = layout.hero_spawn
-	hero.position = hero.spawn_point
 	world.add_child(hero)
 	hero.setup_sprites()
 	var state := SaveGame.load_or_new(save_path)
@@ -51,30 +54,8 @@ func build() -> void:
 	hero.health.damaged.connect(func(a, c): _number(hero.global_position + Vector2(0, -40), a, c, true))
 	hero.rolled.connect(func(_d): _fx("roll_dust", hero.global_position))
 	hero.leveled_up.connect(_on_level_up)
-	var cam := Camera2D.new()
-	cam.limit_left = 0
-	cam.limit_top = 0
-	cam.limit_right = int(layout.size_px().x)
-	cam.limit_bottom = int(layout.size_px().y)
+	cam = Camera2D.new()
 	hero.add_child(cam)
-	var nav := layout.make_nav()
-	var specs: Array = Balance.data()["packs"]
-	for i in specs.size():
-		var spec: Dictionary = specs[i]
-		var pack := WolfPack.new()
-		pack.level = int(spec.level)
-		pack.count = int(spec.count)
-		pack.home = layout.pack_homes[i]
-		pack.nav = nav
-		pack.y_sort_enabled = true
-		pack.hero = hero
-		world.add_child(pack)
-		if pack.wolves.is_empty(): pack.spawn()
-		for w in pack.wolves:
-			var wolf: Wolf = w
-			wolf.health.damaged.connect(func(a, c): _on_wolf_hit(wolf, a, c))
-			wolf.died.connect(_on_wolf_died)
-		packs.append(pack)
 	lock_ring = FxSprite.make("lock_on", true)
 	lock_ring.visible = false
 	world.add_child(lock_ring)        # y-sorted: sits just above the target's feet line
@@ -84,6 +65,76 @@ func build() -> void:
 	add_child(hud)
 	if hud.hp_label == null: hud.build()
 	hud.bind(hero)
+	var fade_layer := CanvasLayer.new()
+	fade_layer.layer = 50
+	add_child(fade_layer)
+	fade = ColorRect.new()
+	fade.color = Color(0, 0, 0, 0)
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fade_layer.add_child(fade)
+	var saved := String(state.get("room", ""))
+	go_to(saved if rooms.has(saved) else rooms.start, "", false)
+
+## Swap to room id. via_warp = the warp you come out of there ("" = the room's spawn). The old room's
+## map, monsters, drops and warps go; the new room's are built fresh; the game saves.
+func go_to(id: String, via_warp := "", with_fade := true) -> void:
+	for p in packs:
+		if is_instance_valid(p): p.free()
+	packs.clear()
+	for d in drops:
+		if is_instance_valid(d): d.free()
+	drops.clear()
+	for w in warps:
+		if is_instance_valid(w): w.free()
+	warps.clear()
+	if forest and is_instance_valid(forest): forest.free()
+	room_id = id
+	layout = rooms.layout(id)
+	forest = PaintedMap.new()
+	add_child(forest)
+	move_child(forest, 0)
+	forest.build(layout)
+	var sz := layout.size_px()
+	cam.limit_left = 0
+	cam.limit_top = 0
+	cam.limit_right = int(sz.x)
+	cam.limit_bottom = int(sz.y)
+	hero.spawn_point = rooms.spawn(id)
+	hero.position = rooms.arrival(id, via_warp) if via_warp != "" else hero.spawn_point   # World sits at the origin
+	hero.velocity = Vector2.ZERO
+	for w in rooms.room(id).warps:
+		var n := Warp.make(w)
+		n.armed = String(w.id) != via_warp
+		world.add_child(n)
+		warps.append(n)
+	if not _navs.has(id): _navs[id] = layout.make_nav()
+	for m in rooms.room(id).get("monsters", []):
+		_add_group(m, _navs[id])
+	if with_fade and is_inside_tree():
+		fade.color.a = 1.0
+		create_tween().tween_property(fade, "color:a", 0.0, FADE)
+		for p in packs: p.calm = FADE        # nobody notices the hero while the screen is still dark
+	save_now()
+	room_changed.emit(id)
+
+func _add_group(m: Dictionary, nav: AStarGrid2D) -> void:
+	var pack := WolfPack.new()
+	pack.kind = String(m.get("kind", "wolf"))
+	pack.blocked = layout.blocked_at
+	pack.level = int(m.level)
+	pack.count = int(m.count)
+	pack.home = Vector2(m.at[0], m.at[1])
+	pack.nav = nav
+	pack.y_sort_enabled = true
+	pack.hero = hero
+	world.add_child(pack)
+	if pack.wolves.is_empty(): pack.spawn()
+	for w in pack.wolves:
+		var wolf: Wolf = w
+		wolf.health.damaged.connect(func(a, c): _on_wolf_hit(wolf, a, c))
+		wolf.died.connect(_on_wolf_died)
+	packs.append(pack)
 
 func _on_level_up(lv: int) -> void:
 	_fx("level_up", hero.global_position)
@@ -94,7 +145,7 @@ func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_fx("hit_spark", w.hurt_point())
 
 func save_now() -> bool:
-	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.skill_gems}, save_path)
+	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.skill_gems, "room": room_id}, save_path)
 
 func tick_autosave(delta: float) -> void:
 	_autosave_t += delta
@@ -120,9 +171,14 @@ func _on_skill_released(id: String, at: Vector2) -> void:
 func _on_wolf_died(w: Wolf) -> void:
 	hero.on_kill(w.stats().exp, w.level)
 	var at := w.global_position if w.is_inside_tree() else w.position
-	var items := Loot.roll("wolf", w.level, loot_rng)
+	var table := "wolf"
+	var gold_mult := 1.0
+	if w is Monster:
+		table = w.loot_table()
+		gold_mult = w.gold_mult()
+	var items := Loot.roll(table, w.level, loot_rng)
 	for it in items:
-		if it.id == "gold": it.count = hero.bonus_gold(it.count)   # gear "ทอง +%"
+		if it.id == "gold": it.count = hero.bonus_gold(int(round(it.count * gold_mult)))   # deer ×2, gear "ทอง +%"
 	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)
 	for i in items.size():
 		var d: LootDrop
@@ -142,6 +198,11 @@ func _blocked(p: Vector2) -> bool:
 
 func _physics_process(delta: float) -> void:
 	tick_autosave(delta)
+	if hero and hero.state != "dead":
+		for w in warps:
+			if is_instance_valid(w) and w.step(hero.global_position):
+				go_to.call_deferred(w.to_room, w.to_warp)
+				break
 	_bag_full_cd = maxf(0.0, _bag_full_cd - delta)
 	for d in drops.duplicate():
 		if not is_instance_valid(d) or d.expired:

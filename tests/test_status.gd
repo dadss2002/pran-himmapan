@@ -41,6 +41,7 @@ func test_burn_kill_credited_once():
 	var g = load("res://scenes/test_ground.tscn").instantiate()
 	g.save_path = "user://test_status_save.json"
 	g.build()
+	g.go_to("c1r0", "", false)          # the Lv1 wolf room
 	var w: Wolf = g.packs[0].wolves[0]
 	var exp_before: int = g.hero.exp
 	var drops_before: int = g.drops.size()
