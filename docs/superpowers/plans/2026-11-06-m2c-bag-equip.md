@@ -134,7 +134,7 @@
 - Create: `tests/screenshots_m2c.gd`, `docs/preview/m2c_*.png`
 - Modify: this plan (checkboxes), `docs/pixellab-budget.md` (0 gen; ring/necklace waiting)
 
-- [ ] **Step 1:** Screenshots: gear drop with beam · bag open with compare · after equipping ธนูเขาควาย (bow in hand changed) · level-lock message. Look at every image.
-- [ ] **Step 2:** `python3 tools/test_assets.py` → PASS; full suite → 0 failed; M2a/M2b screenshot scripts → rc=0.
-- [ ] **Step 3:** Commit, push `m2c/bag`, draft PR with base `m2b/loot`: commands, SHA, counts, my-choices list, waiting-for-approval list.
-- [ ] **Step 4:** Fresh reviewer on the branch; fix findings; report to the owner in Thai.
+- [x] **Step 1:** Screenshots: gear drop with beam · bag open with compare · after equipping ธนูเขาควาย (bow in hand changed) · level-lock message. Look at every image.
+- [x] **Step 2:** `python3 tools/test_assets.py` → PASS; full suite → 0 failed; M2a/M2b screenshot scripts → rc=0.
+- [x] **Step 3:** Commit, push `m2c/bag`, draft PR with base `m2b/loot`: commands, SHA, counts, my-choices list, waiting-for-approval list.
+- [x] **Step 4:** Fresh reviewer on the branch; fix findings; report to the owner in Thai.
