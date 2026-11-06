@@ -42,6 +42,62 @@
     "loop": false,
     "pixellab": "27a9b652-199e-4bf4-bbc1-c8a7c98909df"
   },
+  "level_up": {
+    "cell": [
+      60,
+      99
+    ],
+    "frames": 14,
+    "fps": 14,
+    "anchor": [
+      30,
+      86
+    ],
+    "loop": false,
+    "pixellab": "6aa71090-ce58-428c-9f96-2aea3fdb8271"
+  },
+  "pickup_pop": {
+    "cell": [
+      43,
+      49
+    ],
+    "frames": 10,
+    "fps": 15,
+    "anchor": [
+      21,
+      32
+    ],
+    "loop": false,
+    "pixellab": "da056813-71dc-4e27-a9e0-8f720fa39c66"
+  },
+  "piercing_trail": {
+    "cell": [
+      85,
+      39
+    ],
+    "frames": 8,
+    "fps": 12,
+    "anchor": [
+      60,
+      20
+    ],
+    "loop": true,
+    "pixellab": "20160e5b-66c1-4083-a7bf-28a6fbf4597d"
+  },
+  "spread_burst": {
+    "cell": [
+      40,
+      43
+    ],
+    "frames": 7,
+    "fps": 16,
+    "anchor": [
+      20,
+      23
+    ],
+    "loop": false,
+    "pixellab": "c54f014c-928a-4b98-84e0-d5f76e1151c8"
+  },
   "lock_on": {
     "cell": [
       50,
@@ -55,5 +111,19 @@
     ],
     "loop": true,
     "pixellab": "aed3bdd1-9a64-4a87-af1a-4526bbb92bf2"
+  },
+  "item_glint": {
+    "cell": [
+      24,
+      31
+    ],
+    "frames": 16,
+    "fps": 12,
+    "anchor": [
+      9,
+      18
+    ],
+    "loop": true,
+    "pixellab": "2d184b0f-8a29-42f0-917e-41a2d198c81f"
   }
 }

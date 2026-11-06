@@ -12,8 +12,13 @@ var world: Node2D
 var hero: Hero
 var hud: Hud
 var packs: Array = []
+var drops: Array = []
+var loot_rng := RandomNumberGenerator.new()
 var _built := false
+var _bag_full_cd := 0.0
 var lock_ring: FxSprite
+var save_path := SaveGame.PATH
+var _autosave_t := 0.0
 
 func _ready() -> void:
 	build()
@@ -33,8 +38,15 @@ func build() -> void:
 	hero.position = hero.spawn_point
 	world.add_child(hero)
 	hero.setup_sprites()
+	var state := SaveGame.load_or_new(save_path)
+	hero.set_progress(int(state.level), int(state.exp))
+	hero.inventory.from_dict(state.inventory)
+	hero.leveled_up.connect(func(_l): save_now())
+	hero.skill_released.connect(_on_skill_released)
+	hero.shot.connect(_on_arrow)
 	hero.health.damaged.connect(func(a, c): _number(hero.global_position + Vector2(0, -40), a, c, true))
 	hero.rolled.connect(func(_d): _fx("roll_dust", hero.global_position))
+	hero.leveled_up.connect(_on_level_up)
 	var cam := Camera2D.new()
 	var size: Array = Balance.data()["map_size"]
 	cam.limit_left = 0
@@ -54,6 +66,7 @@ func build() -> void:
 		for w in pack.wolves:
 			var wolf: Wolf = w
 			wolf.health.damaged.connect(func(a, c): _on_wolf_hit(wolf, a, c))
+			wolf.died.connect(_on_wolf_died)
 		packs.append(pack)
 	lock_ring = FxSprite.make("lock_on", true)
 	lock_ring.visible = false
@@ -72,10 +85,83 @@ func build() -> void:
 	hud.add_child(label)
 	queue_redraw()
 
+func _on_level_up(lv: int) -> void:
+	_fx("level_up", hero.global_position)
+	_text(hero.global_position + Vector2(0, -60), "Lv ขึ้น! %d" % lv, Color("#ffd36a"))
+
 func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30), amount, crit, false)
 	_fx("hit_spark", w.hurt_point())
 
+func save_now() -> bool:
+	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict()}, save_path)
+
+func tick_autosave(delta: float) -> void:
+	_autosave_t += delta
+	if _autosave_t >= Balance.num("save.autosave_every"):
+		_autosave_t = 0.0
+		save_now()
+
+func _notification(what: int) -> void:
+	# Desktop sends WM_CLOSE_REQUEST; phones and browser tabs send PAUSED / FOCUS_OUT instead.
+	if what in [NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT] and hero:
+		save_now()
+
+func _on_arrow(a: Arrow) -> void:
+	if a.pierce and is_inside_tree():
+		var trail := FxSprite.make("piercing_trail", true)
+		trail.show_behind_parent = true
+		a.add_child(trail)
+		trail.play("piercing_trail")
+
+func _on_skill_released(id: String, at: Vector2) -> void:
+	if id == "spread": _fx("spread_burst", at)
+
+func _on_wolf_died(w: Wolf) -> void:
+	hero.on_kill(w.stats().exp, w.level)
+	var at := w.global_position if w.is_inside_tree() else w.position
+	var items := Loot.roll("wolf", w.level, loot_rng)
+	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)
+	for i in items.size():
+		var d := LootDrop.make(items[i].id, items[i].count)
+		d.pop_out(at, spots[i])
+		d.collected.connect(func(id, n):
+			_fx("pickup_pop", hero.global_position + Vector2(0, -20))
+			save_now())
+		drops.append(d)
+		if world: world.add_child(d)
+
+## true when a point is inside a post (or other static collider).
+func _blocked(p: Vector2) -> bool:
+	if not is_inside_tree(): return false
+	var q := PhysicsPointQueryParameters2D.new()
+	q.position = p
+	q.collide_with_bodies = true
+	q.collision_mask = 1
+	for hit in get_world_2d().direct_space_state.intersect_point(q, 4):
+		if hit.collider is StaticBody2D: return true
+	return false
+
+func _physics_process(delta: float) -> void:
+	tick_autosave(delta)
+	_bag_full_cd = maxf(0.0, _bag_full_cd - delta)
+	for d in drops.duplicate():
+		if not is_instance_valid(d) or d.expired:
+			drops.erase(d)
+			continue
+		d.step(delta, hero, hero.inventory)
+		if d.bag_full_notice and _bag_full_cd <= 0.0:
+			_bag_full_cd = Balance.num("pickup.bag_full_notice_every")
+			_text(hero.global_position + Vector2(0, -52), "กระเป๋าเต็ม", Color("#ffb37a"))
+
+func _text(at: Vector2, t: String, c: Color) -> void:
+	if not is_inside_tree(): return
+	var d := DamageNumber.make(0, false)
+	d.text = t
+	d.add_theme_color_override("font_color", c)
+	d.size = Vector2(80, 16)
+	d.position = at - Vector2(20, 0)
+	add_child(d)
 func _process(_delta: float) -> void:
 	if lock_ring == null or hero == null: return
 	var t := hero.current_target() if hero.state != "dead" else null

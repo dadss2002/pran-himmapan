@@ -1,0 +1,21 @@
+class_name Skills
+## Active skill numbers (docs/skills.md §1, balance.json "skills"). Skill level = char level −
+## unlock level + 1; each level above 1 adds +5% damage and −1% cooldown (cut capped at 30%).
+
+static func unlock_level(id: String) -> int:
+	return int(Balance.num("skills.%s.unlock" % id))
+
+static func skill_level(id: String, char_level: int) -> int:
+	return maxi(0, char_level - unlock_level(id) + 1)
+
+static func damage_mult(id: String, char_level: int) -> float:
+	var lv := maxi(1, skill_level(id, char_level))
+	return Balance.num("skills.%s.mult" % id) * (1.0 + Balance.num("skills.per_level_damage") * (lv - 1))
+
+static func cooldown(id: String, char_level: int) -> float:
+	var lv := maxi(1, skill_level(id, char_level))
+	var cut := minf(Balance.num("skills.per_level_cooldown") * (lv - 1), Balance.num("skills.max_cooldown_cut"))
+	return Balance.num("skills.%s.cooldown" % id) * (1.0 - cut)
+
+static func mp_cost(id: String) -> float:
+	return Balance.num("skills.%s.mp" % id)
