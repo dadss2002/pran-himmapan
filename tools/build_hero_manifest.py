@@ -8,14 +8,16 @@ import argparse, json, os, subprocess, sys, tempfile
 from PIL import Image
 
 DIRS = ["south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west"]
-OUT = os.path.join(os.path.dirname(__file__), "..", "assets", "hero")
+HERE = os.path.dirname(__file__)
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("preview"); ap.add_argument("anim")
     ap.add_argument("--cell", required=True); ap.add_argument("--frames", type=int, required=True)
     ap.add_argument("--fps", type=int, required=True); ap.add_argument("--expect-colors", type=int)
+    ap.add_argument("--root", default="assets/hero", help="actor folder, e.g. assets/wolf")
     a = ap.parse_args()
+    OUT = os.path.join(HERE, "..", a.root)
     cw, ch = (int(v) for v in a.cell.split("x"))
     os.makedirs(OUT, exist_ok=True)
     sheet_path = os.path.join(tempfile.gettempdir(), f"{a.anim}_sheet.png")
