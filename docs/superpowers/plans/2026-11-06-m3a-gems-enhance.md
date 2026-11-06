@@ -95,11 +95,11 @@
 - Consumes: `SkillBuild.of`, `Gem.add_exp`, `Inventory.take_gem/add_gem`.
 - Produces: `Hero.skill_gems: Dictionary` (skill → Array) · `Hero.socket(skill_id, slot: int, bag_index: int) -> String` ("" or reason; swaps) · `Hero.unsocket(skill_id, slot) -> String` ("กระเป๋าเต็ม") · `Hero.build(skill_id) -> Dictionary` (SkillBuild for current level/gear) · `Hero.skill_mp(skill_id) -> float` · signal `gems_changed` · kill EXP also feeds equipped gems (`gem_leveled(gem)` signal).
 
-- [ ] **Step 1: Failing tests** `test_socket_swap_and_label` (ขยาย refused "ป้ายไม่ตรง"; locked spread refused "ยังไม่ปลด") · `test_unsocket_full_bag` · `test_piercing_with_split_fires_three` (3 arrows, 12° apart, mult 1.08, MP 11.2) · `test_spread_with_split_fires_seven` · `test_mp_too_high_refused` (cost > mp: refused, nothing spent) · `test_gem_exp_from_kill_and_at_cap` · `test_hud_shows_real_mp`.
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement**; `_release` reads `build(skill)` for arrows, fan, multipliers; MP/cooldown at release as today.
-- [ ] **Step 4: Run** → pass.
-- [ ] **Step 5: Commit** `M3a Task 4: hero sockets gems, skills fire from SkillBuild`.
+- [x] **Step 1: Failing tests** `test_socket_swap_and_label` (ขยาย refused "ป้ายไม่ตรง"; locked spread refused "ยังไม่ปลด") · `test_unsocket_full_bag` · `test_piercing_with_split_fires_three` (3 arrows, 12° apart, mult 1.08, MP 11.2) · `test_spread_with_split_fires_seven` · `test_mp_too_high_refused` (cost > mp: refused, nothing spent) · `test_gem_exp_from_kill_and_at_cap` · `test_hud_shows_real_mp`.
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement**; `_release` reads `build(skill)` for arrows, fan, multipliers; MP/cooldown at release as today.
+- [x] **Step 4: Run** → pass.
+- [x] **Step 5: Commit** `M3a Task 4: hero sockets gems, skills fire from SkillBuild`.
 
 ### Task 5: Arrow behaviours and monster status
 

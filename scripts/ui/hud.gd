@@ -183,20 +183,20 @@ func refresh() -> void:
 	else: exp_bar.value = 100.0 * hero.exp / float(Progression.exp_to_next(hero.level))
 	gold_label.text = str(hero.inventory.gold)
 	dim.color.a = DEAD_DIM if hero.state == "dead" else 0.0
-	var pierce_ok := hero.mp >= Skills.mp_cost("piercing")
+	var pierce_ok := hero.mp >= hero.skill_mp("piercing")
 	buttons.set_state("skill1", pierce_ok, "" if pierce_ok else "MP")
 	if hero.level < Skills.unlock_level("spread"):
 		buttons.set_state("skill2", false, "Lv%d" % Skills.unlock_level("spread"))
 	else:
-		var spread_ok := hero.mp >= Skills.mp_cost("spread")
+		var spread_ok := hero.mp >= hero.skill_mp("spread")
 		buttons.set_state("skill2", spread_ok, "" if spread_ok else "MP")
 	for k in ["hp", "mp"]:
 		var n := hero.inventory.count_of("potion_" + k)
 		buttons.set_state("potion_" + k, n > 0, str(n))
 		buttons.set_cooldown("potion_" + k, hero.potion_cooldown_left(), Balance.num("potion.cooldown"))
 	var st := hero.stats()
-	buttons.set_cooldown("skill1", hero.skill_cooldown_left("piercing"), Skills.cooldown("piercing", hero.level, st.skill_cd_cut))
-	buttons.set_cooldown("skill2", hero.skill_cooldown_left("spread"), Skills.cooldown("spread", hero.level, st.skill_cd_cut))
+	buttons.set_cooldown("skill1", hero.skill_cooldown_left("piercing"), hero.build("piercing").cooldown)
+	buttons.set_cooldown("skill2", hero.skill_cooldown_left("spread"), hero.build("spread").cooldown)
 	buttons.set_cooldown("shoot", hero.cooldown, st.shot_cd)
 	buttons.set_cooldown("dodge", hero.dodge_cooldown_left(), Balance.dodge(hero.level).cooldown)
 

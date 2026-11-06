@@ -24,6 +24,13 @@ func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier :
 	pierce = pierce_all
 	rotation = dir.angle()  # art points east
 
+## Gem behaviour from SkillBuild (pierce_extra, bounces, homing, leech, element); see Task 5.
+var build := {}
+var shooter: Node = null
+func configure(b: Dictionary, from: Node = null) -> void:
+	build = b
+	shooter = from
+
 func advance(delta: float) -> void:
 	if spent: return
 	var range_px := max_range if max_range > 0.0 else Balance.num("shot.range")
