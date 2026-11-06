@@ -28,6 +28,8 @@
 - Percent options round to 0.1%; HP, DEF and MP to whole numbers; MP regen to 0.1/s.
 - "ดาเมจธาตุ" is stored and shown but has no effect until elements exist (no element in M2).
 - The game pauses while the bag is open.
+- The mockup's "ทิ้ง" (drop item) button is left out of M2c: no confirm flow yet, and dropping gear by mistake cannot be undone.
+- Gems and ore show their description only; "ใส่สกิล" and "ไปตีบวก" come with those systems.
 - Starting kit: ธนูไม้ไผ่ + ชุดพรานฝึกหัด, both ธรรมดา, equipped.
 - The bow cannot be taken off ("ต้องถือธนูไว้"); the player swaps it for another bow. Arrows need a bow, and an empty hand would look broken.
 - Gear never heals: wearing +HP raises the max only; removing it clamps HP to the new max.
@@ -119,12 +121,12 @@
 - Consumes: `Hero.equip/unequip/equipped/inventory`, `Gear.describe_option/rarity_color/display_name`.
 - Produces: `BagPanel.open(hero)`, `close()`, `select(index)`, `selected_detail() -> Dictionary` (lines for the UI, used by tests), `press_equip()`. Layout follows the approved mockup: 4 equipment slots on the left, 6×4 grid, detail panel with name in rarity color, main stat, options, compare with the worn item (+green / −red), button สวมใส่ / ถอด, gold, close ✕.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   `test_open_pauses_and_close_resumes` · `test_select_shows_compare` (bow ATK+16 over ATK+8 → "+8" green) · `test_equip_from_panel_updates_slots_and_saves` · `test_level_lock_shown_red`.
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement**; touch-sized cells (≥ 28 px in the 640×360 view).
-- [ ] **Step 4: Run** → pass.
-- [ ] **Step 5: Commit** `M2c: bag screen`.
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement**; touch-sized cells (≥ 28 px in the 640×360 view).
+- [x] **Step 4: Run** → pass.
+- [x] **Step 5: Commit** `M2c: bag screen`.
 
 ### Task 6: Screenshots, verification, PR
 

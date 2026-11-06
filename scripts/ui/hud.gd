@@ -17,6 +17,8 @@ var exp_bar: ProgressBar
 var joystick: TouchJoystick
 var buttons: TouchButtons
 var touch_ui: Node
+var bag_panel: BagPanel
+var bag_button: Button
 var dim: ColorRect
 var top_right: HBoxContainer
 const DEAD_DIM := 0.6
@@ -110,7 +112,9 @@ func build() -> void:
 	tr.add_child(gold_panel)
 	var bag := Button.new()
 	bag.text = "กระเป๋า"
-	bag.disabled = true          # bag arrives in M2c
+	bag.focus_mode = Control.FOCUS_NONE
+	bag.pressed.connect(open_bag)
+	bag_button = bag
 	bag.add_theme_font_size_override("font_size", 8)
 	bag.custom_minimum_size = Vector2(36, 30)
 	bag.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
@@ -146,12 +150,23 @@ func build() -> void:
 	buttons.build_default()
 	touch_ui.add_child(buttons)
 	touch_ui.visible = show_touch()
+	bag_panel = BagPanel.new()
+	bag_panel.build()
+	add_child(bag_panel)
 
 static func show_touch() -> bool:
 	return DisplayServer.is_touchscreen_available() or "--touch" in OS.get_cmdline_user_args()
 
 func bind(h: Hero) -> void:
 	hero = h
+	bag_panel.hero = h
+
+## Opens the bag; held touch buttons and the joystick let go first so nothing stays pressed.
+func open_bag() -> void:
+	if hero == null or bag_panel.is_open(): return
+	joystick.release_all()
+	buttons.release_all()
+	bag_panel.open(hero)
 	refresh()
 
 func refresh() -> void:
@@ -178,9 +193,10 @@ func refresh() -> void:
 		var n := hero.inventory.count_of("potion_" + k)
 		buttons.set_state("potion_" + k, n > 0, str(n))
 		buttons.set_cooldown("potion_" + k, hero.potion_cooldown_left(), Balance.num("potion.cooldown"))
-	buttons.set_cooldown("skill1", hero.skill_cooldown_left("piercing"), Skills.cooldown("piercing", hero.level))
-	buttons.set_cooldown("skill2", hero.skill_cooldown_left("spread"), Skills.cooldown("spread", hero.level))
-	buttons.set_cooldown("shoot", hero.cooldown, Balance.num("shot.cooldown"))
+	var st := hero.stats()
+	buttons.set_cooldown("skill1", hero.skill_cooldown_left("piercing"), Skills.cooldown("piercing", hero.level, st.skill_cd_cut))
+	buttons.set_cooldown("skill2", hero.skill_cooldown_left("spread"), Skills.cooldown("spread", hero.level, st.skill_cd_cut))
+	buttons.set_cooldown("shoot", hero.cooldown, st.shot_cd)
 	buttons.set_cooldown("dodge", hero.dodge_cooldown_left(), Balance.dodge(hero.level).cooldown)
 
 func _process(_delta: float) -> void:
