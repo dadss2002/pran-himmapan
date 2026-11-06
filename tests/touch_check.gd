@@ -47,5 +47,17 @@ func _run() -> void:
 	if h.equipped.bow.base != "bow_buffalo_horn": return _fail("tapping สวมใส่ did not equip")
 	await _tap(bag._close_button.get_global_rect().get_center())
 	if bag.is_open() or paused: return _fail("tapping ✕ did not close the bag / unpause")
-	print("TOUCH PASS: open, tab, select, equip, close")
+	# skill · gem screen
+	h.inventory.add_gem({"type": "split", "level": 1, "exp": 0, "rarity": "good", "opts": [{"k": "crit", "v": 0.03}]})
+	await _tap(hud.skills_button.get_global_rect().get_center())
+	var sp := hud.skill_panel
+	if not sp.is_open(): return _fail("tapping สกิล did not open the skill screen")
+	await _tap(sp._gem_cells[0].get_global_rect().get_center())
+	if not sp.gem_detail().name.begins_with("เจมแยกศร"): return _fail("tapping a gem did not select it")
+	var slot_btn: Button = sp._rows["piercing"].slots.get_child(0)
+	await _tap(slot_btn.get_global_rect().get_center())
+	if h.skill_gems.piercing.is_empty() or h.skill_gems.piercing[0] == null: return _fail("tapping a slot did not socket the gem")
+	await _tap(sp._close_button.get_global_rect().get_center())
+	if sp.is_open() or paused: return _fail("tapping ✕ did not close the skill screen")
+	print("TOUCH PASS: bag open, tab, select, equip, close · skills open, pick gem, socket, close")
 	quit(0)

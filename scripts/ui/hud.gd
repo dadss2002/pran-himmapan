@@ -19,6 +19,8 @@ var buttons: TouchButtons
 var touch_ui: Node
 var bag_panel: BagPanel
 var bag_button: Button
+var skill_panel: SkillPanel
+var skills_button: Button
 var dim: ColorRect
 var top_right: HBoxContainer
 const DEAD_DIM := 0.6
@@ -92,8 +94,8 @@ func build() -> void:
 	top_right = tr
 	tr.add_theme_constant_override("separation", 6)
 	tr.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	tr.position = Vector2(640 - 6 - 190, 6)
-	tr.size = Vector2(190, 56)
+	tr.position = Vector2(640 - 6 - 232, 6)
+	tr.size = Vector2(232, 56)
 	tr.alignment = BoxContainer.ALIGNMENT_END
 	root.add_child(tr)
 	var gold := HBoxContainer.new()
@@ -110,6 +112,15 @@ func build() -> void:
 	gold_panel.add_child(gold)
 	gold_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	tr.add_child(gold_panel)
+	var sk := Button.new()
+	sk.text = "สกิล"
+	sk.focus_mode = Control.FOCUS_NONE
+	sk.add_theme_font_size_override("font_size", 8)
+	sk.custom_minimum_size = Vector2(36, 30)
+	sk.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	sk.pressed.connect(open_skills)
+	skills_button = sk
+	tr.add_child(sk)
 	var bag := Button.new()
 	bag.text = "กระเป๋า"
 	bag.focus_mode = Control.FOCUS_NONE
@@ -153,6 +164,9 @@ func build() -> void:
 	bag_panel = BagPanel.new()
 	bag_panel.build()
 	add_child(bag_panel)
+	skill_panel = SkillPanel.new()
+	skill_panel.build()
+	add_child(skill_panel)
 
 static func show_touch() -> bool:
 	return DisplayServer.is_touchscreen_available() or "--touch" in OS.get_cmdline_user_args()
@@ -160,10 +174,19 @@ static func show_touch() -> bool:
 func bind(h: Hero) -> void:
 	hero = h
 	bag_panel.hero = h
+	skill_panel.hero = h
+
+## Opens the skill · gem screen (touch input lets go first, like the bag).
+func open_skills() -> void:
+	if hero == null or skill_panel.is_open() or bag_panel.is_open(): return
+	joystick.release_all()
+	buttons.release_all()
+	hero.external_input = Vector2.ZERO
+	skill_panel.open(hero)
 
 ## Opens the bag; held touch buttons and the joystick let go first so nothing stays pressed.
 func open_bag() -> void:
-	if hero == null or bag_panel.is_open(): return
+	if hero == null or bag_panel.is_open() or skill_panel.is_open(): return
 	joystick.release_all()
 	buttons.release_all()
 	hero.external_input = Vector2.ZERO

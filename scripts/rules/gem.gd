@@ -82,8 +82,46 @@ static func is_plain(gem: Dictionary) -> bool:
 	return int(gem.get("level", 1)) == 1 and int(gem.get("exp", 0)) == 0 and String(gem.get("rarity", "common")) == "common" \
 		and gem.get("opts", []).is_empty() and not gem.has("element")
 
+static var _items := {}
 static func display_name(type: String) -> String:
-	return String(Balance.data()["gem_names"].get(type, type)) if Balance.has("gem_names") else type
+	if _items.is_empty(): _items = JSON.parse_string(FileAccess.open("res://data/items.json", FileAccess.READ).get_as_text())
+	return String(_items.get("gem_" + type, {}).get("name", type))
+
+static func _pct(v: float) -> String:
+	return Gear._trim(v * 100.0) + "%"
+
+## What the gem does at its level, in Thai (numbers from balance.json).
+static func describe_effect(gem: Dictionary) -> String:
+	var t := String(gem.type)
+	var d := data(t)
+	var e := effect(gem)
+	var high := int(gem.level) >= 10
+	match t:
+		"split": return "ยิงเพิ่ม +%d ดอก ทุกดอกแรง %s" % [int(d.extra_arrows), _pct(e)]
+		"ricochet": return "โดนแล้วเด้งไปอีก %d เป้า แรง %s" % [int(d.bounces_at_10) if high else int(d.bounces), _pct(e)]
+		"pierce": return "ทะลุเป้าเพิ่ม %d ตัว" % (int(d.extra_at_10) if high else int(d.extra))
+		"homing": return "ลูกศรวิ่งตามเป้า แรง %s" % _pct(e)
+		"multiply": return "ดาเมจ ×%s" % ("%.2f" % e)
+		"expand": return "วงกว้างขึ้น +%s" % _pct(e)
+		"extend": return "อยู่นานขึ้น +%s" % _pct(e)
+		"execute": return "คริสกิลนี้ +%s" % _pct(e)
+		"leech": return "ฟื้นเลือด %s ของดาเมจ" % _pct(e)
+		"element":
+			var el := String(gem.get("element", ""))
+			var ed: Dictionary = Balance.data()["elements"].get(el, {})
+			var extra := ""
+			match el:
+				"fire": extra = "ไหม้ %s/วิ นาน %s วิ" % [_pct(float(ed.burn_frac)), Gear._trim(float(ed.duration))]
+				"ice": extra = "ช้าลง %s นาน %s วิ" % [_pct(float(ed.slow)), Gear._trim(float(ed.duration))]
+				"lightning": extra = "กระโดดไปอีก 1 ตัว แรง %s" % _pct(float(ed.mult))
+			return "ธาตุ%s: ดาเมจ ×%s · %s" % [String(ed.get("name", "")), "%.2f" % e, extra]
+	return ""
+
+static func label_text(type: String) -> String:
+	var names := {"arrow": "ลูกศร", "any": "ทุกสกิล", "area": "พื้นที่", "dot": "ต่อเนื่อง", "trap": "กับดัก"}
+	var out: Array = []
+	for l in data(type).get("labels", []): out.append(names.get(l, l))
+	return "·".join(out)
 
 ## "คูลดาวน์สกิลนี้ −6%"
 static func describe_option(o: Dictionary) -> String:

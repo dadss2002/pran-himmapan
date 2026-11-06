@@ -129,11 +129,11 @@
 - Consumes: `Hero.socket/unsocket/build/skill_gems`, `Gem.*`.
 - Produces: `SkillPanel.open(hero)`, `close()`, `select_gem(bag_index)`, `press_slot(skill_id, slot) -> String`, `gem_detail() -> Dictionary` (name, sub, exp_frac, effect, lines with per-skill preview "MP 8 → 11.2"), pauses like BagPanel; HUD `open_skills()` releases touch first.
 
-- [ ] **Step 1: Failing tests** `test_open_pauses` · `test_preview_lines` (แยกศร shows both skills and MP 8 → 11.2, 12 → 16.8) · `test_unusable_gem_dimmed_and_explained` · `test_press_slot_sockets_and_swaps` · `test_full_bag_refusal_shown`.
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement** to the approved sketch (artboard "หน้าสกิล · เจม").
-- [ ] **Step 4: Run** → pass; `xvfb-run … tests/touch_check.gd` → TOUCH PASS including open skills, pick gem, tap slot.
-- [ ] **Step 5: Commit** `M3a Task 6: skill and gem screen`.
+- [x] **Step 1: Failing tests** `test_open_pauses` · `test_preview_lines` (แยกศร shows both skills and MP 8 → 11.2, 12 → 16.8) · `test_unusable_gem_dimmed_and_explained` · `test_press_slot_sockets_and_swaps` · `test_full_bag_refusal_shown`.
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement** to the approved sketch (artboard "หน้าสกิล · เจม").
+- [x] **Step 4: Run** → pass; `xvfb-run … tests/touch_check.gd` → TOUCH PASS including open skills, pick gem, tap slot.
+- [x] **Step 5: Commit** `M3a Task 6: skill and gem screen`.
 
 ### Task 7: Enhance window in the bag
 
