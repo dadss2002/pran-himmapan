@@ -112,11 +112,11 @@
 - Consumes: SkillBuild fields from Task 1.
 - Produces: `Arrow.configure(build: Dictionary)` (pierce_extra, bounces, bounce_mult, homing, leech, element, element_mult) · signal `Arrow.dealt(amount: int)` (for leech) · `StatusEffects.apply_burn(per_tick: float)`, `apply_slow()`, `tick(delta) -> int` (burn damage this frame), `speed_mult() -> float` · `Wolf.status: StatusEffects`; `Wolf._move` scales by `status.speed_mult()`; burn damage goes through `health.take_hit` so death and kill credit use the existing path.
 
-- [ ] **Step 1: Failing tests** `test_pierce_extra_hits_three_then_stops` · `test_ricochet_once_80` · `test_ricochet_no_target_no_error` · `test_homing_turns_and_retargets` (target freed mid-flight → flies on) · `test_leech_heals_3pct_with_carry` · `test_burn_ticks_and_refresh` · `test_slow_40_on_chase_and_lunge` · `test_chain_120px_80pct` · `test_burn_kill_credited_once` (in test_ground: one EXP grant, one loot roll).
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement**; effects from vfx_workbench (`burn_status`, `freeze_status`, `zap_hit`), strip like item_glint.
-- [ ] **Step 4: Run** → pass.
-- [ ] **Step 5: Commit** `M3a Task 5: ricochet, homing, pierce, leech, burn/slow/chain`.
+- [x] **Step 1: Failing tests** `test_pierce_extra_hits_three_then_stops` · `test_ricochet_once_80` · `test_ricochet_no_target_no_error` · `test_homing_turns_and_retargets` (target freed mid-flight → flies on) · `test_leech_heals_3pct_with_carry` · `test_burn_ticks_and_refresh` · `test_slow_40_on_chase_and_lunge` · `test_chain_120px_80pct` · `test_burn_kill_credited_once` (in test_ground: one EXP grant, one loot roll).
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement**; effects from vfx_workbench (`burn_status`, `freeze_status`, `zap_hit`), strip like item_glint.
+- [x] **Step 4: Run** → pass.
+- [x] **Step 5: Commit** `M3a Task 5: ricochet, homing, pierce, leech, burn/slow/chain`.
 
 ### Task 6: Skill screen
 

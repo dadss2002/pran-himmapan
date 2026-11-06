@@ -37,6 +37,7 @@ var _skill_cd := {}
 var _pending_skill := ""
 var _exp_carry := 0.0          # fractional EXP from bonus %, kept so +2.4% is never rounded away
 var _gold_carry := 0.0
+var _leech_carry := 0.0
 var _queued_skill := ""      # pressed during a basic shot; starts once that arrow is out
 var _potion_cd := 0.0
 
@@ -100,6 +101,14 @@ func on_kill(monster_exp: int, monster_level: int) -> void:
 			if g == null: continue
 			var amount := int(round(whole * (1.0 + Gem.option(g, "gem_exp"))))
 			if Gem.add_exp(g, amount) > 0: gem_leveled.emit(g)
+
+## Heals from ดูดเลือด; fractions carry so 3% of small hits still adds up.
+func leech_heal(amount: float) -> void:
+	if state == "dead": return
+	_leech_carry += amount
+	var whole := int(floor(_leech_carry + 1e-6))
+	_leech_carry -= whole
+	if whole > 0: health.hp = mini(health.max_hp, health.hp + whole)
 
 ## Gold from a drop with the gear bonus; the fraction carries to the next drop.
 func bonus_gold(amount: int) -> int:
@@ -501,9 +510,15 @@ func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1
 	a.launch(v, st.atk, _enemies(), mult, pierce, range_px)
 	a.crit_chance = float(b.get("crit", st.crit))
 	a.crit_mult = st.crit_mult
-	if not b.is_empty(): a.configure(b, self)
+	if not b.is_empty():
+		a.configure(b, self)
+		a.spawned.connect(_on_arrow_spawned)
 	if is_inside_tree():
 		get_parent().add_child(a)
+	shot.emit(a)
+
+func _on_arrow_spawned(a: Arrow) -> void:
+	a.spawned.connect(_on_arrow_spawned)
 	shot.emit(a)
 
 # ---------- visuals ----------

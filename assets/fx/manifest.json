@@ -139,5 +139,47 @@
     ],
     "loop": true,
     "pixellab": "240f3478-446c-4234-9727-4baf51c41117"
+  },
+  "status_burn": {
+    "cell": [
+      36,
+      37
+    ],
+    "frames": 12,
+    "fps": 12,
+    "anchor": [
+      18,
+      29
+    ],
+    "loop": true,
+    "pixellab": "1f023a02-2a59-4f6f-b159-fcd39d421afc"
+  },
+  "status_frost": {
+    "cell": [
+      26,
+      30
+    ],
+    "frames": 12,
+    "fps": 10,
+    "anchor": [
+      13,
+      22
+    ],
+    "loop": true,
+    "pixellab": "3042db32-12ee-467b-a5e5-baa2242574c3"
+  },
+  "chain_zap": {
+    "cell": [
+      39,
+      29
+    ],
+    "frames": 10,
+    "fps": 18,
+    "anchor": [
+      16,
+      12
+    ],
+    "loop": false,
+    "pixellab": "6f27c90e-bb57-46d4-a3f0-c535b5bbabbd"
   }
 }
