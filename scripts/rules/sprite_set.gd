@@ -1,8 +1,8 @@
-class_name HeroSprites
-## Builds SpriteFrames from assets/hero/manifest.json + the per-direction strips
+class_name SpriteSet
+## Builds SpriteFrames from an actor manifest (assets/<actor>/manifest.json) + the per-direction strips
 ## (<anim>_<dir>.png, one row of equal cells). Animation names are "<anim>_<dir>".
 
-const LOOPING := ["idle", "walk"]
+const LOOPING := ["idle", "walk", "run"]
 
 static func _manifest(path: String) -> Dictionary:
 	var f := FileAccess.open(path, FileAccess.READ)

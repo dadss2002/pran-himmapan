@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/hero/hero.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/hero/bow_layer.gd" id="2"]
 [ext_resource type="Texture2D" path="res://assets/items/bow_bamboo.png" id="3"]
+[ext_resource type="Script" path="res://scripts/actors/health.gd" id="4"]
 
 [sub_resource type="RectangleShape2D" id="feet"]
 size = Vector2(20, 16)
@@ -20,3 +21,6 @@ shape = SubResource("feet")
 [node name="Bow" type="Sprite2D" parent="."]
 texture = ExtResource("3")
 script = ExtResource("2")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("4")
