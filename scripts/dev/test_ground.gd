@@ -1,14 +1,12 @@
 extends Node2D
-## M2a test ground. PLACEHOLDER art: checker floor + wooden posts drawn in code, to be replaced
-## by the PixelLab forest map. Three ghost-wolf packs from balance.json "packs"; Y-sorted World.
+## The play ground: the painted PixelLab forest (data/map_painted.json via PaintedLayout/PaintedMap), the hero,
+## three ghost-wolf packs (level/count from balance.json "packs", homes from the map); Y-sorted World.
 
-const TILE := 32
-const GREENS := [Color("#255631"), Color("#316134")]
-const POSTS := [Vector2(760, 470), Vector2(1160, 470), Vector2(960, 760), Vector2(640, 860),
-	Vector2(1300, 820), Vector2(300, 520), Vector2(1620, 560), Vector2(480, 1100), Vector2(1450, 1120)]
 const HERO_SCENE := preload("res://scenes/hero.tscn")
 
 var world: Node2D
+var layout: PaintedLayout
+var forest: PaintedMap
 var hero: Hero
 var hud: Hud
 var packs: Array = []
@@ -29,12 +27,14 @@ func build() -> void:
 	world = Node2D.new()
 	world.name = "World"
 	world.y_sort_enabled = true
+	layout = PaintedLayout.open()
+	forest = PaintedMap.new()
+	add_child(forest)
+	move_child(forest, 0)
 	add_child(world)
-	for p in POSTS:
-		world.add_child(_post(p))
-	var spawn: Array = Balance.data()["hero_spawn"]
+	forest.build(layout)
 	hero = HERO_SCENE.instantiate()
-	hero.spawn_point = Vector2(spawn[0], spawn[1])
+	hero.spawn_point = layout.hero_spawn
 	hero.position = hero.spawn_point
 	world.add_child(hero)
 	hero.setup_sprites()
@@ -52,17 +52,20 @@ func build() -> void:
 	hero.rolled.connect(func(_d): _fx("roll_dust", hero.global_position))
 	hero.leveled_up.connect(_on_level_up)
 	var cam := Camera2D.new()
-	var size: Array = Balance.data()["map_size"]
 	cam.limit_left = 0
 	cam.limit_top = 0
-	cam.limit_right = int(size[0])
-	cam.limit_bottom = int(size[1])
+	cam.limit_right = int(layout.size_px().x)
+	cam.limit_bottom = int(layout.size_px().y)
 	hero.add_child(cam)
-	for spec in Balance.data()["packs"]:
+	var nav := layout.make_nav()
+	var specs: Array = Balance.data()["packs"]
+	for i in specs.size():
+		var spec: Dictionary = specs[i]
 		var pack := WolfPack.new()
 		pack.level = int(spec.level)
 		pack.count = int(spec.count)
-		pack.home = Vector2(spec.at[0], spec.at[1])
+		pack.home = layout.pack_homes[i]
+		pack.nav = nav
 		pack.y_sort_enabled = true
 		pack.hero = hero
 		world.add_child(pack)
@@ -81,13 +84,6 @@ func build() -> void:
 	add_child(hud)
 	if hud.hp_label == null: hud.build()
 	hud.bind(hero)
-	var label := Label.new()
-	label.text = "PLACEHOLDER floor/posts (not PixelLab art)"
-	label.add_theme_font_size_override("font_size", 8)
-	label.modulate.a = 0.6
-	label.position = Vector2(200, 4)
-	hud.add_child(label)
-	queue_redraw()
 
 func _on_level_up(lv: int) -> void:
 	_fx("level_up", hero.global_position)
@@ -140,16 +136,9 @@ func _on_wolf_died(w: Wolf) -> void:
 		drops.append(d)
 		if world: world.add_child(d)
 
-## true when a point is inside a post (or other static collider).
+## true where a drop must not land: water, a prop's feet, outside the map.
 func _blocked(p: Vector2) -> bool:
-	if not is_inside_tree(): return false
-	var q := PhysicsPointQueryParameters2D.new()
-	q.position = p
-	q.collide_with_bodies = true
-	q.collision_mask = 1
-	for hit in get_world_2d().direct_space_state.intersect_point(q, 4):
-		if hit.collider is StaticBody2D: return true
-	return false
+	return layout.blocked_at(p)
 
 func _physics_process(delta: float) -> void:
 	tick_autosave(delta)
@@ -170,6 +159,7 @@ func _text(at: Vector2, t: String, c: Color) -> void:
 	d.add_theme_color_override("font_color", c)
 	d.size = Vector2(80, 16)
 	d.position = at - Vector2(20, 0)
+	d.z_index = 45
 	add_child(d)
 func _process(_delta: float) -> void:
 	if lock_ring == null or hero == null: return
@@ -181,6 +171,7 @@ func _number(at: Vector2, amount: int, crit: bool, hurt: bool) -> void:
 	if not is_inside_tree(): return
 	var d := DamageNumber.make(amount, crit, hurt)
 	d.position = at
+	d.z_index = 45                      # above the leaf overlays
 	add_child(d)
 
 func _fx(fx_name: String, at: Vector2) -> void:
@@ -190,28 +181,3 @@ func _fx(fx_name: String, at: Vector2) -> void:
 	f.z_index = 40
 	add_child(f)
 	f.play(fx_name)
-
-func _draw() -> void:
-	var size: Array = Balance.data()["map_size"]
-	for y in int(size[1]) / TILE:
-		for x in int(size[0]) / TILE:
-			draw_rect(Rect2(x * TILE, y * TILE, TILE, TILE), GREENS[(x + y) % 2])
-
-func _post(at: Vector2) -> StaticBody2D:
-	var b := StaticBody2D.new()
-	b.position = at  # origin = base of the post
-	var c := CollisionShape2D.new()
-	var r := RectangleShape2D.new()
-	r.size = Vector2(14, 8)
-	c.shape = r
-	c.position = Vector2(0, -4)
-	b.add_child(c)
-	var v := Polygon2D.new()
-	v.color = Color("#623425")
-	v.polygon = PackedVector2Array([Vector2(-7, 0), Vector2(7, 0), Vector2(7, -40), Vector2(-7, -40)])
-	b.add_child(v)
-	var cap := Polygon2D.new()
-	cap.color = Color("#a4712d")
-	cap.polygon = PackedVector2Array([Vector2(-7, -40), Vector2(7, -40), Vector2(7, -44), Vector2(-7, -44)])
-	b.add_child(cap)
-	return b

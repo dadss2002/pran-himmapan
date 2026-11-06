@@ -181,5 +181,19 @@
     ],
     "loop": false,
     "pixellab": "6f27c90e-bb57-46d4-a3f0-c535b5bbabbd"
+  },
+  "water_ripple": {
+    "cell": [
+      56,
+      26
+    ],
+    "frames": 12,
+    "fps": 10,
+    "anchor": [
+      28,
+      13
+    ],
+    "loop": true,
+    "pixellab": "06caf552-1ad5-40f3-9ac3-dc17b7d9f3ec"
   }
 }

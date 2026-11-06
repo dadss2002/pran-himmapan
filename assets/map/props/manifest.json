@@ -1,0 +1,273 @@
+{
+ "tree_round_a": {
+  "file": "res://assets/map/props/tree_round_a.png",
+  "size": [
+   96,
+   128
+  ],
+  "feet": [
+   48,
+   116
+  ],
+  "foot": [
+   24,
+   10
+  ],
+  "flat": false,
+  "pixellab": "6273ff10"
+ },
+ "tree_round_b": {
+  "file": "res://assets/map/props/tree_round_b.png",
+  "size": [
+   96,
+   128
+  ],
+  "feet": [
+   48,
+   117
+  ],
+  "foot": [
+   24,
+   10
+  ],
+  "flat": false,
+  "pixellab": "e41fc697"
+ },
+ "tree_round_c": {
+  "file": "res://assets/map/props/tree_round_c.png",
+  "size": [
+   96,
+   128
+  ],
+  "feet": [
+   48,
+   118
+  ],
+  "foot": [
+   26,
+   10
+  ],
+  "flat": false,
+  "pixellab": "152d8579"
+ },
+ "bush_a": {
+  "file": "res://assets/map/props/bush_a.png",
+  "size": [
+   64,
+   64
+  ],
+  "feet": [
+   32,
+   51
+  ],
+  "foot": [
+   36,
+   10
+  ],
+  "flat": false,
+  "pixellab": "9b37886f"
+ },
+ "bush_b": {
+  "file": "res://assets/map/props/bush_b.png",
+  "size": [
+   64,
+   64
+  ],
+  "feet": [
+   32,
+   51
+  ],
+  "foot": [
+   36,
+   10
+  ],
+  "flat": false,
+  "pixellab": "4ab276d6"
+ },
+ "well_stone": {
+  "file": "res://assets/map/props/well_stone.png",
+  "size": [
+   96,
+   96
+  ],
+  "feet": [
+   48,
+   80
+  ],
+  "foot": [
+   66,
+   28
+  ],
+  "flat": false,
+  "pixellab": "e20bac0f"
+ },
+ "pillar_stone": {
+  "file": "res://assets/map/props/pillar_stone.png",
+  "size": [
+   32,
+   64
+  ],
+  "feet": [
+   16,
+   59
+  ],
+  "foot": [
+   22,
+   10
+  ],
+  "flat": false,
+  "pixellab": "70b0e5d9"
+ },
+ "bridge_wood": {
+  "file": "res://assets/map/props/bridge_wood.png",
+  "size": [
+   96,
+   96
+  ],
+  "feet": [
+   48,
+   96
+  ],
+  "foot": null,
+  "flat": true,
+  "pixellab": "b9bec764"
+ },
+ "stump_a": {
+  "file": "res://assets/map/props/stump_a.png",
+  "size": [
+   48,
+   48
+  ],
+  "feet": [
+   24,
+   39
+  ],
+  "foot": [
+   30,
+   10
+  ],
+  "flat": false,
+  "pixellab": "e1733fe0"
+ },
+ "stump_b": {
+  "file": "res://assets/map/props/stump_b.png",
+  "size": [
+   48,
+   48
+  ],
+  "feet": [
+   24,
+   40
+  ],
+  "foot": [
+   30,
+   10
+  ],
+  "flat": false,
+  "pixellab": "51167dc4"
+ },
+ "rock_a": {
+  "file": "res://assets/map/props/rock_a.png",
+  "size": [
+   64,
+   48
+  ],
+  "feet": [
+   32,
+   42
+  ],
+  "foot": [
+   50,
+   14
+  ],
+  "flat": false,
+  "pixellab": "2f88af11"
+ },
+ "rock_b": {
+  "file": "res://assets/map/props/rock_b.png",
+  "size": [
+   48,
+   48
+  ],
+  "feet": [
+   24,
+   40
+  ],
+  "foot": [
+   36,
+   12
+  ],
+  "flat": false,
+  "pixellab": "f226cc0e"
+ },
+ "rock_c": {
+  "file": "res://assets/map/props/rock_c.png",
+  "size": [
+   32,
+   32
+  ],
+  "feet": [
+   16,
+   21
+  ],
+  "foot": null,
+  "flat": false,
+  "pixellab": "27e06289"
+ },
+ "mushroom": {
+  "file": "res://assets/map/props/mushroom.png",
+  "size": [
+   32,
+   32
+  ],
+  "feet": [
+   16,
+   25
+  ],
+  "foot": null,
+  "flat": false,
+  "pixellab": "c6634aa1"
+ },
+ "flowers_a": {
+  "file": "res://assets/map/props/flowers_a.png",
+  "size": [
+   48,
+   48
+  ],
+  "feet": [
+   24,
+   39
+  ],
+  "foot": null,
+  "flat": false,
+  "pixellab": "497aa012"
+ },
+ "flowers_b": {
+  "file": "res://assets/map/props/flowers_b.png",
+  "size": [
+   48,
+   48
+  ],
+  "feet": [
+   24,
+   24
+  ],
+  "foot": null,
+  "flat": true,
+  "pixellab": "bd8b7b35"
+ },
+ "flower_carpet_red": {
+  "file": "res://assets/map/props/flower_carpet_red.png",
+  "size": [
+   64,
+   64
+  ],
+  "feet": [
+   32,
+   32
+  ],
+  "foot": null,
+  "flat": true,
+  "pixellab": "7a8a7982"
+ }
+}

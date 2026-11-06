@@ -1,0 +1,173 @@
+{
+ "note": "Hand data for tools/painted_map.py. Coordinates are world pixels (map 2064x1536, chunks 688x384). edits run in order: op walk|block over a pixel rect.",
+ "grid": [
+  3,
+  4
+ ],
+ "hero_spawn": [
+  1038,
+  660
+ ],
+ "pack_homes": [
+  [
+   1018,
+   200
+  ],
+  [
+   1676,
+   958
+  ],
+  [
+   1576,
+   1372
+  ]
+ ],
+ "fx": [
+  {
+   "id": "water_ripple",
+   "at": [
+    212,
+    1040
+   ]
+  },
+  {
+   "id": "water_ripple",
+   "at": [
+    900,
+    1424
+   ]
+  },
+  {
+   "id": "water_ripple",
+   "at": [
+    1910,
+    1330
+   ]
+  }
+ ],
+ "edits": [
+  {
+   "op": "walk",
+   "rect": [
+    600,
+    552,
+    200,
+    48
+   ],
+   "why": "V1 trail between the west road and the plaza (stepping stones read as blocked)"
+  },
+  {
+   "op": "walk",
+   "rect": [
+    1256,
+    1316,
+    48,
+    76
+   ],
+   "why": "V4 trail: dark line at the patch edge"
+  },
+  {
+   "op": "walk",
+   "rect": [
+    372,
+    16,
+    76,
+    1160
+   ],
+   "why": "west stone road: dark slabs and stairs are walkable"
+  }
+ ],
+ "patches": [
+  {
+   "file": "assets/map/painted/raw/patch_V1.png",
+   "at": [
+    560,
+    400
+   ],
+   "mask": [
+    40,
+    110,
+    216,
+    170
+   ]
+  },
+  {
+   "file": "assets/map/painted/raw/patch_V2.png",
+   "at": [
+    520,
+    800
+   ],
+   "mask": [
+    40,
+    100,
+    216,
+    150
+   ]
+  },
+  {
+   "file": "assets/map/painted/raw/patch_V3.png",
+   "at": [
+    1248,
+    384
+   ],
+   "mask": [
+    0,
+    110,
+    216,
+    170
+   ]
+  },
+  {
+   "file": "assets/map/painted/raw/patch_V3b.png",
+   "at": [
+    1150,
+    384
+   ],
+   "mask": [
+    40,
+    110,
+    216,
+    140
+   ]
+  },
+  {
+   "file": "assets/map/painted/raw/patch_V4.png",
+   "at": [
+    1248,
+    1152
+   ],
+   "mask": [
+    40,
+    100,
+    176,
+    200
+   ]
+  },
+  {
+   "file": "assets/map/painted/raw/patch_H3.png",
+   "at": [
+    928,
+    256
+   ],
+   "mask": [
+    0,
+    88,
+    256,
+    80
+   ]
+  },
+  {
+   "file": "assets/map/painted/raw/patch_H8.png",
+   "at": [
+    880,
+    1024
+   ],
+   "mask": [
+    0,
+    80,
+    256,
+    96
+   ]
+  }
+ ]
+}

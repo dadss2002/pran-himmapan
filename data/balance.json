@@ -121,41 +121,23 @@
     "stop_factor": 0.8,
     "wander_pause": 1.5,
     "pack_spacing": 20,
-    "pack_ring": 26
+    "pack_ring": 26,
+    "stuck_time": 1.5,
+    "stuck_distance": 8
   },
   "packs": [
     {
       "level": 1,
-      "count": 4,
-      "at": [
-        480,
-        320
-      ]
+      "count": 4
     },
     {
       "level": 3,
-      "count": 3,
-      "at": [
-        1440,
-        320
-      ]
+      "count": 3
     },
     {
       "level": 5,
-      "count": 4,
-      "at": [
-        960,
-        1040
-      ]
+      "count": 4
     }
-  ],
-  "hero_spawn": [
-    960,
-    560
-  ],
-  "map_size": [
-    1920,
-    1280
   ],
   "exp": {
     "base": 45,

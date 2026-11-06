@@ -19,7 +19,7 @@ func test_ground_spawns_three_packs():
 	var r := ""
 	if levels != [1, 3, 5]: r = "pack levels %s" % [levels]
 	elif total != 11: r = "%d wolves, expected 11" % total
-	elif g.hero.spawn_point != Vector2(960, 560): r = "hero spawn %s" % g.hero.spawn_point
+	elif g.hero.spawn_point != g.layout.hero_spawn: r = "hero spawn %s" % g.hero.spawn_point
 	g.free()
 	return r
 
