@@ -1,6 +1,101 @@
 {
   "_doc": "PixelLab vfx_workbench exports (effects saved in My effects). anchor = pixel in a cell that sits on the node origin.",
-  "lunge_warning": {"cell": [98, 106], "frames": 21, "fps": 42, "anchor": [49, 80], "loop": false, "pixellab": "c8dc78a6-26a9-4267-bcc1-f2de9fb07367"},
-  "hit_spark": {"cell": [45, 43], "frames": 6, "fps": 16, "anchor": [21, 22], "loop": false, "pixellab": "a9fdd80b-cbe0-4a5c-9fdf-b5c5ec1487cb"},
-  "roll_dust": {"cell": [53, 29], "frames": 8, "fps": 14, "anchor": [26, 13], "loop": false, "pixellab": "27a9b652-199e-4bf4-bbc1-c8a7c98909df"}
+  "lunge_warning": {
+    "cell": [
+      98,
+      106
+    ],
+    "frames": 21,
+    "fps": 42,
+    "anchor": [
+      49,
+      80
+    ],
+    "loop": false,
+    "pixellab": "c8dc78a6-26a9-4267-bcc1-f2de9fb07367"
+  },
+  "hit_spark": {
+    "cell": [
+      45,
+      43
+    ],
+    "frames": 6,
+    "fps": 16,
+    "anchor": [
+      21,
+      22
+    ],
+    "loop": false,
+    "pixellab": "a9fdd80b-cbe0-4a5c-9fdf-b5c5ec1487cb"
+  },
+  "roll_dust": {
+    "cell": [
+      53,
+      29
+    ],
+    "frames": 8,
+    "fps": 14,
+    "anchor": [
+      26,
+      13
+    ],
+    "loop": false,
+    "pixellab": "27a9b652-199e-4bf4-bbc1-c8a7c98909df"
+  },
+  "level_up": {
+    "cell": [
+      60,
+      99
+    ],
+    "frames": 14,
+    "fps": 14,
+    "anchor": [
+      30,
+      86
+    ],
+    "loop": false,
+    "pixellab": "6aa71090-ce58-428c-9f96-2aea3fdb8271"
+  },
+  "pickup_pop": {
+    "cell": [
+      43,
+      49
+    ],
+    "frames": 10,
+    "fps": 15,
+    "anchor": [
+      21,
+      32
+    ],
+    "loop": false,
+    "pixellab": "da056813-71dc-4e27-a9e0-8f720fa39c66"
+  },
+  "piercing_trail": {
+    "cell": [
+      85,
+      39
+    ],
+    "frames": 8,
+    "fps": 12,
+    "anchor": [
+      60,
+      20
+    ],
+    "loop": true,
+    "pixellab": "20160e5b-66c1-4083-a7bf-28a6fbf4597d"
+  },
+  "spread_burst": {
+    "cell": [
+      40,
+      43
+    ],
+    "frames": 7,
+    "fps": 16,
+    "anchor": [
+      20,
+      23
+    ],
+    "loop": false,
+    "pixellab": "c54f014c-928a-4b98-84e0-d5f76e1151c8"
+  }
 }

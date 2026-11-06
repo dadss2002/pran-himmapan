@@ -1,42 +1,199 @@
 {
   "_doc": "All tuning numbers. Source: docs/spec-numbers.md + docs/superpowers/specs/2026-11-06-m2-design.md (approved 2026-11-06). Change numbers only with owner approval.",
   "hero": {
-    "hp_base": 100, "hp_per_level": 12,
-    "atk_base": 10, "atk_per_level": 2,
-    "def_base": 2, "def_per_level": 1,
+    "hp_base": 100,
+    "hp_per_level": 12,
+    "atk_base": 10,
+    "atk_per_level": 2,
+    "def_base": 2,
+    "def_per_level": 1,
     "walk": 110,
-    "hurt_knockback": 8, "hurt_iframe": 0.5, "hurt_lock": 0.25, "hurt_flash": 0.1,
-    "death_delay": 1.5, "respawn_iframe": 2.0
+    "hurt_knockback": 8,
+    "hurt_iframe": 0.5,
+    "hurt_lock": 0.25,
+    "hurt_flash": 0.1,
+    "death_delay": 1.5,
+    "respawn_iframe": 2.0
   },
   "gear": {
-    "bamboo_bow": {"atk": 8},
-    "trainee_armor": {"def": 4, "hp": 20}
+    "bamboo_bow": {
+      "atk": 8
+    },
+    "trainee_armor": {
+      "def": 4,
+      "hp": 20
+    }
   },
-  "shot": {"range": 220, "cooldown": 0.8, "arrow_speed": 360, "arrow_hit_radius": 10},
-  "crit": {"chance": 0.05, "mult": 1.5},
+  "shot": {
+    "range": 220,
+    "cooldown": 0.8,
+    "arrow_speed": 360,
+    "arrow_hit_radius": 10
+  },
+  "crit": {
+    "chance": 0.05,
+    "mult": 1.5
+  },
   "dodge": {
     "upgrade_level": 5,
-    "lv1": {"distance": 64, "duration": 0.25, "iframe": 0.2, "cooldown": 1.5},
-    "lv5": {"distance": 96, "duration": 0.3, "iframe": 0.3, "cooldown": 1.5}
+    "lv1": {
+      "distance": 64,
+      "duration": 0.25,
+      "iframe": 0.2,
+      "cooldown": 1.5
+    },
+    "lv5": {
+      "distance": 96,
+      "duration": 0.3,
+      "iframe": 0.3,
+      "cooldown": 1.5
+    }
   },
   "wolf": {
-    "hp_base": 40, "hp_per_level": 18,
-    "atk_base": 6, "atk_per_level": 2,
-    "def_base": 2, "def_per_level": 1,
-    "exp_base": 8, "exp_per_level": 5,
-    "aggro": 160, "leash": 320,
-    "wander_speed": 50, "wander_radius": 48,
+    "hp_base": 40,
+    "hp_per_level": 18,
+    "atk_base": 6,
+    "atk_per_level": 2,
+    "def_base": 2,
+    "def_per_level": 1,
+    "exp_base": 8,
+    "exp_per_level": 5,
+    "aggro": 160,
+    "leash": 320,
+    "wander_speed": 50,
+    "wander_radius": 48,
     "run": 140,
-    "bite_range": 22, "bite_hit_range": 30, "bite_windup": 0.35, "bite_mult": 1.0, "bite_cooldown": 1.2,
-    "lunge_min": 60, "lunge_max": 130, "lunge_warn": 0.5, "lunge_distance": 140, "lunge_time": 0.3,
-    "lunge_mult": 1.5, "lunge_cooldown": 5.0, "lunge_hit_radius": 20,
-    "hit_knockback": 6, "hit_flash": 0.1, "death_fade": 0.6, "respawn": 20
+    "bite_range": 22,
+    "bite_hit_range": 30,
+    "bite_windup": 0.35,
+    "bite_mult": 1.0,
+    "bite_cooldown": 1.2,
+    "lunge_min": 60,
+    "lunge_max": 130,
+    "lunge_warn": 0.5,
+    "lunge_distance": 140,
+    "lunge_time": 0.3,
+    "lunge_mult": 1.5,
+    "lunge_cooldown": 5.0,
+    "lunge_hit_radius": 20,
+    "hit_knockback": 6,
+    "hit_flash": 0.1,
+    "death_fade": 0.6,
+    "respawn": 20
   },
   "packs": [
-    {"level": 1, "count": 4, "at": [480, 320]},
-    {"level": 3, "count": 3, "at": [1440, 320]},
-    {"level": 5, "count": 4, "at": [960, 1040]}
+    {
+      "level": 1,
+      "count": 4,
+      "at": [
+        480,
+        320
+      ]
+    },
+    {
+      "level": 3,
+      "count": 3,
+      "at": [
+        1440,
+        320
+      ]
+    },
+    {
+      "level": 5,
+      "count": 4,
+      "at": [
+        960,
+        1040
+      ]
+    }
   ],
-  "hero_spawn": [960, 560],
-  "map_size": [1920, 1280]
+  "hero_spawn": [
+    960,
+    560
+  ],
+  "map_size": [
+    1920,
+    1280
+  ],
+  "exp": {
+    "base": 45,
+    "power": 1.8,
+    "growth": 1.035,
+    "cap_level": 10,
+    "low_level_gap": 6,
+    "low_level_mult": 0.3,
+    "death_loss": 0.05
+  },
+  "mp": {
+    "base": 50,
+    "per_level": 5,
+    "regen": 6
+  },
+  "potion": {
+    "heal_frac": 0.4,
+    "cooldown": 10,
+    "start_hp": 5,
+    "start_mp": 3
+  },
+  "loot": {
+    "wolf": {
+      "gold_min": 3,
+      "gold_max": 6,
+      "ore": 0.25,
+      "gem": 0.01
+    }
+  },
+  "gems": [
+    "split",
+    "ricochet",
+    "pierce",
+    "homing",
+    "multiply",
+    "expand",
+    "extend",
+    "execute",
+    "leech",
+    "element"
+  ],
+  "gem_icon_group": {
+    "split": "blue",
+    "ricochet": "blue",
+    "pierce": "blue",
+    "homing": "blue",
+    "multiply": "red",
+    "execute": "red",
+    "element": "red",
+    "expand": "green",
+    "extend": "green",
+    "leech": "green"
+  },
+  "pickup": {
+    "magnet": 64,
+    "speed": 260,
+    "lifetime": 60
+  },
+  "bag": {
+    "slots": 24,
+    "stack": 99
+  },
+  "skills": {
+    "piercing": {
+      "unlock": 1,
+      "mult": 1.8,
+      "cooldown": 4,
+      "mp": 8,
+      "range": 220
+    },
+    "spread": {
+      "unlock": 3,
+      "mult": 0.7,
+      "cooldown": 6,
+      "mp": 12,
+      "arrows": 5,
+      "fan_deg": 45
+    },
+    "per_level_damage": 0.05,
+    "per_level_cooldown": 0.01,
+    "max_cooldown_cut": 0.3
+  }
 }

@@ -50,3 +50,6 @@ static func dodge(level: int) -> Dictionary:
 		"distance": num(key + ".distance"), "duration": num(key + ".duration"),
 		"iframe": num(key + ".iframe"), "cooldown": num(key + ".cooldown"),
 	}
+
+static func mp(level: int) -> int:
+	return int(num("mp.base") + num("mp.per_level") * (level - 1))
