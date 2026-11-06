@@ -1,5 +1,5 @@
 extends SceneTree
-## M3b real-render screenshots: xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_m3b.gd -- --touch
+## M3b painted-map screenshots: xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_m3b.gd -- --touch
 
 const OUT := "res://docs/preview/"
 const SAVE := "user://shots_m3b_save.json"
@@ -42,23 +42,26 @@ func _run() -> void:
 	for p in g.packs: p.set_process(false)
 	await _frames(10)
 	await _at(g.layout.hero_spawn)
-	await _snap("m3b_spawn_path.png")
-	await _at(Vector2(560, 470))
-	await _snap("m3b_pack_clearing.png")
-	await _at(Vector2(420, 800))
-	await _snap("m3b_pond.png")
-	await _at(Vector2(960, 960))
-	await _snap("m3b_bridge.png")
-	await _at(Vector2(700, 680))             # just above the tree's feet: drawn behind its canopy
-	await _snap("m3b_behind_tree.png")
-	await _at(Vector2(960, 1110))
-	await _snap("m3b_south_pack.png")
-	# whole map: zoom the camera out
+	await _snap("m3b_spawn_plaza.png")
+	await _at(g.layout.pack_homes[0] + Vector2(-90, 60))
+	await _snap("m3b_ruins_pack.png")
+	await _at(Vector2(410, 980))
+	await _snap("m3b_pond_road.png")
+	await _at(Vector2(1720, 230))
+	await _snap("m3b_shrine.png")
+	await _at(Vector2(380, 1300))
+	await _snap("m3b_arena.png")
+	await _at(g.layout.pack_homes[2] + Vector2(-80, 0))
+	await _snap("m3b_south_pond_pack.png")
+	# under the leaves: feet right at a canopy's lower edge north of the plaza
+	await _at(g.layout.hero_spawn + Vector2(0, -150))
+	await _snap("m3b_under_leaves.png")
+	# whole map
 	var cam: Camera2D = hero.get_child(hero.get_child_count() - 1)
 	g.hud.visible = false
-	cam.limit_left = -2000; cam.limit_top = -2000; cam.limit_right = 4000; cam.limit_bottom = 4000
-	cam.zoom = Vector2(1, 1) / 3.6
-	await _at(Vector2(960, 640))
+	cam.limit_left = -4000; cam.limit_top = -4000; cam.limit_right = 8000; cam.limit_bottom = 8000
+	cam.zoom = Vector2(1, 1) / 4.3
+	await _at(Vector2(1032, 768))
 	var img := root.get_texture().get_image()
 	img.save_png(ProjectSettings.globalize_path(OUT + "m3b_overview.png"))
 	print("saved m3b_overview.png")

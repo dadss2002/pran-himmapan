@@ -1,12 +1,12 @@
 extends Node2D
-## The play ground: the PixelLab forest (data/map_forest.json via ForestLayout/ForestMap), the hero,
+## The play ground: the painted PixelLab forest (data/map_painted.json via PaintedLayout/PaintedMap), the hero,
 ## three ghost-wolf packs (level/count from balance.json "packs", homes from the map); Y-sorted World.
 
 const HERO_SCENE := preload("res://scenes/hero.tscn")
 
 var world: Node2D
-var layout: ForestLayout
-var forest: ForestMap
+var layout: PaintedLayout
+var forest: PaintedMap
 var hero: Hero
 var hud: Hud
 var packs: Array = []
@@ -27,12 +27,12 @@ func build() -> void:
 	world = Node2D.new()
 	world.name = "World"
 	world.y_sort_enabled = true
-	layout = ForestLayout.open()
-	forest = ForestMap.new()
+	layout = PaintedLayout.open()
+	forest = PaintedMap.new()
 	add_child(forest)
 	move_child(forest, 0)
 	add_child(world)
-	forest.build(layout, world)
+	forest.build(layout)
 	hero = HERO_SCENE.instantiate()
 	hero.spawn_point = layout.hero_spawn
 	hero.position = hero.spawn_point
@@ -52,11 +52,10 @@ func build() -> void:
 	hero.rolled.connect(func(_d): _fx("roll_dust", hero.global_position))
 	hero.leveled_up.connect(_on_level_up)
 	var cam := Camera2D.new()
-	var size: Array = Balance.data()["map_size"]
 	cam.limit_left = 0
 	cam.limit_top = 0
-	cam.limit_right = int(size[0])
-	cam.limit_bottom = int(size[1])
+	cam.limit_right = int(layout.size_px().x)
+	cam.limit_bottom = int(layout.size_px().y)
 	hero.add_child(cam)
 	var specs: Array = Balance.data()["packs"]
 	for i in specs.size():
@@ -158,6 +157,7 @@ func _text(at: Vector2, t: String, c: Color) -> void:
 	d.add_theme_color_override("font_color", c)
 	d.size = Vector2(80, 16)
 	d.position = at - Vector2(20, 0)
+	d.z_index = 45
 	add_child(d)
 func _process(_delta: float) -> void:
 	if lock_ring == null or hero == null: return
@@ -169,6 +169,7 @@ func _number(at: Vector2, amount: int, crit: bool, hurt: bool) -> void:
 	if not is_inside_tree(): return
 	var d := DamageNumber.make(amount, crit, hurt)
 	d.position = at
+	d.z_index = 45                      # above the leaf overlays
 	add_child(d)
 
 func _fx(fx_name: String, at: Vector2) -> void:
