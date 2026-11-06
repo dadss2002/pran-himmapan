@@ -38,6 +38,7 @@ var _d_sub: Label
 var _d_main: Label
 var _d_lines: VBoxContainer
 var _d_action: Button
+var _close_button: Button
 
 func _ready() -> void:
 	if _root == null: build()
@@ -261,6 +262,7 @@ func build() -> void:
 	x.custom_minimum_size = Vector2(30, 26)
 	x.focus_mode = Control.FOCUS_NONE
 	x.pressed.connect(close)
+	_close_button = x
 	head.add_child(x)
 
 	var body := HBoxContainer.new()

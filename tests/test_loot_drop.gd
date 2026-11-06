@@ -74,8 +74,14 @@ func test_drop_scatter_not_inside_walls():
 
 func test_icon_for_items():
 	var r := ""
-	for id in ["gold", "ore_himmapan", "gem_split", "gem_multiply", "gem_leech"]:
-		if LootDrop.icon_path(id) == "" or not ResourceLoader.exists(LootDrop.icon_path(id)): r = "no icon for %s" % id
+	var ids := ["gold", "ore_himmapan", "potion_hp", "potion_mp"]
+	for g in Balance.data()["gems"]: ids.append("gem_" + g)
+	var seen := {}
+	for id in ids:
+		var p := LootDrop.icon_path(id)
+		if not ResourceLoader.exists(p): r = "no icon for %s (%s)" % [id, p]
+		elif id.begins_with("gem_") and seen.has(p): r = "%s shares its icon with %s" % [id, seen[p]]
+		seen[p] = id
 	return r
 
 func test_bag_full_notice_clears_when_away():

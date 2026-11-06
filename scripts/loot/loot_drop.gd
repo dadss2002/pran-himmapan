@@ -22,9 +22,6 @@ var beam: FxSprite = null      # rarity_beam under rare-and-up equipment, tinted
 static func icon_path(id: String) -> String:
 	if id == "gold": return "res://assets/items/coin_gold.png"
 	if Gear.is_gear(id): return "res://assets/items/%s.png" % Gear.icon_name(id)
-	if id.begins_with("gem_"):
-		var group: String = Balance.data()["gem_icon_group"].get(id.trim_prefix("gem_"), "blue")
-		return "res://assets/items/gem_%s.png" % group
 	return "res://assets/items/%s.png" % id
 
 static func make(id: String, n: int) -> LootDrop:

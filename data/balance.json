@@ -51,14 +51,14 @@
       "level": 1,
       "from_source": true,
       "name": "แหวน",
-      "icon": "ring_placeholder"
+      "icon": "ring_silver_ruby"
     },
     "necklace": {
       "slot": "necklace",
       "level": 1,
       "from_source": true,
       "name": "สร้อย",
-      "icon": "necklace_placeholder"
+      "icon": "necklace_gold_amulet"
     }
   },
   "shot": {
@@ -198,18 +198,6 @@
     "leech",
     "element"
   ],
-  "gem_icon_group": {
-    "split": "blue",
-    "ricochet": "blue",
-    "pierce": "blue",
-    "homing": "blue",
-    "multiply": "red",
-    "execute": "red",
-    "element": "red",
-    "expand": "green",
-    "extend": "green",
-    "leech": "green"
-  },
   "pickup": {
     "magnet": 64,
     "speed": 260,

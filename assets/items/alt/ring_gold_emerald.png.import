@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://1o4yf3kuabkq"
-path="res://.godot/imported/ring_placeholder.png-99e1cdab2415f439d3c47aad7708b79b.ctex"
+uid="uid://bcsvb321adswe"
+path="res://.godot/imported/ring_gold_emerald.png-b4c56d1ed75722cba7fb271d9239213b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/items/ring_placeholder.png"
-dest_files=["res://.godot/imported/ring_placeholder.png-99e1cdab2415f439d3c47aad7708b79b.ctex"]
+source_file="res://assets/items/alt/ring_gold_emerald.png"
+dest_files=["res://.godot/imported/ring_gold_emerald.png-b4c56d1ed75722cba7fb271d9239213b.ctex"]
 
 [params]
 

@@ -126,3 +126,4 @@ func test_hud_bag_button_opens_and_releases_touch():
 	elif hud.joystick.vector != Vector2.ZERO or hud.joystick.active: r = "joystick still held"
 	hud.free(); h.free()
 	return r
+
