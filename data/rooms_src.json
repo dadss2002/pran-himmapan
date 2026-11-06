@@ -1,0 +1,137 @@
+{
+ "note": "Hand data for tools/painted_rooms.py. Room-local pixels (688x384). links: room:side pairs (side = north/south/east/west); a warp sits on the open ground nearest that edge's middle, or nearest hints[side]. edits: walk/block pixel rects.",
+ "start": "c1r1",
+ "links": [
+  [
+   "c0r0:south",
+   "c0r1:north"
+  ],
+  [
+   "c0r1:south",
+   "c0r2:north"
+  ],
+  [
+   "c0r2:south",
+   "c0r3:north"
+  ],
+  [
+   "c0r1:east",
+   "c1r1:west"
+  ],
+  [
+   "c1r0:south",
+   "c1r1:north"
+  ],
+  [
+   "c1r1:east",
+   "c2r1:west"
+  ],
+  [
+   "c2r0:south",
+   "c2r1:north"
+  ],
+  [
+   "c2r1:south",
+   "c2r2:north"
+  ],
+  [
+   "c0r2:east",
+   "c1r2:west"
+  ],
+  [
+   "c1r2:south",
+   "c1r3:north"
+  ],
+  [
+   "c1r3:east",
+   "c2r3:west"
+  ]
+ ],
+ "rooms": {
+  "c0r0": {
+   "edits": [
+    {
+     "op": "walk",
+     "rect": [
+      372,
+      0,
+      76,
+      384
+     ],
+     "why": "stone road incl. stairs"
+    }
+   ]
+  },
+  "c0r1": {
+   "edits": [
+    {
+     "op": "walk",
+     "rect": [
+      372,
+      0,
+      76,
+      384
+     ],
+     "why": "stone road incl. stairs"
+    }
+   ]
+  },
+  "c0r2": {
+   "fx": [
+    {
+     "id": "water_ripple",
+     "at": [
+      212,
+      272
+     ]
+    }
+   ],
+   "edits": [
+    {
+     "op": "walk",
+     "rect": [
+      372,
+      0,
+      76,
+      384
+     ],
+     "why": "stone road incl. stairs"
+    }
+   ]
+  },
+  "c0r3": {},
+  "c1r0": {},
+  "c1r1": {
+   "spawn": [
+    350,
+    280
+   ]
+  },
+  "c1r2": {},
+  "c1r3": {
+   "fx": [
+    {
+     "id": "water_ripple",
+     "at": [
+      212,
+      272
+     ]
+    }
+   ]
+  },
+  "c2r0": {},
+  "c2r1": {},
+  "c2r2": {},
+  "c2r3": {
+   "fx": [
+    {
+     "id": "water_ripple",
+     "at": [
+      522,
+      178
+     ]
+    }
+   ]
+  }
+ }
+}
