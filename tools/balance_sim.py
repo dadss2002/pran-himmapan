@@ -42,3 +42,28 @@ def attempts_to(t):
         s+=n
     return s/20000
 for t in (5,7,10): print(f"avg attempts to +{t}: {attempts_to(t):.1f}")
+
+# --- gear/option/rune stacking at Lv10 (added after owner asked) ---
+def dps(L,bow,up,atkpct,crit,cdmg,aspd,classsk,passive_far,rune):
+    upmul=1+(0.06*min(up,6)+0.10*max(0,up-6))
+    atk=(10+2*(L-1)+bow*upmul)*(1+atkpct)
+    c=min(1,0.05+crit); cm=1.5+cdmg
+    critf=1+c*(cm-1)
+    far=1.10 if passive_far else 1
+    sk=lambda u:1+0.05*(L-u)
+    cdr=lambda u:1-0.01*(L-u)
+    basic=atk*1.25*(1+aspd)
+    skills=atk*(1.8*sk(1)/(4*cdr(1)) + 0.7*5*0.6*sk(3)/(6*cdr(3)) + 2.4*sk(7)/(10*cdr(7)))
+    if classsk: skills+=atk*(2.0+0.6)/6   # fire arrow + burn
+    if rune: skills*=1.25                  # rough: splitting/crit runes on skills
+    return (basic+skills)*critf*far
+L=10
+cases={
+ 'ขั้นต่ำ: ธนูเขาควาย +0 ไม่มีออฟชั่น ไม่มีสกิลอาชีพ':dps(L,16,0,0,0,0,0,False,False,False),
+ 'ปกติ: ธนูพญาเสือ +3, ออฟชั่นฟ้า 2 ช่อง, ศรเพลิง, สายตาพราน':dps(L,26,3,0.05,0.03,0,0,True,True,False),
+ 'สุดทาง: ธนูพญาเสือ +10, ออฟชั่นทอง 4 ช่อง x3 ชิ้น, รูน':dps(L,26,10,0.24,0.15,0.6,0.30,True,True,True),
+}
+base=list(cases.values())[0]
+for k,v in cases.items():
+    boss=4000/(v*(1-mit(25))); kk=(70+25*8)/(v*(1-mit(3+1.5*9)))
+    print(f"{k}\n   DPS {v:6.0f} (x{v/base:.2f})  บอส {boss:5.1f} วิ  ผีกองกอย Lv9 {kk:4.2f} วิ")
