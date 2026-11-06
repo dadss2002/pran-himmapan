@@ -22,6 +22,7 @@ var cooldown := 0.0           # shot cooldown
 var spawn_point := Vector2.ZERO
 var external_input := Vector2.ZERO   # touch joystick, added to keyboard input
 var test_enemies: Array = []  # used instead of the "enemies" group when not in a tree
+var inventory := Inventory.new()
 
 @onready var body: AnimatedSprite2D = $Body
 @onready var bow: BowLayer = $Bow

@@ -12,7 +12,10 @@ var world: Node2D
 var hero: Hero
 var hud: Hud
 var packs: Array = []
+var drops: Array = []
+var loot_rng := RandomNumberGenerator.new()
 var _built := false
+var _bag_full_cd := 0.0
 
 func _ready() -> void:
 	build()
@@ -53,6 +56,7 @@ func build() -> void:
 		for w in pack.wolves:
 			var wolf: Wolf = w
 			wolf.health.damaged.connect(func(a, c): _on_wolf_hit(wolf, a, c))
+			wolf.died.connect(_on_wolf_died)
 		packs.append(pack)
 	hud = Hud.new()
 	add_child(hud)
@@ -69,6 +73,48 @@ func build() -> void:
 func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30), amount, crit, false)
 	_fx("hit_spark", w.hurt_point())
+
+func _on_wolf_died(w: Wolf) -> void:
+	var at := w.global_position if w.is_inside_tree() else w.position
+	var items := Loot.roll("wolf", w.level, loot_rng)
+	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)
+	for i in items.size():
+		var d := LootDrop.make(items[i].id, items[i].count)
+		d.pop_out(at, spots[i])
+		d.collected.connect(func(id, n): _fx("pickup_pop", hero.global_position + Vector2(0, -20)))
+		drops.append(d)
+		if world: world.add_child(d)
+
+## true when a point is inside a post (or other static collider).
+func _blocked(p: Vector2) -> bool:
+	if not is_inside_tree(): return false
+	var q := PhysicsPointQueryParameters2D.new()
+	q.position = p
+	q.collide_with_bodies = true
+	q.collision_mask = 1
+	for hit in get_world_2d().direct_space_state.intersect_point(q, 4):
+		if hit.collider is StaticBody2D: return true
+	return false
+
+func _physics_process(delta: float) -> void:
+	_bag_full_cd = maxf(0.0, _bag_full_cd - delta)
+	for d in drops.duplicate():
+		if not is_instance_valid(d) or d.expired:
+			drops.erase(d)
+			continue
+		d.step(delta, hero, hero.inventory)
+		if d.bag_full_notice and _bag_full_cd <= 0.0:
+			_bag_full_cd = 2.0
+			_text(hero.global_position + Vector2(0, -52), "กระเป๋าเต็ม", Color("#ffb37a"))
+
+func _text(at: Vector2, t: String, c: Color) -> void:
+	if not is_inside_tree(): return
+	var d := DamageNumber.make(0, false)
+	d.text = t
+	d.add_theme_color_override("font_color", c)
+	d.size = Vector2(80, 16)
+	d.position = at - Vector2(20, 0)
+	add_child(d)
 
 func _number(at: Vector2, amount: int, crit: bool, hurt: bool) -> void:
 	if not is_inside_tree(): return
