@@ -127,3 +127,70 @@ func test_hud_shows_real_mp_and_cooldown():
 	hud.free()
 	_done(h)
 	return r
+
+func _full_bag(h: Hero, keep := 0) -> void:
+	var i := 0
+	while h.inventory.slots.size() < 24 - keep:
+		h.inventory.add("junk_%d" % i, 1)
+		i += 1
+
+func test_swap_from_single_gem_always_works_full_bag():
+	var h := _hero()
+	h.inventory.add_gem(_g("split"))
+	h.socket("piercing", 0, 0)
+	h.inventory.add_gem(_g("multiply"))
+	_full_bag(h)
+	var i := h.inventory.slots.size() - 1
+	for k in h.inventory.slots.size():
+		if h.inventory.slots[k].get("gem", {}).get("type", "") == "multiply": i = k
+	var r := ""
+	if h.socket("piercing", 0, i) != "": r = "swap with a full bag refused"
+	elif h.skill_gems.piercing[0].type != "multiply": r = "multiply not socketed"
+	elif h.inventory.slots[i].get("gem", {}).get("type", "") != "split": r = "split should take multiply's bag slot"
+	_done(h)
+	return r
+
+func test_swap_from_stack_full_bag_refused_nothing_lost():
+	var h := _hero()
+	h.inventory.add_gem(_g("split"))
+	h.socket("piercing", 0, 0)
+	h.inventory.add("gem_element", 3)
+	_full_bag(h)
+	var gems_before := _count_gems(h)
+	var r := ""
+	if h.socket("piercing", 0, 0) != "กระเป๋าเต็ม": r = "should be refused: no room for the gem that comes out"
+	elif _count_gems(h) != gems_before or h.inventory.slots[0].count != 3: r = "a gem was lost or the stack changed"
+	elif h.skill_gems.piercing[0].type != "split": r = "socket changed"
+	_done(h)
+	return r
+
+func _count_gems(h: Hero) -> int:
+	var n := 0
+	for s in h.inventory.slots:
+		if String(s.id).begins_with("gem_"): n += int(s.count)
+	for id in h.skill_gems:
+		for g in h.skill_gems[id]: if g != null: n += 1
+	return n
+
+func test_duplicate_gem_type_refused():
+	var h := _hero(10)
+	h.inventory.add_gem(_g("element", {"element": "fire"}))
+	h.inventory.add_gem(_g("element", {"element": "ice"}))
+	h.socket("piercing", 0, 0)
+	var r := "" if h.socket("piercing", 1, 0) == "เจมชนิดนี้ใส่ในสกิลนี้แล้ว" else "two element gems in one skill"
+	if r == "" and h.socket("piercing", 0, 0) != "": r = "replacing the same slot with the same type should work"
+	_done(h)
+	return r
+
+func test_hud_skill_button_shows_mp():
+	var h := _hero(3)
+	h.inventory.add_gem(_g("split"))
+	h.socket("spread", 0, 0)
+	var hud := Hud.new()
+	hud.build()
+	hud.bind(h)
+	hud.refresh()
+	var r := "" if hud.buttons.buttons["skill2"].note == "MP 16.8" else "skill2 note '%s', want MP 16.8" % hud.buttons.buttons["skill2"].note
+	hud.free()
+	_done(h)
+	return r

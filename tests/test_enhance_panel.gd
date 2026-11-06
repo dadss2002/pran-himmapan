@@ -81,3 +81,30 @@ func test_bag_offers_enhance_for_bow_not_ring():
 	if r == "" and not bag.selected_detail().enhance: r = "worn bow should offer ตีบวก"
 	bag.free(); h.free()
 	return r
+
+func test_closing_bag_closes_enhance():
+	var h := _hero()
+	var bag := BagPanel.new()
+	bag.build()
+	bag.open(h)
+	bag.select_worn("bow")
+	bag.press_enhance()
+	bag.close()
+	var r := "" if not bag.enhance_panel.is_open() else "enhance window stayed open after the bag closed"
+	bag.free(); h.free()
+	return r
+
+func test_bag_shows_gem_details():
+	var h := _hero()
+	h.inventory.add_gem({"type": "element", "level": 4, "exp": 10, "rarity": "epic", "opts": [{"k": "crit", "v": 0.03}], "element": "ice"})
+	var bag := BagPanel.new()
+	bag.build()
+	bag.open(h)
+	bag.select(0)
+	var d := bag.selected_detail()
+	var r := ""
+	if d.name != "เจมธาตุ Lv4": r = "name %s" % d.name
+	elif not d.main.contains("น้ำแข็ง"): r = "main %s should name the element" % d.main
+	elif not Color(d.color).is_equal_approx(Gear.rarity_color("epic")): r = "colour not epic"
+	bag.free(); h.free()
+	return r

@@ -55,7 +55,7 @@ func is_open() -> bool:
 	return visible
 
 func _unhandled_input(e: InputEvent) -> void:
-	if visible and e.is_action_pressed("ui_cancel"):
+	if visible and (e.is_action_pressed("ui_cancel") or e.is_action_pressed("bag") or e.is_action_pressed("skills")):
 		close()
 		get_viewport().set_input_as_handled()
 
@@ -189,7 +189,8 @@ func build() -> void:
 	col.add_child(_warn_box)
 	_warn = UiKit.label("", 10, SAFE_TEXT)
 	_warn_box.add_child(_warn)
-	col.add_child(UiKit.label("ตีได้เฉพาะธนูและชุด · ค่าหลัก +6%/ขั้น ถึง +6 แล้ว +10%/ขั้น", 8, DIM_TEXT))
+	col.add_child(UiKit.label("ตีได้เฉพาะธนูและชุด · ค่าหลัก +%s%%/ขั้น ถึง +%d แล้ว +%s%%/ขั้น" % [
+		Gear._trim(Balance.num("enhance.bonus_low") * 100.0), int(Balance.num("enhance.bonus_low_until")), Gear._trim(Balance.num("enhance.bonus_high") * 100.0)], 8, DIM_TEXT))
 	_res = UiKit.label("", 11, UP)
 	col.add_child(_res)
 	var fill := Control.new()

@@ -151,15 +151,29 @@ func socket(skill_id: String, slot: int, bag_index: int) -> String:
 	if not Gem.fits(String(entry.id).trim_prefix("gem_"), skill_id): return "ป้ายไม่ตรง"
 	var sockets: Array = skill_gems.get(skill_id, [])
 	while sockets.size() <= slot: sockets.append(null)
-	var taken := inventory.take_gem(bag_index)
+	var type := String(entry.id).trim_prefix("gem_")
+	for i in sockets.size():
+		if i != slot and sockets[i] != null and String(sockets[i].type) == type: return "เจมชนิดนี้ใส่ในสกิลนี้แล้ว"
 	var old = sockets[slot]
-	if old != null and not inventory.add_gem(old):
-		inventory.add_gem(taken)            # put it back: nothing changes
+	var single: bool = entry.has("gem") or int(entry.count) == 1
+	# a gem coming out needs a place: the slot the new gem leaves, a plain stack, or a free slot
+	if old != null and not single and not inventory.has_free_slot() and not (Gem.is_plain(old) and _plain_stack_has_room(String(old.type))):
 		return "กระเป๋าเต็ม"
+	var taken := inventory.take_gem(bag_index)
+	if old != null:
+		if single and not Gem.is_plain(old):
+			inventory.slots.insert(mini(bag_index, inventory.slots.size()), {"id": "gem_" + String(old.type), "count": 1, "gem": old})
+		else:
+			inventory.add_gem(old)
 	sockets[slot] = taken
 	skill_gems[skill_id] = sockets
 	gems_changed.emit()
 	return ""
+
+func _plain_stack_has_room(type: String) -> bool:
+	for s in inventory.slots:
+		if s.id == "gem_" + type and not Inventory._unique(s) and int(s.count) < int(Balance.num("bag.stack")): return true
+	return false
 
 func unsocket(skill_id: String, slot: int) -> String:
 	var sockets: Array = skill_gems.get(skill_id, [])

@@ -85,3 +85,11 @@ func test_chain_120px_80pct():
 	elif not ds[2].hits.is_empty(): r = "chained beyond 120 px"
 	_free(ds + [a])
 	return r
+
+func test_piercing_bounces_only_from_first_target():
+	var ds := [_dummy(Vector2(60, 14)), _dummy(Vector2(200, 14)), _dummy(Vector2(200, 110))]
+	var a := _arrow(Vector2.RIGHT, ds, {"bounces": 1, "bounce_mult": 0.8}, true)
+	_fly(a, 1.0)
+	var r := "" if _spawned.is_empty() else "a piercing arrow bounced from its second target"
+	_free(ds + _spawned + [a])
+	return r

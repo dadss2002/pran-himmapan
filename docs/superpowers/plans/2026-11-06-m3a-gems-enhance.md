@@ -161,4 +161,4 @@
 - [x] **Step 1:** Shots: skill screen with a socketed gem · piercing + แยกศร three lines · burn / frost / chain on wolves · enhance safe and risky · bag name with +N. Look at each.
 - [x] **Step 2:** `python3 tools/test_assets.py` PASS · full suite 0 failed · `touch_check.gd` PASS · M2a/M2b/M2c/M3a screenshot scripts rc=0.
 - [x] **Step 3:** Push `m3a/gems-enhance`, draft PR to `main` with commands, SHA, counts, tagged Thai summary.
-- [ ] **Step 4:** Fresh reviewer on the branch; fix findings with regression tests; report to the owner in Thai with group tags.
+- [x] **Step 4:** Fresh reviewer on the branch; fix findings with regression tests; report to the owner in Thai with group tags.

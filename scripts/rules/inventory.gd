@@ -71,7 +71,7 @@ func remove(id: String, count: int) -> bool:
 	for i in range(slots.size() - 1, -1, -1):
 		if left == 0: break
 		var s: Dictionary = slots[i]
-		if s.id != id or s.has("item"): continue
+		if s.id != id or _unique(s): continue
 		var take := mini(left, s.count)
 		s.count -= take
 		left -= take

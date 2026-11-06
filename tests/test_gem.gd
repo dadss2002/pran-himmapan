@@ -133,3 +133,7 @@ func test_build_crit_ricochet_pierce_homing_leech_element():
 func test_build_ignores_gems_that_do_not_fit():
 	var b := SkillBuild.of("piercing", 1, [_gem("expand"), null], STATS)
 	return "" if absf(b.mp - 8.0) < 1e-6 and b.arrows == 1 else "unfit/empty gems changed the build: %s" % b
+
+func test_plain_element_text():
+	var t := Gem.describe_effect({"type": "element", "level": 1, "exp": 0, "rarity": "common", "opts": []})
+	return "" if t.contains("สุ่ม") else "plain element gem text '%s' should say the element is rolled" % t

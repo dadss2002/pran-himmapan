@@ -95,7 +95,7 @@ static func describe_effect(gem: Dictionary) -> String:
 	var t := String(gem.type)
 	var d := data(t)
 	var e := effect(gem)
-	var high := int(gem.level) >= 10
+	var high := int(gem.level) >= int(Balance.num("gem_exp.strong_level"))
 	match t:
 		"split": return "ยิงเพิ่ม +%d ดอก ทุกดอกแรง %s" % [int(d.extra_arrows), _pct(e)]
 		"ricochet": return "โดนแล้วเด้งไปอีก %d เป้า แรง %s" % [int(d.bounces_at_10) if high else int(d.bounces), _pct(e)]
@@ -108,6 +108,7 @@ static func describe_effect(gem: Dictionary) -> String:
 		"leech": return "ฟื้นเลือด %s ของดาเมจ" % _pct(e)
 		"element":
 			var el := String(gem.get("element", ""))
+			if el == "": return "ธาตุสุ่ม (ไฟ/น้ำแข็ง/สายฟ้า) ตอนแยกจากกอง: ดาเมจ ×%s" % ("%.2f" % e)
 			var ed: Dictionary = Balance.data()["elements"].get(el, {})
 			var extra := ""
 			match el:

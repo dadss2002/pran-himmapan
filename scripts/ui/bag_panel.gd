@@ -64,6 +64,7 @@ func open(h: Hero) -> void:
 	if is_inside_tree(): get_tree().paused = true
 
 func close() -> void:
+	if enhance_panel and enhance_panel.is_open(): enhance_panel.close()
 	visible = false
 	if is_inside_tree(): get_tree().paused = false
 	closed.emit()
@@ -157,6 +158,15 @@ func _detail_body(d: Dictionary) -> void:
 		else:
 			d.action = "สวมใส่"
 			d.action_ok = true
+		return
+	if s.has("gem"):
+		var g: Dictionary = s.gem
+		d.name = "%s Lv%d" % [Gem.display_name(String(g.type)), int(g.level)]
+		d.color = Gear.rarity_color(String(g.rarity))
+		d.sub = "ระดับ %s · ป้าย%s · MP ×%s" % [Gear.rarity_name(String(g.rarity)), Gem.label_text(String(g.type)), Gear._trim(Gem.mp_mult(String(g.type)))]
+		d.main = Gem.describe_effect(g)
+		for o in g.get("opts", []): d.lines.append({"text": Gem.describe_option(o), "color": UP})
+		d.lines.append({"text": "ใส่ได้ที่หน้าสกิล (ปุ่ม \"สกิล\")", "color": DIM_TEXT})
 		return
 	var t: Dictionary = _items_text().get(String(s.id), {})
 	d.name = String(t.get("name", s.id))
@@ -479,7 +489,9 @@ func refresh() -> void:
 			var s: Dictionary = hero.inventory.slots[v[i]]
 			ic.texture = load(LootDrop.icon_path(String(s.id)))
 			q.text = str(s.count) if s.count > 1 else ""
-			var border := Gear.rarity_color(String(s.item.rarity)) if s.has("item") else Color("#9aa0a6")
+			var border := Color("#9aa0a6")
+			if s.has("item"): border = Gear.rarity_color(String(s.item.rarity))
+			elif s.has("gem"): border = Gear.rarity_color(String(s.gem.rarity))
 			_style_cell(c, border, true, _sel.get("bag", -1) == v[i])
 		else:
 			ic.texture = null

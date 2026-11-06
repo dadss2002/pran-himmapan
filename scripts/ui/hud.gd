@@ -207,12 +207,12 @@ func refresh() -> void:
 	gold_label.text = str(hero.inventory.gold)
 	dim.color.a = DEAD_DIM if hero.state == "dead" else 0.0
 	var pierce_ok := hero.mp >= hero.skill_mp("piercing")
-	buttons.set_state("skill1", pierce_ok, "" if pierce_ok else "MP")
+	buttons.set_state("skill1", pierce_ok, _mp_note("piercing"))
 	if hero.level < Skills.unlock_level("spread"):
 		buttons.set_state("skill2", false, "Lv%d" % Skills.unlock_level("spread"))
 	else:
 		var spread_ok := hero.mp >= hero.skill_mp("spread")
-		buttons.set_state("skill2", spread_ok, "" if spread_ok else "MP")
+		buttons.set_state("skill2", spread_ok, _mp_note("spread"))
 	for k in ["hp", "mp"]:
 		var n := hero.inventory.count_of("potion_" + k)
 		buttons.set_state("potion_" + k, n > 0, str(n))
@@ -222,6 +222,10 @@ func refresh() -> void:
 	buttons.set_cooldown("skill2", hero.skill_cooldown_left("spread"), hero.build("spread").cooldown)
 	buttons.set_cooldown("shoot", hero.cooldown, st.shot_cd)
 	buttons.set_cooldown("dodge", hero.dodge_cooldown_left(), Balance.dodge(hero.level).cooldown)
+
+## "MP 11.2": the real cost after gems (dim button = not enough MP).
+func _mp_note(skill_id: String) -> String:
+	return "MP %s" % Gear._trim(snappedf(hero.skill_mp(skill_id), 0.1))
 
 func _process(_delta: float) -> void:
 	if hero == null: return

@@ -80,9 +80,8 @@ func _after_hit(t: Node2D, amount: int) -> void:
 					z.play("chain_zap")
 	if _bounces_left > 0 and not _bounced:
 		var next := _nearest(t.hurt_point(), Balance.num("ricochet.range"), _hit.keys())
-		if next:
-			_bounced = pierce          # a piercing arrow bounces once, from its first target
-			_spawn_bounce(t.hurt_point(), next)
+		_bounced = pierce              # a piercing arrow tries once, from its first target only
+		if next: _spawn_bounce(t.hurt_point(), next)
 
 func _leech(amount: int) -> void:
 	var frac := float(build.get("leech", 0.0))

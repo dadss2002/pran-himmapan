@@ -480,7 +480,8 @@
   "gem_exp": {
     "base": 150,
     "power": 1.7,
-    "cap": 20
+    "cap": 20,
+    "strong_level": 10
   },
   "gem_options": {
     "dmg_pct": {

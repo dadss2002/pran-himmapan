@@ -31,7 +31,7 @@ static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dicti
 		mp_cut += Gem.option(g, "mp_cut")
 		cd_cut += Gem.option(g, "cd_cut")
 		crit += Gem.option(g, "crit")
-		var high := int(g.level) >= 10
+		var high := int(g.level) >= int(Balance.num("gem_exp.strong_level"))
 		match t:
 			"split":
 				b.arrows += int(d.extra_arrows)

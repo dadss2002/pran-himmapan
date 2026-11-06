@@ -188,7 +188,7 @@ func _previews(d: Dictionary, g: Dictionary) -> void:
 		if b1.arrows != b0.arrows: text += " · ลูกศร %d → %d" % [b0.arrows, b1.arrows]
 		if t == "pierce" and b0.pierce_all: text += " · ทะลุทุกตัวอยู่แล้ว ไม่มีผลเพิ่ม"
 		d.lines.append({"text": text, "color": UP if not (t == "pierce" and b0.pierce_all) else DIM_TEXT})
-	if not any: d.lines.append({"text": "ยังไม่มีสกิลที่ใส่ได้ (ใช้กับห่าศร Lv7)", "color": DOWN})
+	if not any: d.lines.append({"text": "ยังไม่มีสกิลที่ใส่ได้ (ใช้กับห่าศรในรอบถัดไป)", "color": DOWN})
 
 # ---------- view ----------
 
@@ -260,9 +260,10 @@ func build() -> void:
 	var rain := HBoxContainer.new()
 	rain.modulate.a = 0.55
 	rain.add_child(UiKit.icon("res://assets/skills/arrow_rain.png", 30))
-	rain.add_child(UiKit.label("ห่าศร · ปลดที่ Lv7 (รอบถัดไป)", 9, DIM_TEXT))
+	rain.add_child(UiKit.label("ห่าศร · มาในรอบถัดไป (ป้ายพื้นที่·ต่อเนื่อง)", 9, DIM_TEXT))
 	left.add_child(rain)
-	left.add_child(UiKit.label("ช่องเจมเพิ่มเป็น 2 ช่องที่เลเวลสกิล 10 · ถอดเจมฟรี เจมเก็บ EXP ไว้", 8, DIM_TEXT))
+	var slot_lv: Array = Balance.data()["gem_slots"]
+	left.add_child(UiKit.label("ช่องเจมเพิ่มเป็น 2 ช่องที่เลเวลสกิล %d · ถอดเจมฟรี เจมเก็บ EXP ไว้" % int(slot_lv[1]), 8, DIM_TEXT))
 
 	var mid := VBoxContainer.new()
 	mid.add_theme_constant_override("separation", 5)
