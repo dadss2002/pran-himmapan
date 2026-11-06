@@ -12,9 +12,10 @@ static func damage_mult(id: String, char_level: int) -> float:
 	var lv := maxi(1, skill_level(id, char_level))
 	return Balance.num("skills.%s.mult" % id) * (1.0 + Balance.num("skills.per_level_damage") * (lv - 1))
 
-static func cooldown(id: String, char_level: int) -> float:
+## extra_cut = cooldown cut from gear; the total cut is still capped at skills.max_cooldown_cut.
+static func cooldown(id: String, char_level: int, extra_cut := 0.0) -> float:
 	var lv := maxi(1, skill_level(id, char_level))
-	var cut := minf(Balance.num("skills.per_level_cooldown") * (lv - 1), Balance.num("skills.max_cooldown_cut"))
+	var cut := minf(Balance.num("skills.per_level_cooldown") * (lv - 1) + extra_cut, Balance.num("skills.max_cooldown_cut"))
 	return Balance.num("skills.%s.cooldown" % id) * (1.0 - cut)
 
 static func mp_cost(id: String) -> float:

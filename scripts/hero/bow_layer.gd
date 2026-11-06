@@ -28,6 +28,10 @@ func draws_in_front(state: String, facing: int) -> bool:
 		return facing != 4
 	return facing in [3, 4, 5]
 
+## Shows the equipped bow's art (assets/items/<icon>.png).
+func set_bow(base_id: String) -> void:
+	texture = load("res://assets/items/%s.png" % Gear.icon_name(base_id))
+
 func apply(state: String, facing: int) -> void:
 	z_index = 1 if draws_in_front(state, facing) else -1
 	if state == "shoot":

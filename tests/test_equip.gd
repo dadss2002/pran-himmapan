@@ -61,9 +61,97 @@ func test_unequip_and_full_bag():
 	var h := _hero()
 	h.inventory.slots.clear()
 	var r := ""
-	if h.unequip("bow") != "" or h.equipped.bow != null or h.inventory.slots.size() != 1: r = "unequip into an empty bag failed"
+	if h.unequip("bow") != "ต้องถือธนูไว้" or h.equipped.bow == null: r = "the bow must stay (swap it instead)"
+	elif h.unequip("armor") != "" or h.equipped.armor != null or h.inventory.slots.size() != 1: r = "unequip into an empty bag failed"
+	h.equipped.armor = _item("armor_trainee")
 	for i in 23: h.inventory.add("junk_%d" % i, 1)
 	if r == "" and h.unequip("armor") != "กระเป๋าเต็ม": r = "unequip with a full bag should be refused"
 	elif r == "" and h.equipped.armor == null: r = "armor came off anyway"
+	h.free()
+	return r
+
+func _wear(h: Hero, slot: String, it) -> void:
+	var eq: Dictionary = h.equipped.duplicate(true)
+	eq[slot] = it
+	h.set_equipped(eq)
+
+func test_each_option_changes_its_stat():
+	var r := ""
+	var cases := [
+		["atk_pct", 0.10, "atk", func(a, b): return b.atk == int(round(a.atk * 1.10))],
+		["crit", 0.04, "crit", func(a, b): return is_equal_approx(b.crit, a.crit + 0.04)],
+		["crit_dmg", 0.20, "crit_mult", func(a, b): return is_equal_approx(b.crit_mult, a.crit_mult + 0.20)],
+		["atk_speed", 0.10, "shot_cd", func(a, b): return is_equal_approx(b.shot_cd, a.shot_cd / 1.10)],
+		["hp", 30, "hp", func(a, b): return b.hp == a.hp + 30],
+		["def", 5, "def", func(a, b): return b.def == a.def + 5],
+		["move_speed", 0.05, "walk", func(a, b): return is_equal_approx(b.walk, a.walk * 1.05)],
+		["skill_cd", 0.05, "skill_cd_cut", func(a, b): return is_equal_approx(b.skill_cd_cut, 0.05)],
+		["exp_pct", 0.05, "exp_mult", func(a, b): return is_equal_approx(b.exp_mult, 1.05)],
+		["gold_pct", 0.10, "gold_mult", func(a, b): return is_equal_approx(b.gold_mult, 1.10)],
+		["mp", 20, "mp", func(a, b): return b.mp == a.mp + 20],
+		["mp_regen", 1.0, "mp_regen", func(a, b): return is_equal_approx(b.mp_regen, a.mp_regen + 1.0)],
+	]
+	for c in cases:
+		var h := _hero()
+		var before := h.stats()
+		_wear(h, "ring", _item("ring", "good", [{"k": c[0], "v": c[1]}]))
+		var after := h.stats()
+		if not c[3].call(before, after): r = "%s: %s %s → %s" % [c[0], c[2], before[c[2]], after[c[2]]]
+		h.free()
+		if r != "": break
+	return r
+
+func test_gear_reaches_the_game():
+	var h := _hero()
+	_wear(h, "ring", _item("ring", "good", [{"k": "mp", "v": 20}]))
+	_wear(h, "necklace", _item("necklace", "good", [{"k": "skill_cd", "v": 0.05}]))
+	var r := ""
+	if h.max_mp() != 70: r = "max_mp %d, want 70" % h.max_mp()
+	elif not is_equal_approx(Skills.cooldown("piercing", 1, h.stats().skill_cd_cut), 4.0 * 0.95): r = "skill cooldown %.3f" % Skills.cooldown("piercing", 1, h.stats().skill_cd_cut)
+	elif not is_equal_approx(Skills.cooldown("piercing", 30, 0.2), 4.0 * 0.7): r = "total cut must stay capped at 30%%"
+	h.try_shoot()
+	if r == "" and not is_equal_approx(h.cooldown, h.stats().shot_cd): r = "shot cooldown %.3f" % h.cooldown
+	h.free()
+	return r
+
+func test_hp_clamps_when_gear_removed():
+	var h := _hero()
+	_wear(h, "ring", _item("ring", "good", [{"k": "hp", "v": 30}]))
+	var r := ""
+	if h.health.max_hp != 150 or h.health.hp != 120: r = "wearing +30 HP: %d/%d (gear must not heal)" % [h.health.hp, h.health.max_hp]
+	h.health.hp = 150
+	_wear(h, "ring", null)
+	if r == "" and (h.health.max_hp != 120 or h.health.hp != 120): r = "after removing: %d/%d" % [h.health.hp, h.health.max_hp]
+	h.free()
+	return r
+
+func test_bow_layer_shows_equipped_bow():
+	var h := _hero(5)
+	var r := ""
+	if not String(h.bow.texture.resource_path).ends_with("bow_bamboo.png"): r = "start bow %s" % h.bow.texture.resource_path
+	_wear(h, "bow", _item("bow_buffalo_horn"))
+	if r == "" and not String(h.bow.texture.resource_path).ends_with("bow_buffalo_horn.png"): r = "bow layer %s" % h.bow.texture.resource_path
+	h.free()
+	return r
+
+func test_exp_bonus_on_kill():
+	var h := _hero()
+	_wear(h, "ring", _item("ring", "good", [{"k": "exp_pct", "v": 0.10}]))
+	h.on_kill(20, 1)
+	var r := "" if h.exp == 22 else "exp %d, want 22 (20 × 1.10)" % h.exp
+	h.free()
+	return r
+
+func test_arrow_carries_crit_stats():
+	var h := _hero()
+	_wear(h, "ring", _item("ring", "good", [{"k": "crit", "v": 0.05}]))
+	var arrows := []
+	h.shot.connect(func(a): arrows.append(a))
+	h.try_shoot()
+	for i in 60: h.step(1.0 / 60.0, Vector2.ZERO)
+	var r := ""
+	if arrows.size() != 1: r = "%d arrows" % arrows.size()
+	elif not is_equal_approx(arrows[0].crit_chance, h.stats().crit): r = "arrow crit %.3f, want %.3f" % [arrows[0].crit_chance, h.stats().crit]
+	for a in arrows: a.free()
 	h.free()
 	return r

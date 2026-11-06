@@ -75,9 +75,9 @@ func telegraph_visible() -> bool:
 # ---------- events ----------
 
 ## Hit by the hero. Returns damage dealt (0 when dead). Knockback, except during the bite windup.
-func receive_hit(atk: float, mult: float, from: Vector2) -> int:
+func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, crit_mult := -1.0) -> int:
 	if not is_alive(): return 0
-	var r := Combat.roll_damage(atk, mult, stats().def)
+	var r := Combat.roll_damage(atk, mult, stats().def, true, crit_chance, crit_mult)
 	health.take_hit(r.amount, r.crit)
 	if not is_alive(): return r.amount
 	_flash = n("hit_flash")

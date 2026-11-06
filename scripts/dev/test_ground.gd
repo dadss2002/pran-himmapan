@@ -123,6 +123,8 @@ func _on_wolf_died(w: Wolf) -> void:
 	hero.on_kill(w.stats().exp, w.level)
 	var at := w.global_position if w.is_inside_tree() else w.position
 	var items := Loot.roll("wolf", w.level, loot_rng)
+	for it in items:
+		if it.id == "gold": it.count = int(round(it.count * hero.stats().gold_mult))   # gear "ทอง +%"
 	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)
 	for i in items.size():
 		var d := LootDrop.make(items[i].id, items[i].count)

@@ -29,6 +29,8 @@
 - "ดาเมจธาตุ" is stored and shown but has no effect until elements exist (no element in M2).
 - The game pauses while the bag is open.
 - Starting kit: ธนูไม้ไผ่ + ชุดพรานฝึกหัด, both ธรรมดา, equipped.
+- The bow cannot be taken off ("ต้องถือธนูไว้"); the player swaps it for another bow. Arrows need a bow, and an empty hand would look broken.
+- Gear never heals: wearing +HP raises the max only; removing it clamps HP to the new max.
 
 ## Review Focus
 1. Bag full when a gear drop is touched → item stays on the ground with "กระเป๋าเต็ม", same as M2b (test in Task 4).
@@ -82,12 +84,12 @@
 **Interfaces:**
 - Produces: `Hero.stats()` = `{hp, atk, def, mp, crit, crit_mult, shot_cd, walk, skill_cd_cut, mp_regen, exp_mult, gold_mult}`; `Combat.roll_damage(atk, mult, def, can_crit, crit_chance := -1.0, crit_mult := -1.0)`; `Skills.cooldown(id, level, extra_cut := 0.0)` (total cut still capped at `skills.max_cooldown_cut`); `BowLayer.set_bow(base: String)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   `test_hero_lv1` keeps 120/18/6 with the starting kit · `test_each_option_changes_its_stat` (one item per option key: ATK%, crit, crit dmg, shot cooldown, HP, DEF, walk speed, skill cooldown, EXP, gold, MP, MP regen) · `test_hp_clamps_when_gear_removed` · `test_bow_layer_shows_equipped_bow`.
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement.** Gold bonus applies to the gold count rolled in `test_ground._on_wolf_died`; EXP bonus in `Hero.on_kill`.
-- [ ] **Step 4: Run** → pass.
-- [ ] **Step 5: Commit** `M2c: gear stats and bow in hand`.
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement.** Gold bonus applies to the gold count rolled in `test_ground._on_wolf_died`; EXP bonus in `Hero.on_kill`.
+- [x] **Step 4: Run** → pass.
+- [x] **Step 5: Commit** `M2c: gear stats and bow in hand`.
 
 ### Task 4: Equipment drops on the ground
 
