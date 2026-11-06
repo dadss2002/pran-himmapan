@@ -56,6 +56,7 @@ func setup() -> void:
 	_refresh(true)
 
 var status := StatusEffects.new()
+const STATUS_FX_SCALE := 1.5
 var _burn_fx: FxSprite = null
 var _frost_fx: FxSprite = null
 
@@ -128,6 +129,7 @@ func _update_status_fx() -> void:
 func _toggle_fx(fx: FxSprite, fx_name: String, on: bool) -> FxSprite:
 	if on and fx == null:
 		fx = FxSprite.make(fx_name, true)
+		fx.scale = Vector2.ONE * STATUS_FX_SCALE   # the effects were drawn small; match the 80 px wolf
 		add_child(fx)
 		fx.play(fx_name)
 	elif not on and fx != null:
