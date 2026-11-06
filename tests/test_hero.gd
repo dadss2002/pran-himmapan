@@ -78,6 +78,7 @@ func test_bow_layer_order():
 	elif not b.draws_in_front("walk", 4): r = "walk north: bow on back must be on top"
 	elif not b.draws_in_front("shoot", 0): r = "shoot south: bow must be in front"
 	elif b.draws_in_front("shoot", 4): r = "shoot north: bow must be behind body"
+	elif not b.draws_in_front("shoot", 3): r = "shoot north-east: bow held out to the side must be visible"
 	b.free()
 	return r
 

@@ -21,11 +21,12 @@ static func dir_vector(facing: int) -> Vector2:
 	return Vector2(cos(a), sin(a)).normalized()
 
 ## true = draw over the body. 0,1,7 face the camera (south-ish); 3,4,5 face away (north-ish).
+## On the back it shows only when the back faces the camera. In the hand it is in front, except
+## straight north where the body hides the bow (NE/NW shots hold it out to the side, so it stays visible).
 func draws_in_front(state: String, facing: int) -> bool:
-	var away := facing in [3, 4, 5]
 	if state == "shoot":
-		return not away
-	return away
+		return facing != 4
+	return facing in [3, 4, 5]
 
 func apply(state: String, facing: int) -> void:
 	z_index = 1 if draws_in_front(state, facing) else -1

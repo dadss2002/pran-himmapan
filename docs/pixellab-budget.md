@@ -13,7 +13,11 @@
 | 2026-11-06 | ฮีโร่ A สถานะไม่ถือธนู (ฐานสำหรับธนูชั้นแยก) | create_character_state | 10 | 6dfecdec-c546-49f2-b270-145e616d1ca1 |
 | 2026-11-06 | ฐานไม่ถือธนู ท่าเดิน 8 ทิศ | animate template walking-8-frames | 8 | group 14e0bc25 |
 | 2026-11-06 | ฐานไม่ถือธนู ท่าน้าวสาย ทดสอบทิศใต้ | animate v3 | 1 | group 68fa223c |
+| 2026-11-06 | ฐานไม่ถือธนู ท่ายืน (breathing-idle) 8 ทิศ | animate template | 8 | group 85c1f339 |
+| 2026-11-06 | ฐานไม่ถือธนู ท่าน้าวสาย อีก 7 ทิศ | animate v3 | 7 | group 68fa223c |
+| 2026-11-06 | ท่าเดินแก้ SE/W (template ใส่ธนูผีมา) | animate skeleton v3 | 6 | group b11926d0 |
+| 2026-11-06 | ไอเทมชุดแรก 16 ชิ้น (ธนู 3, ลูกศร, ยา 2, เจม 3, เหรียญ, กระบอกลูกศร, ชุด 3, หนังเสือ, +1) | create_1_direction_object | 10 | tag pran-items-batch1 |
 
-ใช้รวม: 34 gen
+ใช้รวม: 65 gen (ตรงกับ get_balance 2026-11-06: ใช้ 65 / เหลือ 4,935)
 
 หมายเหตุ: `docs/preview/pran_base_rotations_x4.png` เป็นภาพตัวอย่างขยาย 4 เท่าบนพื้นหลังทึบ ไม่ใช่ไฟล์สไปรต์ที่ใช้ในเกม ไฟล์จริงต้องดาวน์โหลดจาก api.pixellab.ai ซึ่งตอนนี้เครื่องของ Claude เข้าไม่ได้
