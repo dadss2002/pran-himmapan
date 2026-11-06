@@ -10,7 +10,10 @@
 
 | 2026-11-06 | ฮีโร่ A ท่ายืน (breathing-idle) 8 ทิศ — ธนูหายในท่านี้ | animate template | 8 | group 3d6a38ff |
 | 2026-11-06 | ฮีโร่ A ท่ายิงธนู ทดสอบทิศใต้ | animate v3 | 1 | group 0bbe57ac |
+| 2026-11-06 | ฮีโร่ A สถานะไม่ถือธนู (ฐานสำหรับธนูชั้นแยก) | create_character_state | 10 | 6dfecdec-c546-49f2-b270-145e616d1ca1 |
+| 2026-11-06 | ฐานไม่ถือธนู ท่าเดิน 8 ทิศ | animate template walking-8-frames | 8 | group 14e0bc25 |
+| 2026-11-06 | ฐานไม่ถือธนู ท่าน้าวสาย ทดสอบทิศใต้ | animate v3 | 1 | group 68fa223c |
 
-ใช้รวม: 15 gen
+ใช้รวม: 34 gen
 
 หมายเหตุ: `docs/preview/pran_base_rotations_x4.png` เป็นภาพตัวอย่างขยาย 4 เท่าบนพื้นหลังทึบ ไม่ใช่ไฟล์สไปรต์ที่ใช้ในเกม ไฟล์จริงต้องดาวน์โหลดจาก api.pixellab.ai ซึ่งตอนนี้เครื่องของ Claude เข้าไม่ได้
