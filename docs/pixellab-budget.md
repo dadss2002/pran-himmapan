@@ -61,3 +61,7 @@
 
 ## M3a
 | 2026-11-07 | เอฟเฟกต์ไหม้ / น้ำแข็งเกาะ / สายฟ้ากระโดด (status_burn, status_frost, chain_zap) | vfx_workbench | 0 | 1f023a02 / 3042db32 / 6f27c90e |
+
+## M3b (เจ้าของอนุมัติ 2026-11-07 "อนุมัติ แผนที่" · งบประมาณ ~70 สูงสุด 110)
+| 2026-11-07 | พื้นชุด 1 หญ้า→พื้นป่าทึบ · create_tiles_pro tileset 32px top-down palette ภาพแรก · ประเมินก่อนเจน: 10 gen | create_tiles_pro | 10 (จริง) | 57bcf3c3 · ดึงลงเครื่องได้ (join → ไฟล์ในเครื่อง) · ตัดกรอบ 2px + ปรับสีพื้นป่าเทาฟ้า→เขียวมอสด้วยเครื่องมือฟรี |
+| 2026-11-07 | พื้นชุด 2 หญ้า→บ่อน้ำขอบผาหินดำ + ชุด 3 หญ้า→ลานหิน · create_tiles_pro tileset 32px top-down palette ภาพแรก · ประเมินก่อนเจน: 20 gen | create_tiles_pro | 20 (จริง) | b75efda9 / 74d31e23 · รวมเป็น assets/map/tiles/ground.png |
