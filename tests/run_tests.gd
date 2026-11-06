@@ -32,7 +32,11 @@ func _run_file(path: String) -> void:
 		var name: String = m["name"]
 		if name.begins_with("test_"):
 			var err = await inst.call(name)
-			if err == null or err == "":
+			# A test passes only by returning "" explicitly. A script error inside a test makes
+			# the call return null, which must count as a failure, never as a pass.
+			if err == null:
+				err = "test errored or returned nothing (see SCRIPT ERROR above)"
+			if typeof(err) == TYPE_STRING and err == "":
 				passed += 1
 				print("  ok   %s::%s" % [path.get_file(), name])
 			else:

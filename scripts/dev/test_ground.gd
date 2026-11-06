@@ -13,6 +13,7 @@ var hero: Hero
 var hud: Hud
 var packs: Array = []
 var _built := false
+var lock_ring: FxSprite
 
 func _ready() -> void:
 	build()
@@ -54,6 +55,11 @@ func build() -> void:
 			var wolf: Wolf = w
 			wolf.health.damaged.connect(func(a, c): _on_wolf_hit(wolf, a, c))
 		packs.append(pack)
+	lock_ring = FxSprite.make("lock_on", true)
+	lock_ring.visible = false
+	world.add_child(lock_ring)        # y-sorted: sits just above the target's feet line
+	world.move_child(lock_ring, 0)
+	lock_ring.play("lock_on")
 	hud = Hud.new()
 	add_child(hud)
 	if hud.hp_label == null: hud.build()
@@ -69,6 +75,12 @@ func build() -> void:
 func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30), amount, crit, false)
 	_fx("hit_spark", w.hurt_point())
+
+func _process(_delta: float) -> void:
+	if lock_ring == null or hero == null: return
+	var t := hero.current_target() if hero.state != "dead" else null
+	lock_ring.visible = t != null
+	if t: lock_ring.global_position = t.global_position - Vector2(0, 0.5)
 
 func _number(at: Vector2, amount: int, crit: bool, hurt: bool) -> void:
 	if not is_inside_tree(): return

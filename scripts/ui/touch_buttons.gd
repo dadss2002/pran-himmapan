@@ -10,10 +10,37 @@ const MASK := preload("res://shaders/circle_mask.gdshader")
 var buttons := {}
 var _held := {}          # touch index -> button name
 var _cd := {}            # name -> [remaining, total]
+var view_size := Vector2(640, 360)
+const BASE := Vector2(640, 360)   # layout below is authored for this view; buttons hug the bottom-right
 
 func _ready() -> void:
 	if buttons.is_empty():
 		build_default()
+	layout(get_viewport_rect().size)
+	get_viewport().size_changed.connect(func(): layout(get_viewport_rect().size))
+
+## Keep every button at the same distance from the bottom-right corner on wider screens.
+func layout(size: Vector2) -> void:
+	var shift := size - view_size
+	view_size = size
+	var i := 0
+	for name in buttons:
+		buttons[name].center += shift
+		get_child(i).position = buttons[name].center
+		i += 1
+	queue_redraw()
+
+func release_all() -> void:
+	for idx in _held.keys():
+		var name: String = _held[idx]
+		_held.erase(idx)
+		if not _held.values().has(name):
+			Input.action_release(buttons[name].action)
+	queue_redraw()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		release_all()
 
 func build_default() -> void:
 	_add("shoot", "attack", Vector2(584, 302), 34, "res://assets/skills/basic_shot.png", true, "ยิง")
