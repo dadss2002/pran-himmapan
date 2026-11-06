@@ -55,6 +55,9 @@ func setup_sprites() -> void:
 	health.died.connect(_on_died)
 	_refresh()
 
+func dodge_cooldown_left() -> float:
+	return _dodge_cd
+
 func stats() -> Dictionary:
 	return Balance.hero(level)
 
