@@ -20,6 +20,7 @@ func test_ground_wolf_packs_in_their_rooms():
 			var wolves := 0
 			var levels := []
 			for p in g.packs:
+				if p.kind != "wolf": continue      # other forest monsters share some rooms (spec M3d §3)
 				levels.append(p.level)
 				wolves += p.wolves.size()
 			if levels != [want[1]] or wolves != want[2]:

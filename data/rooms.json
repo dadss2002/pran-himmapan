@@ -71,7 +71,26 @@
 }
 ],
 "fx": [],
-"monsters": []
+"monsters": [
+{
+"kind": "boar",
+"level": 3,
+"count": 2,
+"at": [
+236,
+196
+]
+},
+{
+"kind": "deer",
+"level": 3,
+"count": 2,
+"at": [
+516,
+156
+]
+}
+]
 },
 "c0r1": {
 "image": "res://assets/map/painted/raw/c0r1.png",
@@ -156,7 +175,17 @@
 }
 ],
 "fx": [],
-"monsters": []
+"monsters": [
+{
+"kind": "boar",
+"level": 2,
+"count": 3,
+"at": [
+212,
+196
+]
+}
+]
 },
 "c0r2": {
 "image": "res://assets/map/painted/raw/c0r2.png",
@@ -249,7 +278,26 @@
 ]
 }
 ],
-"monsters": []
+"monsters": [
+{
+"kind": "shroom",
+"level": 4,
+"count": 3,
+"at": [
+516,
+196
+]
+},
+{
+"kind": "viper",
+"level": 4,
+"count": 1,
+"at": [
+228,
+148
+]
+}
+]
 },
 "c0r3": {
 "image": "res://assets/map/painted/raw/c0r3.png",
@@ -316,7 +364,26 @@
 }
 ],
 "fx": [],
-"monsters": []
+"monsters": [
+{
+"kind": "kongkoi",
+"level": 7,
+"count": 2,
+"at": [
+332,
+252
+]
+},
+{
+"kind": "viper",
+"level": 7,
+"count": 2,
+"at": [
+548,
+180
+]
+}
+]
 },
 "c1r0": {
 "image": "res://assets/map/painted/raw/c1r0.png",
@@ -478,7 +545,17 @@
 }
 ],
 "fx": [],
-"monsters": [],
+"monsters": [
+{
+"kind": "deer",
+"level": 1,
+"count": 3,
+"at": [
+500,
+148
+]
+}
+],
 "spawn": [
 348,
 276
@@ -567,6 +644,15 @@
 332,
 212
 ]
+},
+{
+"kind": "shroom",
+"level": 5,
+"count": 2,
+"at": [
+516,
+156
+]
 }
 ]
 },
@@ -652,7 +738,26 @@
 ]
 }
 ],
-"monsters": []
+"monsters": [
+{
+"kind": "viper",
+"level": 8,
+"count": 3,
+"at": [
+348,
+140
+]
+},
+{
+"kind": "shroom",
+"level": 8,
+"count": 2,
+"at": [
+516,
+276
+]
+}
+]
 },
 "c2r0": {
 "image": "res://assets/map/painted/raw/c2r0.png",
@@ -719,7 +824,26 @@
 }
 ],
 "fx": [],
-"monsters": []
+"monsters": [
+{
+"kind": "deer",
+"level": 4,
+"count": 2,
+"at": [
+252,
+244
+]
+},
+{
+"kind": "macaque",
+"level": 4,
+"count": 2,
+"at": [
+476,
+260
+]
+}
+]
 },
 "c2r1": {
 "image": "res://assets/map/painted/raw/c2r1.png",
@@ -804,7 +928,17 @@
 }
 ],
 "fx": [],
-"monsters": []
+"monsters": [
+{
+"kind": "macaque",
+"level": 3,
+"count": 3,
+"at": [
+292,
+204
+]
+}
+]
 },
 "c2r2": {
 "image": "res://assets/map/painted/raw/c2r2.png",
@@ -879,6 +1013,15 @@
 "at": [
 300,
 188
+]
+},
+{
+"kind": "macaque",
+"level": 3,
+"count": 1,
+"at": [
+516,
+260
 ]
 }
 ]
@@ -956,7 +1099,26 @@
 ]
 }
 ],
-"monsters": []
+"monsters": [
+{
+"kind": "kongkoi",
+"level": 9,
+"count": 2,
+"at": [
+252,
+252
+]
+},
+{
+"kind": "kongkoi",
+"level": 10,
+"count": 1,
+"at": [
+372,
+172
+]
+}
+]
 }
 }
 }

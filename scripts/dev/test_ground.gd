@@ -118,6 +118,8 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 
 func _add_group(m: Dictionary, nav: AStarGrid2D) -> void:
 	var pack := WolfPack.new()
+	pack.kind = String(m.get("kind", "wolf"))
+	pack.blocked = layout.blocked_at
 	pack.level = int(m.level)
 	pack.count = int(m.count)
 	pack.home = Vector2(m.at[0], m.at[1])
@@ -167,9 +169,14 @@ func _on_skill_released(id: String, at: Vector2) -> void:
 func _on_wolf_died(w: Wolf) -> void:
 	hero.on_kill(w.stats().exp, w.level)
 	var at := w.global_position if w.is_inside_tree() else w.position
-	var items := Loot.roll("wolf", w.level, loot_rng)
+	var table := "wolf"
+	var gold_mult := 1.0
+	if w is Monster:
+		table = w.loot_table()
+		gold_mult = w.gold_mult()
+	var items := Loot.roll(table, w.level, loot_rng)
 	for it in items:
-		if it.id == "gold": it.count = hero.bonus_gold(it.count)   # gear "ทอง +%"
+		if it.id == "gold": it.count = hero.bonus_gold(int(round(it.count * gold_mult)))   # deer ×2, gear "ทอง +%"
 	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)
 	for i in items.size():
 		var d: LootDrop

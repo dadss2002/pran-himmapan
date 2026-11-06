@@ -86,16 +86,20 @@ func test_leaving_clears_drops_and_monsters():
 	var g := _ground()
 	await tree.physics_frame
 	g.go_to("c1r0", "", false)
-	var w: Wolf = g.packs[0].wolves[0]
+	var old_pack: WolfPack = g.packs[0]
+	var w: Wolf = old_pack.wolves[0]
 	w.health.take_hit(99999, false)
 	for i in 3: await tree.physics_frame
 	var had: int = g.drops.size()
 	g.go_to("c1r1", "north", false)
 	await tree.physics_frame
+	var here := 0                          # c1r1's own monsters (deer, spec M3d §3)
+	for m in g.rooms.room("c1r1").get("monsters", []): here += int(m.count)
 	var r := ""
 	if had == 0: r = "no drops to test with"
-	elif not g.drops.is_empty() or not g.packs.is_empty(): r = "drops %d packs %d left behind" % [g.drops.size(), g.packs.size()]
-	elif tree.get_nodes_in_group("enemies").size() != 0: r = "%d enemies still in the tree" % tree.get_nodes_in_group("enemies").size()
+	elif not g.drops.is_empty() or is_instance_valid(old_pack): r = "drops %d / old pack %s left behind" % [g.drops.size(), is_instance_valid(old_pack)]
+	elif g.packs.size() != g.rooms.room("c1r1").get("monsters", []).size(): r = "%d packs in c1r1" % g.packs.size()
+	elif tree.get_nodes_in_group("enemies").size() != here: r = "%d enemies in the tree (c1r1 has %d)" % [tree.get_nodes_in_group("enemies").size(), here]
 	await _done(g)
 	return r
 

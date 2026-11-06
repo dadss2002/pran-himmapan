@@ -354,9 +354,33 @@ func receive_hit(atk: float, mult: float, from: Vector2) -> int:
 	_refresh(true)
 	return r.amount
 
+## Poison from a monster (mushroom spores): per_tick damage once a second for duration seconds,
+## no knockback (blocked while invulnerable, like any hit). A new dose restarts it, keeping the higher tick.
+var poison_tick := 0
+var poison_left := 0.0
+var _poison_t := 0.0
+
+func apply_poison(per_tick: int, duration: float) -> void:
+	if state == "dead" or per_tick <= 0: return
+	poison_tick = maxi(poison_tick, per_tick) if poison_left > 0.0 else per_tick
+	poison_left = duration
+	_poison_t = 0.0
+
+func _tick_poison(delta: float) -> void:
+	if poison_left <= 0.0: return
+	if state == "dead":
+		poison_left = 0.0
+		return
+	poison_left -= delta
+	_poison_t += delta
+	if _poison_t >= 1.0:
+		_poison_t -= 1.0
+		health.take_hit(poison_tick, false)
+
 # ---------- simulation ----------
 
 func step(delta: float, input: Vector2) -> void:
+	_tick_poison(delta)
 	cooldown = maxf(0.0, cooldown - delta)
 	_dodge_cd = maxf(0.0, _dodge_cd - delta)
 	_potion_cd = maxf(0.0, _potion_cd - delta)

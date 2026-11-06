@@ -60,6 +60,26 @@
      ],
      "why": "stone road incl. stairs"
     }
+   ],
+   "monsters": [
+    {
+     "kind": "boar",
+     "level": 3,
+     "count": 2,
+     "at": [
+      220,
+      200
+     ]
+    },
+    {
+     "kind": "deer",
+     "level": 3,
+     "count": 2,
+     "at": [
+      520,
+      160
+     ]
+    }
    ]
   },
   "c0r1": {
@@ -73,6 +93,17 @@
       384
      ],
      "why": "stone road incl. stairs"
+    }
+   ],
+   "monsters": [
+    {
+     "kind": "boar",
+     "level": 2,
+     "count": 3,
+     "at": [
+      200,
+      200
+     ]
     }
    ]
   },
@@ -97,9 +128,50 @@
      ],
      "why": "stone road incl. stairs"
     }
+   ],
+   "monsters": [
+    {
+     "kind": "shroom",
+     "level": 4,
+     "count": 3,
+     "at": [
+      520,
+      200
+     ]
+    },
+    {
+     "kind": "viper",
+     "level": 4,
+     "count": 1,
+     "at": [
+      230,
+      150
+     ]
+    }
    ]
   },
-  "c0r3": {},
+  "c0r3": {
+   "monsters": [
+    {
+     "kind": "kongkoi",
+     "level": 7,
+     "count": 2,
+     "at": [
+      330,
+      250
+     ]
+    },
+    {
+     "kind": "viper",
+     "level": 7,
+     "count": 2,
+     "at": [
+      560,
+      160
+     ]
+    }
+   ]
+  },
   "c1r0": {
    "monsters": [
     {
@@ -117,6 +189,17 @@
    "spawn": [
     350,
     280
+   ],
+   "monsters": [
+    {
+     "kind": "deer",
+     "level": 1,
+     "count": 3,
+     "at": [
+      500,
+      150
+     ]
+    }
    ]
   },
   "c1r2": {
@@ -128,6 +211,15 @@
      "at": [
       330,
       210
+     ]
+    },
+    {
+     "kind": "shroom",
+     "level": 5,
+     "count": 2,
+     "at": [
+      520,
+      160
      ]
     }
    ]
@@ -141,10 +233,63 @@
       272
      ]
     }
+   ],
+   "monsters": [
+    {
+     "kind": "viper",
+     "level": 8,
+     "count": 3,
+     "at": [
+      350,
+      140
+     ]
+    },
+    {
+     "kind": "shroom",
+     "level": 8,
+     "count": 2,
+     "at": [
+      520,
+      280
+     ]
+    }
    ]
   },
-  "c2r0": {},
-  "c2r1": {},
+  "c2r0": {
+   "monsters": [
+    {
+     "kind": "deer",
+     "level": 4,
+     "count": 2,
+     "at": [
+      250,
+      250
+     ]
+    },
+    {
+     "kind": "macaque",
+     "level": 4,
+     "count": 2,
+     "at": [
+      480,
+      260
+     ]
+    }
+   ]
+  },
+  "c2r1": {
+   "monsters": [
+    {
+     "kind": "macaque",
+     "level": 3,
+     "count": 3,
+     "at": [
+      300,
+      200
+     ]
+    }
+   ]
+  },
   "c2r2": {
    "monsters": [
     {
@@ -154,6 +299,15 @@
      "at": [
       300,
       190
+     ]
+    },
+    {
+     "kind": "macaque",
+     "level": 3,
+     "count": 1,
+     "at": [
+      520,
+      260
      ]
     }
    ]
@@ -165,6 +319,26 @@
      "at": [
       522,
       178
+     ]
+    }
+   ],
+   "monsters": [
+    {
+     "kind": "kongkoi",
+     "level": 9,
+     "count": 2,
+     "at": [
+      250,
+      250
+     ]
+    },
+    {
+     "kind": "kongkoi",
+     "level": 10,
+     "count": 1,
+     "at": [
+      380,
+      180
      ]
     }
    ]
