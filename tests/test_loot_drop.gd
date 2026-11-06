@@ -146,3 +146,20 @@ func test_icon_for_gear():
 		var p := LootDrop.icon_path(base)
 		if not ResourceLoader.exists(p): r = "%s icon missing: %s" % [base, p]
 	return r
+
+func test_gem_drop_pickup_keeps_data():
+	var h := _hero(Vector2.ZERO)
+	var inv := Inventory.new()
+	inv.slots.clear()
+	var gem := {"type": "split", "level": 1, "exp": 0, "rarity": "epic", "opts": [{"k": "crit", "v": 0.03}, {"k": "mp_cut", "v": 0.05}, {"k": "dmg_pct", "v": 0.04}]}
+	var d := LootDrop.make_gem(gem)
+	d.position = Vector2(20, 0)
+	d.settle()
+	var got := false
+	for i in 60: got = d.step(DT, h, inv) or got
+	var r := ""
+	if not got: r = "gem not picked up"
+	elif inv.slots.size() != 1 or inv.slots[0].get("gem", {}).get("rarity", "") != "epic": r = "bag %s" % [inv.slots]
+	if is_instance_valid(d) and not d.is_queued_for_deletion(): d.free()
+	h.free()
+	return r

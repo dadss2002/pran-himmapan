@@ -18,6 +18,7 @@ var _icon: Sprite2D
 var glint: FxSprite = null     # gems twinkle (item_glint) so they stand out from ore
 var item: Dictionary = {}      # equipment: {base, rarity, level, opts}; empty for stackables
 var beam: FxSprite = null      # rarity_beam under rare-and-up equipment, tinted by rarity
+var gem: Dictionary = {}       # gem data for gem drops (rarity, options, element)
 
 static func icon_path(id: String) -> String:
 	if id == "gold": return "res://assets/items/coin_gold.png"
@@ -52,6 +53,12 @@ static func make_item(it: Dictionary) -> LootDrop:
 		d.add_child(d.beam)
 		d.move_child(d.beam, 0)
 		d.beam.play("rarity_beam")
+	return d
+
+## A gem on the ground; keeps its rolled data until it is picked up.
+static func make_gem(g: Dictionary) -> LootDrop:
+	var d := make("gem_" + String(g.type), 1)
+	d.gem = g.duplicate(true)
 	return d
 
 ## n spots pickup.scatter_min–scatter_max px from of center, skipping blocked ones (e.g. inside a post).
@@ -94,11 +101,20 @@ func step(delta: float, hero: Hero, inv: Inventory) -> bool:
 	var hp: Vector2 = hero.global_position if hero.is_inside_tree() else hero.position
 	var to := hp - position
 	if to.length() > Balance.num("pickup.magnet"): return false
-	bag_full_notice = (not inv.has_free_slot()) if not item.is_empty() else inv.is_full_for(item_id)
+	if not item.is_empty() or (not gem.is_empty() and not Gem.is_plain(gem)):
+		bag_full_notice = not inv.has_free_slot()
+	else:
+		bag_full_notice = inv.is_full_for(item_id)
 	if bag_full_notice: return false
 	var stepd := Balance.num("pickup.speed") * delta
 	if to.length() <= maxf(Balance.num("pickup.contact"), stepd):
 		position = hp
+		if not gem.is_empty():
+			if not inv.add_gem(gem): return false
+			collected.emit(item_id, 1)
+			expired = true
+			if is_inside_tree(): queue_free()
+			return true
 		if not item.is_empty():
 			if not inv.add_item(item): return false
 			collected.emit(item_id, 1)

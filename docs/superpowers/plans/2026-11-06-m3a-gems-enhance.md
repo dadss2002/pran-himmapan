@@ -79,11 +79,11 @@
 - Consumes: `Gem.roll`, `Gem.is_plain`.
 - Produces: `Inventory.add_gem(gem: Dictionary) -> bool` (plain gems stack on `gem_<type>` stacks without data, others take a slot) · `Inventory.take_gem(index: int) -> Dictionary` (splits one off a plain stack) · `Loot.roll` gem entries carry `gem` data · state key `skills: {piercing: [gem|null, …], spread: [...]}` · item `plus` kept by `clean_item` · `SaveGame.VERSION = 3`.
 
-- [ ] **Step 1: Failing tests** `test_rolled_gems_take_own_slot` · `test_plain_gems_stack_and_split` · `test_gem_drop_has_data` (seeded: rarity, opts count by rarity, element for gem_element) · `test_save_v3_roundtrip` (gem level/exp/opts, sockets, plus) · `test_v2_save_migrates` (24 stacked slots incl. gem stacks load; plus 0; sockets empty) · `test_v1_save_still_migrates` · `test_bad_gem_rejected` (unknown type, level 21, duplicate option, plus 11).
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** → pass.
-- [ ] **Step 5: Commit** `M3a Task 3: gems as items, gem drops, save v3`.
+- [x] **Step 1: Failing tests** `test_rolled_gems_take_own_slot` · `test_plain_gems_stack_and_split` · `test_gem_drop_has_data` (seeded: rarity, opts count by rarity, element for gem_element) · `test_save_v3_roundtrip` (gem level/exp/opts, sockets, plus) · `test_v2_save_migrates` (24 stacked slots incl. gem stacks load; plus 0; sockets empty) · `test_v1_save_still_migrates` · `test_bad_gem_rejected` (unknown type, level 21, duplicate option, plus 11).
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** → pass.
+- [x] **Step 5: Commit** `M3a Task 3: gems as items, gem drops, save v3`.
 
 ### Task 4: Hero uses gems
 
