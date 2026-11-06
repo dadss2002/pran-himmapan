@@ -8,6 +8,9 @@
 | 2026-11-06 | ฮีโร่ chibi แบบ A (ฮู้ดผ้าคลุมเขียว) | create_character v3 | 2 | 5916b571-120d-4633-83d8-ea09079fc5d5 |
 | 2026-11-06 | ฮีโร่ chibi แบบ B (ผ้าคาดหัวเขียว) | create_character v3 | 2 | 0ba6b789-efc6-45e7-bc9b-4f1d5e79fa9b |
 
-ใช้รวม: 6 gen
+| 2026-11-06 | ฮีโร่ A ท่ายืน (breathing-idle) 8 ทิศ — ธนูหายในท่านี้ | animate template | 8 | group 3d6a38ff |
+| 2026-11-06 | ฮีโร่ A ท่ายิงธนู ทดสอบทิศใต้ | animate v3 | 1 | group 0bbe57ac |
+
+ใช้รวม: 15 gen
 
 หมายเหตุ: `docs/preview/pran_base_rotations_x4.png` เป็นภาพตัวอย่างขยาย 4 เท่าบนพื้นหลังทึบ ไม่ใช่ไฟล์สไปรต์ที่ใช้ในเกม ไฟล์จริงต้องดาวน์โหลดจาก api.pixellab.ai ซึ่งตอนนี้เครื่องของ Claude เข้าไม่ได้
