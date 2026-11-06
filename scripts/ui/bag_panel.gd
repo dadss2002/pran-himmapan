@@ -431,7 +431,7 @@ func refresh() -> void:
 	_who.text = "พราน · Lv %d" % hero.level
 	for c in _stats.get_children(): c.free()
 	var st := hero.stats()
-	for pair in [["HP", str(st.hp)], ["MP", str(st.mp)], ["ATK", str(int(round(st.atk)))], ["DEF", str(st.def)],
+	for pair in [["HP", str(st.hp)], ["MP", str(st.mp)], ["ATK", str(int(round(st.atk)))], ["DEF", Gear._trim(float(st.def))],
 			["คริ", "%s%%" % Gear._trim(st.crit * 100.0)], ["ยิง", "%s/วิ" % Gear._trim(1.0 / st.shot_cd)]]:
 		var row := HBoxContainer.new()
 		row.add_child(_label(pair[0], 9, Color("#e8e2d4")))

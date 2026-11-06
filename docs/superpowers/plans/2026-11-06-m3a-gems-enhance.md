@@ -63,11 +63,11 @@
 **Interfaces:**
 - Produces: `Enhance.chance(target: int) -> float` · `Enhance.ore(target) -> int` · `Enhance.gold(target) -> int` · `Enhance.bonus(plus: int) -> float` (+5 → 0.30, +6 → 0.36, +7 → 0.46, +10 → 0.76) · `Enhance.can(item: Dictionary) -> bool` (bow/armor, plus < 10) · `Enhance.attempt(item: Dictionary, inv: Inventory, rng) -> Dictionary` `{result: "ok"|"fail"|"down"|"no_ore"|"no_gold"|"max"|"cannot", plus: int}` (mutates item.plus and inventory) · `Gear.totals` applies `(1 + Enhance.bonus(plus))` to atk/def (float) and hp (rounded per item) · `Gear.item_name(item) -> String` ("ธนูเขาควาย +6").
 
-- [ ] **Step 1: Failing tests** `test_tables` (chances and costs for +1…+10) · `test_bonus_curve` · `test_fail_rules` (seeded: plus 5 fail → 5; plus 6 fail → 5; costs taken either way) · `test_not_enough_takes_nothing` · `test_ring_cannot` · `test_totals_with_plus` (trainee armor +1: def 4.24, hp 21; horn bow +6: atk 21.76) · `test_name_with_plus`.
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** → pass (existing gear tests still pass; ATK/DEF stay floats).
-- [ ] **Step 5: Commit** `M3a Task 2: enhancement rules and plus on gear`.
+- [x] **Step 1: Failing tests** `test_tables` (chances and costs for +1…+10) · `test_bonus_curve` · `test_fail_rules` (seeded: plus 5 fail → 5; plus 6 fail → 5; costs taken either way) · `test_not_enough_takes_nothing` · `test_ring_cannot` · `test_totals_with_plus` (trainee armor +1: def 4.24, hp 21; horn bow +6: atk 21.76) · `test_name_with_plus`.
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** → pass (existing gear tests still pass; ATK/DEF stay floats).
+- [x] **Step 5: Commit** `M3a Task 2: enhancement rules and plus on gear`.
 
 ### Task 3: Gems in the bag, drops, save v3
 
