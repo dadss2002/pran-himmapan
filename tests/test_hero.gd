@@ -8,7 +8,7 @@ func _hero() -> Hero:
 
 func test_manifest_complete():
 	var sf := SpriteSet.build(MANIFEST)
-	var want := {"idle": 4, "walk": 8, "shoot": 9}
+	var want := {"idle": 4, "walk": 8, "shoot": 9, "roll": 8, "death": 7}
 	var count := 0
 	for anim in want:
 		for d in Combat.DIRS:
@@ -19,7 +19,8 @@ func test_manifest_complete():
 			count += 1
 	if sf.get_animation_loop("shoot_east"): return "shoot must not loop"
 	if not sf.get_animation_loop("walk_east"): return "walk must loop"
-	return "" if count == 24 else "expected 24 animations, got %d" % count
+	if sf.get_animation_loop("roll_east") or sf.get_animation_loop("death_east"): return "roll/death must not loop"
+	return "" if count == 40 else "expected 40 animations, got %d" % count
 
 func test_anchor_puts_feet_on_origin():
 	var a := SpriteSet.anchor(MANIFEST, "walk")

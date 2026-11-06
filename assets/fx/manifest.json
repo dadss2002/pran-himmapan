@@ -1,0 +1,6 @@
+{
+  "_doc": "PixelLab vfx_workbench exports (effects saved in My effects). anchor = pixel in a cell that sits on the node origin.",
+  "lunge_warning": {"cell": [98, 106], "frames": 21, "fps": 42, "anchor": [49, 80], "loop": false, "pixellab": "c8dc78a6-26a9-4267-bcc1-f2de9fb07367"},
+  "hit_spark": {"cell": [45, 43], "frames": 6, "fps": 16, "anchor": [21, 22], "loop": false, "pixellab": "a9fdd80b-cbe0-4a5c-9fdf-b5c5ec1487cb"},
+  "roll_dust": {"cell": [53, 29], "frames": 8, "fps": 14, "anchor": [26, 13], "loop": false, "pixellab": "27a9b652-199e-4bf4-bbc1-c8a7c98909df"}
+}

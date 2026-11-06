@@ -21,6 +21,14 @@
     "shoot": [
       64,
       64
+    ],
+    "death": [
+      64,
+      64
+    ],
+    "roll": [
+      64,
+      64
     ]
   },
   "frames": {
@@ -53,12 +61,34 @@
       "north-west": 9,
       "west": 9,
       "south-west": 9
+    },
+    "death": {
+      "south": 7,
+      "south-east": 7,
+      "east": 7,
+      "north-east": 7,
+      "north": 7,
+      "north-west": 7,
+      "west": 7,
+      "south-west": 7
+    },
+    "roll": {
+      "south": 8,
+      "south-east": 8,
+      "east": 8,
+      "north-east": 8,
+      "north": 8,
+      "north-west": 8,
+      "west": 8,
+      "south-west": 8
     }
   },
   "fps": {
     "idle": 6,
     "walk": 10,
-    "shoot": 14
+    "shoot": 14,
+    "death": 10,
+    "roll": 32
   },
   "anchor": {
     "idle": [
@@ -70,6 +100,14 @@
       54
     ],
     "shoot": [
+      32,
+      54
+    ],
+    "death": [
+      32,
+      54
+    ],
+    "roll": [
       32,
       54
     ]

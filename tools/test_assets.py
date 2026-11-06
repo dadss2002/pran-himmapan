@@ -3,7 +3,7 @@ import json, os, sys
 from PIL import Image
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "assets", "hero")
-REQUIRED = {"idle", "walk", "shoot"}
+REQUIRED = {"idle", "walk", "shoot", "roll", "death"}
 
 def main():
     m = json.load(open(os.path.join(ROOT, "manifest.json")))
@@ -24,8 +24,9 @@ def main():
             ax, ay = m.get("anchor", {}).get(anim, [None, None])
             if ay is None: fails.append(f"{anim}: no anchor in manifest")
             else:
-                bottom = max((im.crop((i*cw, 0, (i+1)*cw, ch)).getbbox() or (0,0,0,0))[3] for i in range(per_dir[d]))
-                if abs(bottom - ay) > 2: fails.append(f"{p}: feet row {bottom} far from anchor {ay}")
+                # first frame is the standing pose of every clip (death falls toward the camera later)
+                bottom = (im.crop((0, 0, cw, ch)).getbbox() or (0,0,0,0))[3]
+                if abs(bottom - ay) > 2: fails.append(f"{p}: feet row {bottom} (frame 0) far from anchor {ay}")
     print("\n".join(fails) if fails else f"PASS {sum(len(v) for v in m['frames'].values())} strips")
     sys.exit(1 if fails else 0)
 
