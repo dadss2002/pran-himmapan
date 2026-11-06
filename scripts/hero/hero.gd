@@ -30,6 +30,7 @@ var test_enemies: Array = []  # used instead of the "enemies" group when not in 
 var inventory := Inventory.new()
 var _skill_cd := {}
 var _pending_skill := ""
+var _queued_skill := ""      # pressed during a basic shot; starts once that arrow is out
 var _potion_cd := 0.0
 
 func _init() -> void:
@@ -81,6 +82,7 @@ func set_progress(new_level: int, new_exp: int) -> void:
 	exp_changed.emit()
 
 func on_kill(monster_exp: int, monster_level: int) -> void:
+	if state == "dead": return     # an arrow still flying after death earns nothing
 	gain_exp(Progression.kill_exp(monster_exp, monster_level, level))
 
 ## Adds EXP; each level gained heals HP/MP fully and emits leveled_up once.
@@ -122,14 +124,22 @@ func potion_cooldown_left() -> float:
 	return _potion_cd
 
 ## ศรทะลวง / ศรกระจาย: needs the unlock level, no cooldown, enough MP, and a free hero.
-## Refusing never spends MP.
+## Pressed during a basic shot, the skill waits and starts as soon as that arrow is out.
+## MP and cooldown are taken when the skill's arrow leaves, so a cancelled skill costs nothing.
 func try_skill(id: String) -> bool:
-	if state in ["roll", "hurt", "dead", "shoot"]: return false
+	if state in ["roll", "hurt", "dead"]: return false
 	if level < Skills.unlock_level(id): return false
 	if _skill_cd.get(id, 0.0) > 0.0: return false
 	if mp < Skills.mp_cost(id): return false
-	mp -= Skills.mp_cost(id)
-	_skill_cd[id] = Skills.cooldown(id, level)
+	if state == "shoot":
+		if _pending_skill != "": return false      # another skill is drawing
+		_queued_skill = id
+		return true
+	_start_skill(id)
+	return true
+
+func _start_skill(id: String) -> void:
+	_queued_skill = ""
 	_pending_skill = id
 	state = "shoot"
 	_t = 0.0
@@ -137,13 +147,14 @@ func try_skill(id: String) -> bool:
 	velocity = Vector2.ZERO
 	_aim()
 	_refresh(true)
-	return true
 
-## Potions heal 40% of max HP or MP; one shared cooldown.
+## Potions heal 40% of max HP or MP; one shared cooldown. Refused when that bar is full.
 func try_potion(kind: String) -> bool:
 	if state == "dead" or _potion_cd > 0.0: return false
 	var item := "potion_" + kind
 	if inventory.count_of(item) <= 0: return false
+	if kind == "hp" and health.hp >= health.max_hp: return false
+	if kind == "mp" and mp >= max_mp(): return false
 	var frac := Balance.num("potion.heal_frac")
 	if kind == "hp":
 		health.hp = mini(health.max_hp, health.hp + int(round(frac * health.max_hp)))
@@ -161,6 +172,8 @@ func try_dodge(dir: Vector2) -> bool:
 	_roll_dir = dir.normalized() if dir.length() > 0.01 else BowLayer.dir_vector(facing)
 	facing = Combat.facing_from_vector(_roll_dir, facing)
 	_released = true          # a shot in progress is cancelled: no arrow later
+	_pending_skill = ""
+	_queued_skill = ""
 	state = "roll"
 	_t = 0.0
 	rolled.emit(_roll_dir)
@@ -181,6 +194,8 @@ func receive_hit(atk: float, mult: float, from: Vector2) -> int:
 	_knockback(from)
 	_flash = Balance.num("hero.hurt_flash")
 	_released = true          # getting hit cancels a pending shot
+	_pending_skill = ""
+	_queued_skill = ""
 	state = "hurt"
 	_t = 0.0
 	_refresh(true)
@@ -217,7 +232,9 @@ func step(delta: float, input: Vector2) -> void:
 			velocity = Vector2.ZERO
 			if not _released and _t >= RELEASE_FRAME / SHOOT_FPS:
 				_release()
-			if _t >= SHOOT_FRAMES / SHOOT_FPS:
+			if _released and _queued_skill != "" and _pending_skill == "":
+				_start_skill(_queued_skill)          # cut the basic shot's follow-through
+			elif _t >= SHOOT_FRAMES / SHOOT_FPS:
 				state = "idle"
 		_:
 			if input.length() > 0.01:
@@ -329,10 +346,16 @@ func _release() -> void:
 	if is_instance_valid(_aim_target) and _aim_target.is_alive():
 		v = (_aim_target.hurt_point() - start).normalized()
 	if _pending_skill != "":
-		skill_released.emit(_pending_skill, start)
+		var id := _pending_skill
+		if mp < Skills.mp_cost(id):          # cannot happen today (MP only drops here); stay safe
+			_pending_skill = ""
+			return
+		mp -= Skills.mp_cost(id)
+		_skill_cd[id] = Skills.cooldown(id, level)
+		skill_released.emit(id, start)
 	match _pending_skill:
 		"piercing":
-			_fire(start, v, Skills.damage_mult("piercing", level), true)
+			_fire(start, v, Skills.damage_mult("piercing", level), true, Balance.num("skills.piercing.range"))
 		"spread":
 			var n := int(Balance.num("skills.spread.arrows"))
 			var fan := deg_to_rad(Balance.num("skills.spread.fan_deg"))
@@ -342,10 +365,10 @@ func _release() -> void:
 			_fire(start, v, 1.0, false)
 	_pending_skill = ""
 
-func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool) -> void:
+func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1.0) -> void:
 	var a: Arrow = ARROW_SCENE.instantiate()
 	a.position = start
-	a.launch(v, stats().atk, _enemies(), mult, pierce)
+	a.launch(v, stats().atk, _enemies(), mult, pierce, range_px)
 	if is_inside_tree():
 		get_parent().add_child(a)
 	shot.emit(a)

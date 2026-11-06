@@ -40,10 +40,14 @@ func _pack(level: int) -> WolfPack:
 		if p.level == level: return p
 	return null
 
+const SHOT_SAVE := "user://shots_m2a_save.json"
+
 func _run() -> void:
 	seed(4)
 	Combat.rng.seed = 4
 	g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = SHOT_SAVE          # never touch the player's real save
+	if FileAccess.file_exists(SHOT_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(SHOT_SAVE))
 	root.add_child(g)
 	await process_frame          # _ready runs once the main loop starts
 	hero = g.hero
@@ -102,4 +106,5 @@ func _run() -> void:
 	await _frames(25)
 	await _snap("m2a_hero_death.png")
 	print("hero death seen: ", dead)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SHOT_SAVE))
 	quit(0)

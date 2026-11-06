@@ -175,7 +175,12 @@
   "pickup": {
     "magnet": 64,
     "speed": 260,
-    "lifetime": 60
+    "lifetime": 60,
+    "contact": 8,
+    "pop_time": 0.25,
+    "scatter_min": 6,
+    "scatter_max": 24,
+    "bag_full_notice_every": 2
   },
   "bag": {
     "slots": 24,
@@ -200,5 +205,8 @@
     "per_level_damage": 0.05,
     "per_level_cooldown": 0.01,
     "max_cooldown_cut": 0.3
+  },
+  "save": {
+    "autosave_every": 30
   }
 }

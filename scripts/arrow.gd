@@ -10,9 +10,11 @@ var spent := false
 var targets: Array = []
 var mult := 1.0
 var pierce := false     # ศรทะลวง: hits every enemy in its line once and keeps flying
+var max_range := 0.0    # px; shot.range unless the skill sets its own
 var _hit := {}
 
-func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier := 1.0, pierce_all := false) -> void:
+func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier := 1.0, pierce_all := false, range_px := -1.0) -> void:
+	max_range = range_px if range_px > 0.0 else Balance.num("shot.range")
 	dir = direction.normalized()
 	atk = attack
 	targets = enemies
@@ -22,7 +24,7 @@ func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier :
 
 func advance(delta: float) -> void:
 	if spent: return
-	var range_px := Balance.num("shot.range")
+	var range_px := max_range if max_range > 0.0 else Balance.num("shot.range")
 	var radius := Balance.num("shot.arrow_hit_radius")
 	var stepd := minf(Balance.num("shot.arrow_speed") * delta, range_px - travelled)
 	position += dir * stepd

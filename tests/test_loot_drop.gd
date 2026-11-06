@@ -77,3 +77,25 @@ func test_icon_for_items():
 	for id in ["gold", "ore_himmapan", "gem_split", "gem_multiply", "gem_leech"]:
 		if LootDrop.icon_path(id) == "" or not ResourceLoader.exists(LootDrop.icon_path(id)): r = "no icon for %s" % id
 	return r
+
+func test_bag_full_notice_clears_when_away():
+	var h := _hero(Vector2.ZERO)
+	var inv := Inventory.new()
+	for i in 24: inv.add("item_%d" % i, 1)
+	var d := _drop("ore_himmapan", 1, Vector2(30, 0))
+	d.step(DT, h, inv)
+	var r := "" if d.bag_full_notice else "no bag-full notice next to the hero"
+	h.position = Vector2(1000, 0)
+	d.step(DT, h, inv)
+	if r == "" and d.bag_full_notice: r = "bag-full notice still on with the hero 1000 px away"
+	d.free(); h.free()
+	return r
+
+func test_gems_glint_ore_does_not():
+	var gem := LootDrop.make("gem_split", 1)
+	var ore := LootDrop.make("ore_himmapan", 1)
+	var r := ""
+	if gem.glint == null or gem.glint.animation != "item_glint": r = "gem drop has no item_glint"
+	elif ore.glint != null: r = "ore should not glint"
+	gem.free(); ore.free()
+	return r

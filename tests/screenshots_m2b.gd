@@ -69,6 +69,17 @@ func _run() -> void:
 	await _frames(20)
 	await _snap("m2b_loot_magnet.png")
 	print("loot seen: ", dropped)
+
+	# a gem and an ore on the ground, out of magnet range: only the gem glints
+	var spot := hero.global_position + Vector2(-110, 30)
+	for it in [["gem_split", Vector2(0, 0)], ["ore_himmapan", Vector2(22, 0)]]:
+		var d := LootDrop.make(it[0], 1)
+		d.position = spot + it[1]
+		d.settle()
+		g.drops.append(d)
+		g.world.add_child(d)
+	await _frames(20)          # glint peaks around frame 4 of its 16-frame loop
+	await _snap("m2b_gem_glint.png")
 	Input.action_press("attack")
 	await _until(func(): return hero.inventory.gold > 0, 300)
 	Input.action_release("attack")

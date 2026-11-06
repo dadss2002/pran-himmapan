@@ -28,11 +28,23 @@ static func load_or_new(path := PATH) -> Dictionary:
 	var j := JSON.new()
 	var d = j.data if j.parse(text) == OK else null
 	var ok: bool = typeof(d) == TYPE_DICTIONARY and int(d.get("version", -1)) == VERSION \
-		and d.has("level") and d.has("exp") and typeof(d.get("inventory")) == TYPE_DICTIONARY
+		and d.has("level") and d.has("exp") and _inventory_ok(d.get("inventory"))
 	if not ok:
 		var bad := path.get_basename() + ".bad.json"
 		DirAccess.rename_absolute(ProjectSettings.globalize_path(path), ProjectSettings.globalize_path(bad))
 		return new_state()
 	d.level = clampi(int(d.level), 1, Progression.cap())
-	d.exp = maxi(0, int(d.exp))
+	d.exp = 0 if d.level >= Progression.cap() else clampi(int(d.exp), 0, Progression.exp_to_next(d.level) - 1)
 	return d
+
+## A bag the game can load: {gold >= 0, slots: up to bag.slots of {id: String, count: 1..bag.stack}}.
+static func _inventory_ok(inv) -> bool:
+	if typeof(inv) != TYPE_DICTIONARY: return false
+	if not (typeof(inv.get("gold", 0)) in [TYPE_INT, TYPE_FLOAT]) or float(inv.get("gold", 0)) < 0: return false
+	var slots = inv.get("slots", [])
+	if typeof(slots) != TYPE_ARRAY or slots.size() > int(Balance.num("bag.slots")): return false
+	for s in slots:
+		if typeof(s) != TYPE_DICTIONARY or typeof(s.get("id")) != TYPE_STRING: return false
+		if not (typeof(s.get("count")) in [TYPE_INT, TYPE_FLOAT]): return false
+		if int(s.count) < 1 or int(s.count) > int(Balance.num("bag.stack")): return false
+	return true

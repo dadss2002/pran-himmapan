@@ -18,7 +18,6 @@ var _built := false
 var _bag_full_cd := 0.0
 var lock_ring: FxSprite
 var save_path := SaveGame.PATH
-const AUTOSAVE_EVERY := 30.0
 var _autosave_t := 0.0
 
 func _ready() -> void:
@@ -99,12 +98,13 @@ func save_now() -> bool:
 
 func tick_autosave(delta: float) -> void:
 	_autosave_t += delta
-	if _autosave_t >= AUTOSAVE_EVERY:
+	if _autosave_t >= Balance.num("save.autosave_every"):
 		_autosave_t = 0.0
 		save_now()
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST and hero:
+	# Desktop sends WM_CLOSE_REQUEST; phones and browser tabs send PAUSED / FOCUS_OUT instead.
+	if what in [NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT] and hero:
 		save_now()
 
 func _on_arrow(a: Arrow) -> void:
@@ -151,7 +151,7 @@ func _physics_process(delta: float) -> void:
 			continue
 		d.step(delta, hero, hero.inventory)
 		if d.bag_full_notice and _bag_full_cd <= 0.0:
-			_bag_full_cd = 2.0
+			_bag_full_cd = Balance.num("pickup.bag_full_notice_every")
 			_text(hero.global_position + Vector2(0, -52), "กระเป๋าเต็ม", Color("#ffb37a"))
 
 func _text(at: Vector2, t: String, c: Color) -> void:

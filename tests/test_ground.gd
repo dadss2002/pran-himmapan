@@ -8,6 +8,8 @@ func setup(t: SceneTree) -> void:
 
 func test_ground_spawns_three_packs():
 	var g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = TMP_SAVE          # never touch the player's real save
+	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
 	g.build()
 	var levels := []
 	var total := 0
@@ -79,6 +81,12 @@ func test_ground_loads_and_autosaves():
 	if r == "" and SaveGame.load_or_new(TMP_SAVE).inventory.gold != 80: r = "autosave after 30 s missing"
 	g.hero.gain_exp(1000)
 	if r == "" and SaveGame.load_or_new(TMP_SAVE).level != g.hero.level: r = "level-up did not save"
+	g.hero.inventory.add("gold", 5)
+	g._notification(Node.NOTIFICATION_APPLICATION_PAUSED)
+	if r == "" and SaveGame.load_or_new(TMP_SAVE).inventory.gold != 85: r = "phone pause did not save"
+	g.hero.inventory.add("gold", 5)
+	g._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	if r == "" and SaveGame.load_or_new(TMP_SAVE).inventory.gold != 90: r = "browser focus-out did not save"
 	g.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
 	return r

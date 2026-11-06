@@ -45,7 +45,8 @@ func test_piercing_skill_fires_one_piercing_arrow():
 	_run(h, 1.0)
 	if r == "" and _shots.size() != 1: r = "%d arrows, want 1" % _shots.size()
 	elif r == "" and (not _shots[0].pierce or absf(_shots[0].mult - 1.8) > 0.001): r = "pierce %s mult %s" % [_shots[0].pierce, _shots[0].mult]
-	if r == "" and absf(h.mp - (50 - 8 + 6 * 1.0)) > 0.2: r = "mp %.1f, want 48 (50 - 8 + 6/s regen)" % h.mp
+	# MP is taken when the arrow leaves (5/14 s); before that the bar is already full.
+	if r == "" and absf(h.mp - (50 - 8 + 6 * (1.0 - 5.0 / 14.0))) > 0.2: r = "mp %.1f, want 45.9 (50 - 8 at release + 6/s regen)" % h.mp
 	_done(h)
 	return r
 
@@ -111,9 +112,66 @@ func test_potion_shared_cooldown():
 	elif h.inventory.count_of("potion_hp") != 4: r = "hp potions left %d" % h.inventory.count_of("potion_hp")
 	if r == "" and h.try_potion("mp"): r = "mp potion inside the shared 10 s cooldown"
 	_run(h, 10.05)
+	h.mp = 10.0                          # regen filled it during the wait
 	if r == "" and not h.try_potion("mp"): r = "mp potion after 10 s refused"
 	h.inventory.remove("potion_hp", 4)
 	_run(h, 10.05)
 	if r == "" and h.try_potion("hp"): r = "no potions left but still drank"
+	_done(h)
+	return r
+
+func test_cancelled_skill_costs_nothing():
+	var h := _hero()
+	var r := ""
+	h.try_skill("piercing")
+	_run(h, 0.1)
+	h.receive_hit(1, 1.0, Vector2(-20, 0))       # bitten before the arrow leaves
+	_run(h, 1.0)
+	if _shots.size() != 0: r = "%d arrows after a cancelled skill" % _shots.size()
+	elif h.skill_cooldown_left("piercing") > 0.0: r = "cooldown %.2f after a cancelled skill" % h.skill_cooldown_left("piercing")
+	elif h.mp < 50.0 - 0.01: r = "mp %.1f, a cancelled skill must not cost MP" % h.mp
+	_run(h, 1.0)
+	h.try_skill("piercing")
+	_run(h, 0.1)
+	h.try_dodge(Vector2.RIGHT)
+	_run(h, 1.0)
+	if r == "" and (_shots.size() != 0 or h.skill_cooldown_left("piercing") > 0.0 or h.mp < 50.0 - 0.01): r = "roll cancel still cost (arrows %d, cd %.2f, mp %.1f)" % [_shots.size(), h.skill_cooldown_left("piercing"), h.mp]
+	_done(h)
+	return r
+
+func test_skill_pressed_during_basic_shot_waits_and_fires():
+	var h := _hero()
+	var r := ""
+	h.try_shoot()
+	_run(h, 0.1)                                   # basic arrow not out yet
+	if not h.try_skill("piercing"): r = "skill press during a basic shot was dropped"
+	_run(h, 1.2)
+	if r == "" and _shots.size() != 2: r = "%d arrows, want basic + piercing" % _shots.size()
+	elif r == "" and (_shots[0].pierce or not _shots[1].pierce): r = "order: basic first, then piercing"
+	# basic arrow out at 5/14 s, skill starts then and releases 5/14 s later
+	elif r == "" and absf(h.mp - (50 - 8 + 6 * (1.3 - 10.0 / 14.0))) > 0.2: r = "mp %.1f, want 45.5" % h.mp
+	_done(h)
+	return r
+
+func test_piercing_uses_its_own_range():
+	var sk: Dictionary = Balance.data()["skills"]["piercing"]
+	var old = sk["range"]
+	sk["range"] = 300
+	var h := _hero()
+	h.facing = 2
+	h.try_skill("piercing")
+	_run(h, 0.5)
+	var r := ""
+	if _shots.size() != 1: r = "%d arrows" % _shots.size()
+	elif absf(_shots[0].max_range - 300.0) > 0.01: r = "piercing range %.0f, want skills.piercing.range" % _shots[0].max_range
+	sk["range"] = old
+	_done(h)
+	return r
+
+func test_potion_refused_when_bar_full():
+	var h := _hero()
+	var r := ""
+	if h.try_potion("hp") or h.inventory.count_of("potion_hp") != 5: r = "drank an HP potion at full HP"
+	elif h.try_potion("mp") or h.inventory.count_of("potion_mp") != 3: r = "drank an MP potion at full MP"
 	_done(h)
 	return r

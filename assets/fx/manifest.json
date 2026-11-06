@@ -111,5 +111,19 @@
     ],
     "loop": true,
     "pixellab": "aed3bdd1-9a64-4a87-af1a-4526bbb92bf2"
+  },
+  "item_glint": {
+    "cell": [
+      24,
+      31
+    ],
+    "frames": 16,
+    "fps": 12,
+    "anchor": [
+      9,
+      18
+    ],
+    "loop": true,
+    "pixellab": "2d184b0f-8a29-42f0-917e-41a2d198c81f"
   }
 }

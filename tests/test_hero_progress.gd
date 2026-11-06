@@ -75,3 +75,11 @@ func test_hud_shows_exp_mp_gold():
 	if r == "" and (hud.exp_bar.value != 100.0 or hud.level_label.text != "Lv 10"): r = "at cap: bar %.1f label %s" % [hud.exp_bar.value, hud.level_label.text]
 	hud.free(); h.free()
 	return r
+
+func test_no_exp_while_dead():
+	var h := _hero()
+	h.receive_hit(9999, 1.0, Vector2.ZERO)
+	h.on_kill(50, 1)
+	var r := "" if h.exp == 0 else "dead hero gained %d EXP" % h.exp
+	h.free()
+	return r

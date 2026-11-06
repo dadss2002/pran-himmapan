@@ -6,9 +6,6 @@ extends Node2D
 
 signal collected(item_id: String, count: int)
 
-const CONTACT := 8.0
-const POP_TIME := 0.25
-
 var item_id := ""
 var count := 1
 var expired := false
@@ -18,6 +15,7 @@ var _pop_from := Vector2.ZERO
 var _pop_to := Vector2.ZERO
 var _popping := false
 var _icon: Sprite2D
+var glint: FxSprite = null     # gems twinkle (item_glint) so they stand out from ore
 
 static func icon_path(id: String) -> String:
 	if id == "gold": return "res://assets/items/coin_gold.png"
@@ -36,15 +34,20 @@ static func make(id: String, n: int) -> LootDrop:
 	d._icon.position = Vector2(0, -6)
 	d._icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	d.add_child(d._icon)
+	if id.begins_with("gem_"):
+		d.glint = FxSprite.make("item_glint", true)
+		d.glint.position = d._icon.position
+		d.add_child(d.glint)
+		d.glint.play("item_glint")
 	return d
 
-## n spots within 24 px of center, skipping blocked ones (e.g. inside a post).
+## n spots pickup.scatter_min–scatter_max px from of center, skipping blocked ones (e.g. inside a post).
 static func scatter(center: Vector2, n: int, rng: RandomNumberGenerator, blocked: Callable) -> Array:
 	var out: Array = []
 	var tries := 0
 	while out.size() < n and tries < n * 40:
 		tries += 1
-		var p := center + Vector2(rng.randf_range(6, 24), 0).rotated(rng.randf_range(0, TAU))
+		var p := center + Vector2(rng.randf_range(Balance.num("pickup.scatter_min"), Balance.num("pickup.scatter_max")), 0).rotated(rng.randf_range(0, TAU))
 		if not blocked.call(p): out.append(p)
 	while out.size() < n: out.append(center)   # fall back to the corpse spot
 	return out
@@ -62,9 +65,10 @@ func settle() -> void:
 ## Returns true on the frame the item is collected.
 func step(delta: float, hero: Hero, inv: Inventory) -> bool:
 	if expired: return false
+	bag_full_notice = false
 	_age += delta
 	if _popping:
-		var t := clampf(_age / POP_TIME, 0.0, 1.0)
+		var t := clampf(_age / Balance.num("pickup.pop_time"), 0.0, 1.0)
 		position = _pop_from.lerp(_pop_to, t) + Vector2(0, -18.0 * sin(PI * t))
 		if t >= 1.0: _popping = false
 		return false
@@ -72,6 +76,7 @@ func step(delta: float, hero: Hero, inv: Inventory) -> bool:
 		_expire()
 		return false
 	if _icon: _icon.position.y = -6 + sin(_age * 4.0) * 1.5
+	if glint and _icon: glint.position = _icon.position
 	if hero == null or hero.state == "dead": return false
 	var hp: Vector2 = hero.global_position if hero.is_inside_tree() else hero.position
 	var to := hp - position
@@ -79,7 +84,7 @@ func step(delta: float, hero: Hero, inv: Inventory) -> bool:
 	bag_full_notice = inv.is_full_for(item_id)
 	if bag_full_notice: return false
 	var stepd := Balance.num("pickup.speed") * delta
-	if to.length() <= maxf(CONTACT, stepd):
+	if to.length() <= maxf(Balance.num("pickup.contact"), stepd):
 		position = hp
 		var left := inv.add(item_id, count)
 		if left > 0:          # only part fitted

@@ -73,3 +73,19 @@ func test_new_game_has_start_kit():
 	var inv := Inventory.new()
 	inv.from_dict(s.inventory)
 	return "" if inv.count_of("potion_hp") == 5 and inv.count_of("potion_mp") == 3 else "start kit %s" % [inv.to_dict()]
+
+func test_load_caps_exp_below_next_level():
+	_cleanup()
+	SaveGame.save({"level": 2, "exp": 99999, "inventory": Inventory.new().to_dict()}, TMP)
+	var s := SaveGame.load_or_new(TMP)
+	_cleanup()
+	return "" if s.level == 2 and s.exp == Progression.exp_to_next(2) - 1 else "loaded %s" % s
+
+func test_load_bad_slots_starts_fresh():
+	_cleanup()
+	SaveGame.save({"level": 3, "exp": 0, "inventory": {"gold": 5, "slots": [{"id": 7}, "junk"]}}, TMP)
+	var s := SaveGame.load_or_new(TMP)
+	var kept := FileAccess.file_exists(TMP_BAD)
+	_cleanup()
+	if s.level != 1: return "bad bag should start fresh, got %s" % s
+	return "" if kept else "the broken file should be kept as .bad.json"
