@@ -45,6 +45,17 @@ func _run() -> void:
 	if bag.selected_detail().name != "ธนูเขาควาย": return _fail("tapping a bag cell did not select it")
 	await _tap(bag._d_action.get_global_rect().get_center())
 	if h.equipped.bow.base != "bow_buffalo_horn": return _fail("tapping สวมใส่ did not equip")
+	# ตีบวก on the worn bow: worn slot → ตีบวก → ตีบวก → ✕
+	h.inventory.add("ore_himmapan", 5)
+	h.inventory.gold = 5000
+	await _tap(bag._worn_buttons["bow"].get_global_rect().get_center())
+	await _tap(bag._d_enhance.get_global_rect().get_center())
+	if not bag.enhance_panel.is_open(): return _fail("tapping ตีบวก did not open the window")
+	bag.enhance_panel.rng.seed = 1                     # +1 is 100% anyway
+	await _tap(bag.enhance_panel._button.get_global_rect().get_center())
+	if int(h.equipped.bow.get("plus", 0)) != 1: return _fail("tapping ตีบวก in the window did not enhance")
+	await _tap(bag.enhance_panel._close_button.get_global_rect().get_center())
+	if bag.enhance_panel.is_open(): return _fail("tapping ✕ did not close the enhance window")
 	await _tap(bag._close_button.get_global_rect().get_center())
 	if bag.is_open() or paused: return _fail("tapping ✕ did not close the bag / unpause")
 	# skill · gem screen
@@ -59,5 +70,5 @@ func _run() -> void:
 	if h.skill_gems.piercing.is_empty() or h.skill_gems.piercing[0] == null: return _fail("tapping a slot did not socket the gem")
 	await _tap(sp._close_button.get_global_rect().get_center())
 	if sp.is_open() or paused: return _fail("tapping ✕ did not close the skill screen")
-	print("TOUCH PASS: bag open, tab, select, equip, close · skills open, pick gem, socket, close")
+	print("TOUCH PASS: bag open, tab, select, equip, ตีบวก, close · skills open, pick gem, socket, close")
 	quit(0)

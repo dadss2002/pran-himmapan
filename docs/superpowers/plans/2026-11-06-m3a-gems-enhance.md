@@ -146,11 +146,11 @@
 - Consumes: `Enhance.*`, `Gear.item_name`, `Hero.gear_changed`.
 - Produces: `EnhancePanel.open(hero, item_ref: Dictionary)` (`{"worn": slot}` or `{"bag": index}`), `detail() -> Dictionary` (title, stat_before, stat_after, chance, ore, gold, enough flags, warn text, safe), `press() -> String`.
 
-- [ ] **Step 1: Failing tests** `test_safe_and_risky_warnings` (+2→+3 safe text; +6→+7 "ลดเหลือ +5") · `test_not_enough_disables` · `test_worn_item_updates_stats_and_saves` · `test_ring_has_no_button`.
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement** to the approved sketch (artboard "ตีบวก").
-- [ ] **Step 4: Run** → pass; touch check adds tap ตีบวก.
-- [ ] **Step 5: Commit** `M3a Task 7: enhance window`.
+- [x] **Step 1: Failing tests** `test_safe_and_risky_warnings` (+2→+3 safe text; +6→+7 "ลดเหลือ +5") · `test_not_enough_disables` · `test_worn_item_updates_stats_and_saves` · `test_ring_has_no_button`.
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement** to the approved sketch (artboard "ตีบวก").
+- [x] **Step 4: Run** → pass; touch check adds tap ตีบวก.
+- [x] **Step 5: Commit** `M3a Task 7: enhance window`.
 
 ### Task 8: Screenshots, verification, PR, review
 

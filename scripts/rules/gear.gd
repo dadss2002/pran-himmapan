@@ -102,6 +102,23 @@ static func totals(equipped: Dictionary) -> Dictionary:
 	t.mp = int(round(t.mp))
 	return t
 
+## Main stats of one item after its ตีบวก bonus: atk/def float, hp whole. Missing stats are absent.
+static func main_stats(it: Dictionary, plus := -1) -> Dictionary:
+	var b := base(String(it.base))
+	var up := 1.0 + Enhance.bonus(int(it.get("plus", 0)) if plus < 0 else plus)
+	var out := {}
+	if b.has("atk"): out["atk"] = float(b.atk) * up
+	if b.has("def"): out["def"] = float(b.def) * up
+	if b.has("hp"): out["hp"] = int(round(float(b.hp) * up))
+	return out
+
+## "ATK +17.9 · HP +47" (one decimal, trimmed)
+static func main_text(stats: Dictionary) -> String:
+	var parts: Array = []
+	for k in ["atk", "def", "hp"]:
+		if stats.has(k): parts.append("%s +%s" % [k.to_upper(), _trim(snappedf(float(stats[k]), 0.1))])
+	return " · ".join(parts)
+
 ## "ธนูเขาควาย +6" (no suffix at +0)
 static func item_name(it: Dictionary) -> String:
 	var p := int(it.get("plus", 0))
