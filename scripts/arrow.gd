@@ -8,11 +8,16 @@ var atk := 0.0
 var travelled := 0.0
 var spent := false
 var targets: Array = []
+var mult := 1.0
+var pierce := false     # ศรทะลวง: hits every enemy in its line once and keeps flying
+var _hit := {}
 
-func launch(direction: Vector2, attack: float, enemies: Array = []) -> void:
+func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier := 1.0, pierce_all := false) -> void:
 	dir = direction.normalized()
 	atk = attack
 	targets = enemies
+	mult = multiplier
+	pierce = pierce_all
 	rotation = dir.angle()  # art points east
 
 func advance(delta: float) -> void:
@@ -23,10 +28,12 @@ func advance(delta: float) -> void:
 	position += dir * stepd
 	travelled += stepd
 	for t in targets:
-		if is_instance_valid(t) and t.is_alive() and _pos().distance_to(t.hurt_point()) <= radius:
-			t.receive_hit(atk, 1.0, _pos())
-			_finish()
-			return
+		if is_instance_valid(t) and t.is_alive() and not _hit.has(t) and _pos().distance_to(t.hurt_point()) <= radius:
+			t.receive_hit(atk, mult, _pos())
+			if not pierce:
+				_finish()
+				return
+			_hit[t] = true
 	if travelled >= range_px - 0.0001:
 		_finish()
 

@@ -44,13 +44,13 @@ func _notification(what: int) -> void:
 
 func build_default() -> void:
 	_add("shoot", "attack", Vector2(584, 302), 34, "res://assets/skills/basic_shot.png", true, "ยิง")
-	_add("skill1", "", Vector2(506, 302), 20, "res://assets/skills/piercing.png", false, "เร็ว ๆ นี้")
-	_add("skill2", "", Vector2(516.5, 263), 20, "res://assets/skills/spread.png", false, "Lv3")
+	_add("skill1", "skill_1", Vector2(506, 302), 20, "res://assets/skills/piercing.png", true, "")
+	_add("skill2", "skill_2", Vector2(516.5, 263), 20, "res://assets/skills/spread.png", false, "Lv3")
 	_add("skill3", "", Vector2(545, 234.5), 20, "res://assets/skills/arrow_rain.png", false, "Lv7")
 	_add("skill4", "", Vector2(584, 224), 20, "res://assets/skills/slot_empty.png", false, "")
 	_add("dodge", "dodge", Vector2(447, 314), 23, "res://assets/skills/dodge.png", true, "กลิ้ง")
-	_add("potion_hp", "", Vector2(394, 321), 17, "res://assets/items/potion_hp.png", false, "0")
-	_add("potion_mp", "", Vector2(355, 321), 17, "res://assets/items/potion_mp.png", false, "0")
+	_add("potion_hp", "potion_hp", Vector2(394, 321), 17, "res://assets/items/potion_hp.png", true, "5")
+	_add("potion_mp", "potion_mp", Vector2(355, 321), 17, "res://assets/items/potion_mp.png", true, "3")
 
 func _add(name: String, action: String, c: Vector2, r: float, icon: String, enabled: bool, note: String) -> void:
 	buttons[name] = {"action": action, "center": c, "radius": r, "enabled": enabled, "note": note}
@@ -66,6 +66,16 @@ func _add(name: String, action: String, c: Vector2, r: float, icon: String, enab
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	s.show_behind_parent = true   # icons under the rings / cooldown shade drawn in _draw
 	add_child(s)
+
+## Live state from the HUD: locked/unusable buttons grey out and ignore touches.
+func set_state(name: String, enabled: bool, note: String) -> void:
+	var b: Dictionary = buttons[name]
+	if b.enabled == enabled and b.note == note: return
+	b.enabled = enabled
+	b.note = note
+	var i := buttons.keys().find(name)
+	get_child(i).material.set_shader_parameter("dim", 0.0 if enabled else 0.75)
+	queue_redraw()
 
 func center_of(name: String) -> Vector2:
 	return buttons[name].center

@@ -27,6 +27,12 @@ var spawn_point := Vector2.ZERO
 var external_input := Vector2.ZERO   # touch joystick, added to keyboard input
 var test_enemies: Array = []  # used instead of the "enemies" group when not in a tree
 var inventory := Inventory.new()
+var _skill_cd := {}
+var _pending_skill := ""
+var _potion_cd := 0.0
+
+func _init() -> void:
+	inventory.from_dict(SaveGame.new_state().inventory)   # start kit (save loading replaces it)
 
 @onready var body: AnimatedSprite2D = $Body
 @onready var bow: BowLayer = $Bow
@@ -96,15 +102,54 @@ func stats() -> Dictionary:
 # ---------- actions ----------
 
 func try_shoot() -> bool:
-	if cooldown > 0.0 or state in ["roll", "hurt", "dead"]:
+	if cooldown > 0.0 or state in ["roll", "hurt", "dead", "shoot"]:
 		return false
 	cooldown = Balance.num("shot.cooldown")
+	_pending_skill = ""
 	state = "shoot"
 	_t = 0.0
 	_released = false
 	velocity = Vector2.ZERO
 	_aim()
 	_refresh(true)
+	return true
+
+func skill_cooldown_left(id: String) -> float:
+	return _skill_cd.get(id, 0.0)
+
+func potion_cooldown_left() -> float:
+	return _potion_cd
+
+## ศรทะลวง / ศรกระจาย: needs the unlock level, no cooldown, enough MP, and a free hero.
+## Refusing never spends MP.
+func try_skill(id: String) -> bool:
+	if state in ["roll", "hurt", "dead", "shoot"]: return false
+	if level < Skills.unlock_level(id): return false
+	if _skill_cd.get(id, 0.0) > 0.0: return false
+	if mp < Skills.mp_cost(id): return false
+	mp -= Skills.mp_cost(id)
+	_skill_cd[id] = Skills.cooldown(id, level)
+	_pending_skill = id
+	state = "shoot"
+	_t = 0.0
+	_released = false
+	velocity = Vector2.ZERO
+	_aim()
+	_refresh(true)
+	return true
+
+## Potions heal 40% of max HP or MP; one shared cooldown.
+func try_potion(kind: String) -> bool:
+	if state == "dead" or _potion_cd > 0.0: return false
+	var item := "potion_" + kind
+	if inventory.count_of(item) <= 0: return false
+	var frac := Balance.num("potion.heal_frac")
+	if kind == "hp":
+		health.hp = mini(health.max_hp, health.hp + int(round(frac * health.max_hp)))
+	else:
+		mp = minf(max_mp(), mp + frac * max_mp())
+	inventory.remove(item, 1)
+	_potion_cd = Balance.num("potion.cooldown")
 	return true
 
 func try_dodge(dir: Vector2) -> bool:
@@ -145,6 +190,8 @@ func receive_hit(atk: float, mult: float, from: Vector2) -> int:
 func step(delta: float, input: Vector2) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
 	_dodge_cd = maxf(0.0, _dodge_cd - delta)
+	_potion_cd = maxf(0.0, _potion_cd - delta)
+	for k in _skill_cd: _skill_cd[k] = maxf(0.0, _skill_cd[k] - delta)
 	health.tick(delta)
 	if state != "dead":
 		mp = minf(max_mp(), mp + Balance.num("mp.regen") * delta)
@@ -188,6 +235,10 @@ func _physics_process(delta: float) -> void:
 	input = input.limit_length(1.0)
 	if Input.is_action_just_pressed("dodge"):
 		try_dodge(input)
+	if Input.is_action_just_pressed("skill_1"): try_skill("piercing")
+	if Input.is_action_just_pressed("skill_2"): try_skill("spread")
+	if Input.is_action_just_pressed("potion_hp"): try_potion("hp")
+	if Input.is_action_just_pressed("potion_mp"): try_potion("mp")
 	if Input.is_action_pressed("attack"):
 		try_shoot()
 	step(delta, input)
@@ -276,9 +327,22 @@ func _release() -> void:
 	var v := _aim_vec
 	if is_instance_valid(_aim_target) and _aim_target.is_alive():
 		v = (_aim_target.hurt_point() - start).normalized()
+	match _pending_skill:
+		"piercing":
+			_fire(start, v, Skills.damage_mult("piercing", level), true)
+		"spread":
+			var n := int(Balance.num("skills.spread.arrows"))
+			var fan := deg_to_rad(Balance.num("skills.spread.fan_deg"))
+			for i in n:
+				_fire(start, v.rotated(-fan / 2.0 + fan * i / (n - 1)), Skills.damage_mult("spread", level), false)
+		_:
+			_fire(start, v, 1.0, false)
+	_pending_skill = ""
+
+func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool) -> void:
 	var a: Arrow = ARROW_SCENE.instantiate()
 	a.position = start
-	a.launch(v, stats().atk, _enemies())
+	a.launch(v, stats().atk, _enemies(), mult, pierce)
 	if is_inside_tree():
 		get_parent().add_child(a)
 	shot.emit(a)

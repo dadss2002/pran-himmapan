@@ -69,7 +69,7 @@ func test_multitouch_joystick_and_shoot():
 func test_locked_buttons_do_nothing():
 	var b := TouchButtons.new()
 	b.build_default()
-	b.handle_touch(5, b.center_of("skill1"), true)
+	b.handle_touch(5, b.center_of("skill2"), true)
 	var r := "" if b.pressed_names().is_empty() else "locked skill button reacted"
 	b.free()
 	return r
@@ -142,4 +142,19 @@ func test_buttons_follow_wide_screen():
 	j.handle_touch(0, Vector2(390, 250), true)
 	if r == "" and not j.active: r = "joystick zone should grow with the screen (x 390 < 400)"
 	b.free(); j.free()
+	return r
+
+func test_hud_unlocks_spread_at_lv3():
+	var hero: Hero = load("res://scenes/hero.tscn").instantiate()
+	hero.setup_sprites()
+	var hud := Hud.new()
+	hud.build()
+	hud.bind(hero)
+	var r := ""
+	if hud.buttons.buttons["skill2"].enabled: r = "spread usable at Lv1"
+	hero.set_progress(3, 0)
+	hud.refresh()
+	if r == "" and not hud.buttons.buttons["skill2"].enabled: r = "spread still locked at Lv3"
+	if r == "" and hud.buttons.buttons["potion_hp"].note != "5": r = "potion count label '%s'" % hud.buttons.buttons["potion_hp"].note
+	hud.free(); hero.free()
 	return r
