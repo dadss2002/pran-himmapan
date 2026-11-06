@@ -79,7 +79,12 @@
     "hit_knockback": 6,
     "hit_flash": 0.1,
     "death_fade": 0.6,
-    "respawn": 20
+    "respawn": 20,
+    "chase_slot": 14,
+    "stop_factor": 0.8,
+    "wander_pause": 1.5,
+    "pack_spacing": 20,
+    "pack_ring": 26
   },
   "packs": [
     {

@@ -4,3 +4,4 @@
 *.translation
 export_presets.cfg.bak
 /build/
+build/

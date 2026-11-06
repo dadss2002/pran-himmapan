@@ -17,10 +17,22 @@ var exp_bar: ProgressBar
 var joystick: TouchJoystick
 var buttons: TouchButtons
 var touch_ui: Node
+var dim: ColorRect
+var top_right: HBoxContainer
+const DEAD_DIM := 0.6
 
 func _ready() -> void:
 	if hp_label == null:
 		build()
+	layout(get_viewport().get_visible_rect().size)
+	get_viewport().size_changed.connect(func(): layout(get_viewport().get_visible_rect().size))
+
+## Wider phones (aspect "expand"): keep the top-right block and EXP bar on the real edges.
+func layout(size: Vector2) -> void:
+	top_right.position.x = size.x - 6 - top_right.size.x
+	exp_bar.position = Vector2(0, size.y - 4)
+	exp_bar.size.x = size.x
+	exp_bar.custom_minimum_size.x = size.x
 
 func build() -> void:
 	layer = 10
@@ -75,6 +87,7 @@ func build() -> void:
 
 	# --- top-right: gold, bag (M2c), minimap frame
 	var tr := HBoxContainer.new()
+	top_right = tr
 	tr.add_theme_constant_override("separation", 6)
 	tr.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	tr.position = Vector2(640 - 6 - 190, 6)
@@ -116,6 +129,13 @@ func build() -> void:
 	exp_bar.position = Vector2(0, 356)
 	root.add_child(exp_bar)
 
+	# --- death dim (design §5.3: screen goes dark while dead)
+	dim = ColorRect.new()
+	dim.color = Color(0, 0, 0, 0)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.add_child(dim)
+
 	# --- touch controls
 	touch_ui = Node2D.new()
 	touch_ui.name = "Touch"
@@ -146,6 +166,7 @@ func refresh() -> void:
 	if hero.level >= Progression.cap(): exp_bar.value = 100.0
 	else: exp_bar.value = 100.0 * hero.exp / float(Progression.exp_to_next(hero.level))
 	gold_label.text = str(hero.inventory.gold)
+	dim.color.a = DEAD_DIM if hero.state == "dead" else 0.0
 	buttons.set_cooldown("shoot", hero.cooldown, Balance.num("shot.cooldown"))
 	buttons.set_cooldown("dodge", hero.dodge_cooldown_left(), Balance.dodge(hero.level).cooldown)
 

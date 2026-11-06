@@ -16,6 +16,7 @@ var drops: Array = []
 var loot_rng := RandomNumberGenerator.new()
 var _built := false
 var _bag_full_cd := 0.0
+var lock_ring: FxSprite
 
 func _ready() -> void:
 	build()
@@ -59,6 +60,11 @@ func build() -> void:
 			wolf.health.damaged.connect(func(a, c): _on_wolf_hit(wolf, a, c))
 			wolf.died.connect(_on_wolf_died)
 		packs.append(pack)
+	lock_ring = FxSprite.make("lock_on", true)
+	lock_ring.visible = false
+	world.add_child(lock_ring)        # y-sorted: sits just above the target's feet line
+	world.move_child(lock_ring, 0)
+	lock_ring.play("lock_on")
 	hud = Hud.new()
 	add_child(hud)
 	if hud.hp_label == null: hud.build()
@@ -121,6 +127,11 @@ func _text(at: Vector2, t: String, c: Color) -> void:
 	d.size = Vector2(80, 16)
 	d.position = at - Vector2(20, 0)
 	add_child(d)
+func _process(_delta: float) -> void:
+	if lock_ring == null or hero == null: return
+	var t := hero.current_target() if hero.state != "dead" else null
+	lock_ring.visible = t != null
+	if t: lock_ring.global_position = t.global_position - Vector2(0, 0.5)
 
 func _number(at: Vector2, amount: int, crit: bool, hurt: bool) -> void:
 	if not is_inside_tree(): return

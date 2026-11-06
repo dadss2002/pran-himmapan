@@ -201,23 +201,25 @@ func _chase(delta: float) -> void:
 		_face(_lunge_dir)
 		_show_telegraph(true, target)
 		return
-	# run toward a slot around the hero so the pack spreads out
+	# run toward a slot around the hero (inside bite range) so the pack spreads out;
+	# stop by the distance to the hero itself, never short of bite range
 	var slot := Vector2.ZERO
 	if pack and pack.wolves.size() > 1:
-		slot = Vector2(26, 0).rotated(TAU * pack.wolves.find(self) / pack.wolves.size())
-	var to := _hpos() + slot - _pos()
-	var stop := n("bite_range") * 0.8
-	if to.length() > stop:
-		_move(to.normalized() * n("run"), minf(delta, (to.length() - stop) / n("run")))
-	else:
+		slot = Vector2(n("chase_slot"), 0).rotated(TAU * pack.wolves.find(self) / pack.wolves.size())
+	var stop := n("bite_range") * n("stop_factor")
+	if d <= stop:
 		velocity = Vector2.ZERO
 		_face(_hpos() - _pos())
+		return
+	var to := _hpos() + slot - _pos()
+	if to.length() < 1.0: to = _hpos() - _pos()
+	_move(to.normalized() * n("run"), minf(delta, maxf(to.length(), d - stop) / n("run")))
 
 func _wander(delta: float) -> void:
 	var to := _wander_to - _pos()
 	if to.length() < 2.0:
 		velocity = Vector2.ZERO
-		if _t > 1.5:
+		if _t > n("wander_pause"):
 			_t = 0.0
 			var r := n("wander_radius")
 			_wander_to = home + Vector2(randf_range(-r, r), randf_range(-r * 0.6, r * 0.6))

@@ -97,5 +97,19 @@
     ],
     "loop": false,
     "pixellab": "c54f014c-928a-4b98-84e0-d5f76e1151c8"
+  },
+  "lock_on": {
+    "cell": [
+      50,
+      32
+    ],
+    "frames": 32,
+    "fps": 16,
+    "anchor": [
+      25,
+      16
+    ],
+    "loop": true,
+    "pixellab": "aed3bdd1-9a64-4a87-af1a-4526bbb92bf2"
   }
 }

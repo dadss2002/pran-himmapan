@@ -24,7 +24,7 @@ func spawn() -> void:
 		w.level = level
 		w.pack = self
 		w.home = home
-		w.position = home + Vector2(26, 0).rotated(TAU * i / count) * Vector2(1, 0.7)
+		w.position = home + Vector2(Balance.num("wolf.pack_ring"), 0).rotated(TAU * i / count) * Vector2(1, 0.7)
 		add_child(w)
 		w.setup()
 		w.died.connect(_on_wolf_died)
@@ -54,7 +54,6 @@ func tick(delta: float) -> void:
 			_respawn.erase(w)
 			w.revive()
 
-const SPACING := 26.0
 
 func step_all(delta: float, h: Hero) -> void:
 	for w in wolves:
@@ -72,9 +71,9 @@ func _separate() -> void:
 			if a.state in ["lunge_warn", "lunge"] or b.state in ["lunge_warn", "lunge"]: continue
 			var d := b.position - a.position
 			var dist := d.length()
-			if dist < SPACING:
+			if dist < Balance.num("wolf.pack_spacing"):
 				var dir := d.normalized() if dist > 0.01 else Vector2.RIGHT
-				var push := dir * minf((SPACING - dist) * 0.5, 1.5)
+				var push := dir * minf((Balance.num("wolf.pack_spacing") - dist) * 0.5, 1.5)
 				a.push(-push)
 				b.push(push)
 

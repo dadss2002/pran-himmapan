@@ -9,7 +9,7 @@ const KNOB := 18.0
 const DEADZONE := 6.0
 const IDLE_ALPHA := 0.2
 const ACTIVE_ALPHA := 0.85
-const IDLE_CENTER := Vector2(92, 240)
+const IDLE_CENTER := Vector2(92, 240)   # in a 640×360 view; follows the bottom-left corner
 const TOP_BAR := 56.0
 
 var view_size := Vector2(640, 360)
@@ -22,13 +22,26 @@ var _index := -1
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	view_size = get_viewport_rect().size
+	get_viewport().size_changed.connect(func(): view_size = get_viewport_rect().size; reset())
 	reset()
+
+func idle_center() -> Vector2:
+	return Vector2(IDLE_CENTER.x, view_size.y - (360.0 - IDLE_CENTER.y))
+
+## App/tab lost focus mid-touch: the release may never arrive.
+func release_all() -> void:
+	reset()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		release_all()
 
 func reset() -> void:
 	active = false
 	vector = Vector2.ZERO
-	center = IDLE_CENTER
-	knob = IDLE_CENTER
+	center = idle_center()
+	knob = center
 	_index = -1
 	queue_redraw()
 

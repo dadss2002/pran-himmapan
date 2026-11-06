@@ -270,3 +270,18 @@ func test_no_damage_while_dead_or_respawning():
 	if r == "" and h.receive_hit(10, 1.0, Vector2.ZERO) <= 0: r = "hit after 2 s should land"
 	_cleanup(h)
 	return r
+
+func test_current_target_for_lock_ring():
+	var h := _combat_hero()
+	var a := _dummy(Vector2(150, 0))
+	var b := _dummy(Vector2(0, 90))
+	var c := _dummy(Vector2(400, 0))
+	h.test_enemies = [a, b, c]
+	var r := ""
+	if h.current_target() != b: r = "nearest in range should be b"
+	b.alive = false
+	if r == "" and h.current_target() != a: r = "after b dies the ring should move to a"
+	a.alive = false
+	if r == "" and h.current_target() != null: r = "nothing in range -> no ring"
+	_cleanup(h, [a, b, c])
+	return r

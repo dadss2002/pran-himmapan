@@ -175,7 +175,9 @@ func step(delta: float, input: Vector2) -> void:
 			if input.length() > 0.01:
 				facing = Combat.facing_from_vector(input, facing)
 				state = "walk"
-				_move(input.normalized() * Balance.num("hero.walk"), delta)
+				velocity = input.normalized() * Balance.num("hero.walk")
+				if is_inside_tree(): move_and_slide()     # slide along posts while walking
+				else: position += velocity * delta
 			else:
 				velocity = Vector2.ZERO
 				state = "idle"
@@ -236,6 +238,19 @@ func _enemies() -> Array:
 func _arrow_origin() -> Vector2:
 	var v := BowLayer.dir_vector(facing)
 	return _pos() + BowLayer.CHEST + Vector2(v.x, v.y * 0.6) * 18.0
+
+## The enemy a shot would lock on to right now (nearest live one within shot.range), or null.
+func current_target() -> Node2D:
+	var live: Array = []
+	var pts: Array = []
+	var hps: Array = []
+	for e in _enemies():
+		if is_instance_valid(e) and e.is_alive():
+			live.append(e)
+			pts.append(e.hurt_point())
+			hps.append(e.hp if "hp" in e else 0)
+	var i := Combat.pick_target(_pos(), pts, hps, Balance.num("shot.range"))
+	return live[i] if i >= 0 else null
 
 ## Lock on to the nearest live enemy within shot.range and turn to face it.
 func _aim() -> void:
