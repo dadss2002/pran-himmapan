@@ -39,6 +39,8 @@ var _d_sub: Label
 var _d_main: Label
 var _d_lines: VBoxContainer
 var _d_action: Button
+var _d_enhance: Button
+var enhance_panel: EnhancePanel
 var _close_button: Button
 
 func _ready() -> void:
@@ -62,6 +64,7 @@ func open(h: Hero) -> void:
 	if is_inside_tree(): get_tree().paused = true
 
 func close() -> void:
+	if enhance_panel and enhance_panel.is_open(): enhance_panel.close()
 	visible = false
 	if is_inside_tree(): get_tree().paused = false
 	closed.emit()
@@ -124,7 +127,7 @@ func _select_first() -> void:
 ## Everything the detail panel shows: name, color, sub, main, lines [{text, color}],
 ## action (button text, "" = no button) and action_ok.
 func selected_detail() -> Dictionary:
-	var d := {"name": "", "color": TEXT, "sub": "", "main": "", "lines": [], "action": "", "action_ok": false, "icon": ""}
+	var d := {"name": "", "color": TEXT, "sub": "", "main": "", "lines": [], "action": "", "action_ok": false, "icon": "", "enhance": false}
 	if hero == null or not _sel_valid(): return d
 	_detail_body(d)
 	if _notice != "": d.lines.append({"text": _notice, "color": DOWN})
@@ -156,6 +159,15 @@ func _detail_body(d: Dictionary) -> void:
 			d.action = "สวมใส่"
 			d.action_ok = true
 		return
+	if s.has("gem"):
+		var g: Dictionary = s.gem
+		d.name = "%s Lv%d" % [Gem.display_name(String(g.type)), int(g.level)]
+		d.color = Gear.rarity_color(String(g.rarity))
+		d.sub = "ระดับ %s · ป้าย%s · MP ×%s" % [Gear.rarity_name(String(g.rarity)), Gem.label_text(String(g.type)), Gear._trim(Gem.mp_mult(String(g.type)))]
+		d.main = Gem.describe_effect(g)
+		for o in g.get("opts", []): d.lines.append({"text": Gem.describe_option(o), "color": UP})
+		d.lines.append({"text": "ใส่ได้ที่หน้าสกิล (ปุ่ม \"สกิล\")", "color": DIM_TEXT})
+		return
 	var t: Dictionary = _items_text().get(String(s.id), {})
 	d.name = String(t.get("name", s.id))
 	d.sub = "%s · มี %d" % [t.get("sub", ""), int(s.count)]
@@ -169,26 +181,24 @@ func _detail_body(d: Dictionary) -> void:
 	else:
 		d.main = String(t.get("main", ""))
 		if String(s.id).begins_with("gem_"):
-			d.lines.append({"text": "ใส่เจมในสกิลได้ในเฟสถัดไป", "color": DIM_TEXT})
+			d.lines.append({"text": "ใส่ได้ที่หน้าสกิล (ปุ่ม \"สกิล\")", "color": DIM_TEXT})
 
 func _gear_detail(d: Dictionary, it: Dictionary) -> void:
 	var base := String(it.base)
 	d.icon = LootDrop.icon_path(base)
-	d.name = Gear.display_name(base)
+	d.name = Gear.item_name(it)
 	d.color = Gear.rarity_color(String(it.rarity))
+	d.enhance = Enhance.can(it)
 	d.sub = "ระดับ %s · %s · ใช้ได้ Lv%d" % [Gear.rarity_name(String(it.rarity)), SLOT_NAMES.get(Gear.slot_of(base), ""), Gear.req_level(base)]
-	d.main = _main_text(base)
+	d.main = _main_text(it)
 	for o in it.get("opts", []):
 		var line := Gear.describe_option(o)
-		if o.k == "element_dmg": line += " (ยังไม่มีผล)"
+		if o.k == "element_dmg": line += " (ใช้กับเจมธาตุ)"
 		d.lines.append({"text": line, "color": UP})
 
-func _main_text(base: String) -> String:
-	var b := Gear.base(base)
-	var parts: Array = []
-	for k in ["atk", "def", "hp"]:
-		if b.has(k): parts.append("%s +%d" % [k.to_upper(), int(b[k])])
-	return " · ".join(parts) if not parts.is_empty() else "ไม่มีค่าหลัก ใช้ออฟชั่นสุ่ม"
+func _main_text(it: Dictionary) -> String:
+	var t := Gear.main_text(Gear.main_stats(it))
+	return t if t != "" else "ไม่มีค่าหลัก ใช้ออฟชั่นสุ่ม"
 
 ## "เทียบที่ใส่อยู่: ATK +8 ▲" per main stat, green when better, red when worse.
 func _compare(d: Dictionary, it: Dictionary) -> void:
@@ -202,14 +212,25 @@ func _compare(d: Dictionary, it: Dictionary) -> void:
 		for o in worn.get("opts", []): parts.append(Gear.describe_option(o))
 		d.lines.append({"text": "ที่ใส่อยู่: " + (", ".join(parts) if not parts.is_empty() else "ไม่มีออฟชั่น"), "color": DIM_TEXT})
 		return
-	var a := Gear.base(String(it.base))
-	var b := Gear.base(String(worn.base))
+	var a := Gear.main_stats(it)
+	var b := Gear.main_stats(worn)
 	for k in ["atk", "def", "hp"]:
 		if not (a.has(k) or b.has(k)): continue
-		var diff := int(a.get(k, 0)) - int(b.get(k, 0))
-		if diff > 0: d.lines.append({"text": "เทียบที่ใส่อยู่: %s +%d ▲" % [k.to_upper(), diff], "color": UP})
-		elif diff < 0: d.lines.append({"text": "เทียบที่ใส่อยู่: %s −%d ▼" % [k.to_upper(), -diff], "color": DOWN})
+		var diff := snappedf(float(a.get(k, 0)) - float(b.get(k, 0)), 0.1)
+		if diff > 0: d.lines.append({"text": "เทียบที่ใส่อยู่: %s +%s ▲" % [k.to_upper(), Gear._trim(diff)], "color": UP})
+		elif diff < 0: d.lines.append({"text": "เทียบที่ใส่อยู่: %s −%s ▼" % [k.to_upper(), Gear._trim(-diff)], "color": DOWN})
 		else: d.lines.append({"text": "เทียบที่ใส่อยู่: %s เท่าเดิม" % k.to_upper(), "color": DIM_TEXT})
+
+## Opens the ตีบวก window for the selected bow/armor (worn or in the bag). false when not possible.
+func press_enhance() -> bool:
+	if not selected_detail().enhance: return false
+	var ref := {"worn": String(_sel.worn)} if _sel.has("worn") else {"bag": int(_sel.bag)}
+	if enhance_panel == null:
+		enhance_panel = EnhancePanel.new()
+		enhance_panel.build()
+		add_child(enhance_panel)
+	enhance_panel.open(hero, ref)
+	return true
 
 ## Runs the detail button. "" on success, otherwise the reason.
 func press_action() -> String:
@@ -400,7 +421,22 @@ func build() -> void:
 	_d_action.focus_mode = Control.FOCUS_NONE
 	_d_action.add_theme_font_size_override("font_size", 12)
 	_d_action.pressed.connect(func(): press_action())
-	dv.add_child(_d_action)
+	var btns := HBoxContainer.new()
+	btns.add_theme_constant_override("separation", 6)
+	dv.add_child(btns)
+	_d_action.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btns.add_child(_d_action)
+	_d_enhance = Button.new()
+	_d_enhance.text = "ตีบวก"
+	_d_enhance.custom_minimum_size = Vector2(56, 32)
+	_d_enhance.focus_mode = Control.FOCUS_NONE
+	_d_enhance.add_theme_font_size_override("font_size", 12)
+	_d_enhance.pressed.connect(func(): press_enhance())
+	btns.add_child(_d_enhance)
+	enhance_panel = EnhancePanel.new()
+	enhance_panel.build()
+	enhance_panel.closed.connect(refresh)
+	add_child(enhance_panel)
 
 func _worn_button(slot: String) -> Button:
 	var b := Button.new()
@@ -431,7 +467,7 @@ func refresh() -> void:
 	_who.text = "พราน · Lv %d" % hero.level
 	for c in _stats.get_children(): c.free()
 	var st := hero.stats()
-	for pair in [["HP", str(st.hp)], ["MP", str(st.mp)], ["ATK", str(int(round(st.atk)))], ["DEF", str(st.def)],
+	for pair in [["HP", str(st.hp)], ["MP", str(st.mp)], ["ATK", str(int(round(st.atk)))], ["DEF", Gear._trim(float(st.def))],
 			["คริ", "%s%%" % Gear._trim(st.crit * 100.0)], ["ยิง", "%s/วิ" % Gear._trim(1.0 / st.shot_cd)]]:
 		var row := HBoxContainer.new()
 		row.add_child(_label(pair[0], 9, Color("#e8e2d4")))
@@ -453,7 +489,9 @@ func refresh() -> void:
 			var s: Dictionary = hero.inventory.slots[v[i]]
 			ic.texture = load(LootDrop.icon_path(String(s.id)))
 			q.text = str(s.count) if s.count > 1 else ""
-			var border := Gear.rarity_color(String(s.item.rarity)) if s.has("item") else Color("#9aa0a6")
+			var border := Color("#9aa0a6")
+			if s.has("item"): border = Gear.rarity_color(String(s.item.rarity))
+			elif s.has("gem"): border = Gear.rarity_color(String(s.gem.rarity))
 			_style_cell(c, border, true, _sel.get("bag", -1) == v[i])
 		else:
 			ic.texture = null
@@ -473,6 +511,8 @@ func refresh() -> void:
 	_d_main.text = d.main
 	for c in _d_lines.get_children(): c.free()
 	for l in d.lines: _d_lines.add_child(_label(l.text, 9, l.color))
+	_d_enhance.visible = d.enhance
+	UiKit.style_action(_d_enhance, true)
 	_d_action.visible = d.action != ""
 	_d_action.text = d.action
 	_d_action.disabled = not d.action_ok

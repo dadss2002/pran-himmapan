@@ -86,18 +86,43 @@ static func new_item(id: String) -> Dictionary:
 static func totals(equipped: Dictionary) -> Dictionary:
 	var t := {}
 	for k in Balance.data()["options"]: t[k] = 0.0   # includes the flat "hp", "def", "mp"
-	t["atk"] = 0
+	t["atk"] = 0.0
+	var hp_main := 0
 	for s in SLOTS:
 		var it = equipped.get(s)
 		if typeof(it) != TYPE_DICTIONARY: continue
 		var b := base(String(it.base))
-		t.atk += int(b.get("atk", 0))
-		t.def += float(b.get("def", 0))
-		t.hp += float(b.get("hp", 0))
+		var up := 1.0 + Enhance.bonus(int(it.get("plus", 0)))      # ตีบวก raises main stats only
+		t.atk += float(b.get("atk", 0)) * up
+		t.def += float(b.get("def", 0)) * up
+		hp_main += int(round(float(b.get("hp", 0)) * up))          # HP rounds per item
 		for o in it.get("opts", []):
 			t[o.k] += float(o.v)
-	for k in WHOLE: t[k] = int(round(t[k]))
+	t.hp = int(round(t.hp)) + hp_main
+	t.mp = int(round(t.mp))
 	return t
+
+## Main stats of one item after its ตีบวก bonus: atk/def float, hp whole. Missing stats are absent.
+static func main_stats(it: Dictionary, plus := -1) -> Dictionary:
+	var b := base(String(it.base))
+	var up := 1.0 + Enhance.bonus(int(it.get("plus", 0)) if plus < 0 else plus)
+	var out := {}
+	if b.has("atk"): out["atk"] = float(b.atk) * up
+	if b.has("def"): out["def"] = float(b.def) * up
+	if b.has("hp"): out["hp"] = int(round(float(b.hp) * up))
+	return out
+
+## "ATK +17.9 · HP +47" (one decimal, trimmed)
+static func main_text(stats: Dictionary) -> String:
+	var parts: Array = []
+	for k in ["atk", "def", "hp"]:
+		if stats.has(k): parts.append("%s +%s" % [k.to_upper(), _trim(snappedf(float(stats[k]), 0.1))])
+	return " · ".join(parts)
+
+## "ธนูเขาควาย +6" (no suffix at +0)
+static func item_name(it: Dictionary) -> String:
+	var p := int(it.get("plus", 0))
+	return display_name(String(it.base)) + (" +%d" % p if p > 0 else "")
 
 ## "ATK +5.2%", "คูลดาวน์สกิล −4.1%", "HP +34", "ฟื้น MP +0.8/วิ"
 static func describe_option(o: Dictionary) -> String:

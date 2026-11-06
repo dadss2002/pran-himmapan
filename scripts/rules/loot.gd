@@ -11,7 +11,8 @@ static func roll(kind: String, level: int, rng: RandomNumberGenerator) -> Array:
 		out.append({"id": "ore_himmapan", "count": 1})
 	if rng.randf() < Balance.num(t + ".gem"):
 		var gems: Array = Balance.data()["gems"]
-		out.append({"id": "gem_" + gems[rng.randi_range(0, gems.size() - 1)], "count": 1})
+		var type: String = gems[rng.randi_range(0, gems.size() - 1)]
+		out.append({"id": "gem_" + type, "count": 1, "gem": Gem.roll(type, rng)})
 	if Balance.has(t + ".gear") and rng.randf() < Balance.num(t + ".gear"):
 		var pool: Array = Balance.data()["gear_pool"][kind]
 		var base: String = pool[rng.randi_range(0, pool.size() - 1)]

@@ -1,16 +1,79 @@
 {
   "_doc": "Display text for stackable items in the bag (names and one-line descriptions; numbers come from balance.json). Gems: docs/gems.md §5.",
-  "potion_hp": {"name": "ยาฟื้น HP", "sub": "ยา", "kind": "potion"},
-  "potion_mp": {"name": "ยาฟื้น MP", "sub": "ยา", "kind": "potion"},
-  "ore_himmapan": {"name": "แร่หิมพานต์", "sub": "วัตถุดิบ", "main": "ใช้ตีบวกอุปกรณ์ (มาในเฟสถัดไป)", "kind": "material"},
-  "gem_split": {"name": "เจมแยกศร", "sub": "เจม · ป้ายลูกศร", "main": "ยิงเพิ่ม +2 ดอก แต่ละดอกแรง 60%", "kind": "material"},
-  "gem_ricochet": {"name": "เจมสะท้อน", "sub": "เจม · ป้ายลูกศร", "main": "ลูกศรเด้งต่ออีก 1 เป้า แรง 80%", "kind": "material"},
-  "gem_pierce": {"name": "เจมทะลุ", "sub": "เจม · ป้ายลูกศร", "main": "ทะลุเป้าเพิ่ม 2 ตัว", "kind": "material"},
-  "gem_homing": {"name": "เจมศรนำวิถี", "sub": "เจม · ป้ายลูกศร", "main": "ลูกศรวิ่งตามเป้า แรง 90%", "kind": "material"},
-  "gem_multiply": {"name": "เจมทวีคูณ", "sub": "เจม · ทุกสกิล", "main": "ดาเมจ ×1.35", "kind": "material"},
-  "gem_expand": {"name": "เจมขยาย", "sub": "เจม · ป้ายพื้นที่", "main": "วงกว้างขึ้น +30%", "kind": "material"},
-  "gem_extend": {"name": "เจมยืดเวลา", "sub": "เจม · ต่อเนื่อง/กับดัก", "main": "อยู่นานขึ้น +30%", "kind": "material"},
-  "gem_execute": {"name": "เจมพิฆาต", "sub": "เจม · ทุกสกิล", "main": "สกิลนี้คริ +15%", "kind": "material"},
-  "gem_leech": {"name": "เจมดูดเลือด", "sub": "เจม · ทุกสกิล", "main": "ฟื้นเลือด 3% ของดาเมจ", "kind": "material"},
-  "gem_element": {"name": "เจมธาตุ", "sub": "เจม · ทุกสกิล", "main": "เปลี่ยนธาตุ ดาเมจ ×1.1", "kind": "material"}
+  "potion_hp": {
+    "name": "ยาฟื้น HP",
+    "sub": "ยา",
+    "kind": "potion"
+  },
+  "potion_mp": {
+    "name": "ยาฟื้น MP",
+    "sub": "ยา",
+    "kind": "potion"
+  },
+  "ore_himmapan": {
+    "name": "แร่หิมพานต์",
+    "sub": "วัตถุดิบ",
+    "main": "ใช้ตีบวกธนูและชุด (แตะธนู/ชุดในกระเป๋า → ตีบวก)",
+    "kind": "material"
+  },
+  "gem_split": {
+    "name": "เจมแยกศร",
+    "sub": "เจม · ป้ายลูกศร",
+    "main": "ยิงเพิ่ม +2 ดอก แต่ละดอกแรง 60%",
+    "kind": "material"
+  },
+  "gem_ricochet": {
+    "name": "เจมสะท้อน",
+    "sub": "เจม · ป้ายลูกศร",
+    "main": "ลูกศรเด้งต่ออีก 1 เป้า แรง 80%",
+    "kind": "material"
+  },
+  "gem_pierce": {
+    "name": "เจมทะลุ",
+    "sub": "เจม · ป้ายลูกศร",
+    "main": "ทะลุเป้าเพิ่ม 2 ตัว",
+    "kind": "material"
+  },
+  "gem_homing": {
+    "name": "เจมศรนำวิถี",
+    "sub": "เจม · ป้ายลูกศร",
+    "main": "ลูกศรวิ่งตามเป้า แรง 90%",
+    "kind": "material"
+  },
+  "gem_multiply": {
+    "name": "เจมทวีคูณ",
+    "sub": "เจม · ทุกสกิล",
+    "main": "ดาเมจ ×1.35",
+    "kind": "material"
+  },
+  "gem_expand": {
+    "name": "เจมขยาย",
+    "sub": "เจม · ป้ายพื้นที่",
+    "main": "วงกว้างขึ้น +30%",
+    "kind": "material"
+  },
+  "gem_extend": {
+    "name": "เจมยืดเวลา",
+    "sub": "เจม · ต่อเนื่อง/กับดัก",
+    "main": "อยู่นานขึ้น +30%",
+    "kind": "material"
+  },
+  "gem_execute": {
+    "name": "เจมพิฆาต",
+    "sub": "เจม · ทุกสกิล",
+    "main": "สกิลนี้คริ +15%",
+    "kind": "material"
+  },
+  "gem_leech": {
+    "name": "เจมดูดเลือด",
+    "sub": "เจม · ทุกสกิล",
+    "main": "ฟื้นเลือด 3% ของดาเมจ",
+    "kind": "material"
+  },
+  "gem_element": {
+    "name": "เจมธาตุ",
+    "sub": "เจม · ทุกสกิล",
+    "main": "เปลี่ยนธาตุ ดาเมจ ×1.1",
+    "kind": "material"
+  }
 }

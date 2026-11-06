@@ -11,6 +11,8 @@ signal leveled_up(level: int)
 signal exp_changed()
 signal skill_released(id: String, at: Vector2)
 signal gear_changed()
+signal gems_changed()
+signal gem_leveled(gem: Dictionary)
 
 const MANIFEST := "res://assets/hero/manifest.json"
 const ARROW_SCENE := preload("res://scenes/arrow.tscn")
@@ -29,11 +31,13 @@ var spawn_point := Vector2.ZERO
 var external_input := Vector2.ZERO   # touch joystick, added to keyboard input
 var test_enemies: Array = []  # used instead of the "enemies" group when not in a tree
 var inventory := Inventory.new()
-var equipped := SaveGame.start_equipped()   # bow, armor, ring, necklace → item or null
+var equipped := SaveGame.start_equipped()
+var skill_gems := {"piercing": [], "spread": []}   # sockets: skill → [gem|null, …]   # bow, armor, ring, necklace → item or null
 var _skill_cd := {}
 var _pending_skill := ""
 var _exp_carry := 0.0          # fractional EXP from bonus %, kept so +2.4% is never rounded away
 var _gold_carry := 0.0
+var _leech_carry := 0.0
 var _queued_skill := ""      # pressed during a basic shot; starts once that arrow is out
 var _potion_cd := 0.0
 
@@ -92,6 +96,19 @@ func on_kill(monster_exp: int, monster_level: int) -> void:
 	var whole := int(floor(raw + 1e-6))
 	_exp_carry = raw - whole
 	gain_exp(whole)
+	for id in skill_gems:
+		for g in skill_gems[id]:
+			if g == null: continue
+			var amount := int(round(whole * (1.0 + Gem.option(g, "gem_exp"))))
+			if Gem.add_exp(g, amount) > 0: gem_leveled.emit(g)
+
+## Heals from ดูดเลือด; fractions carry so 3% of small hits still adds up.
+func leech_heal(amount: float) -> void:
+	if state == "dead": return
+	_leech_carry += amount
+	var whole := int(floor(_leech_carry + 1e-6))
+	_leech_carry -= whole
+	if whole > 0: health.hp = mini(health.max_hp, health.hp + whole)
 
 ## Gold from a drop with the gear bonus; the fraction carries to the next drop.
 func bonus_gold(amount: int) -> int:
@@ -110,6 +127,66 @@ func gain_exp(amount: int) -> void:
 		leveled_up.emit(level)
 	exp = r.exp
 	exp_changed.emit()
+
+# ---------- gems ----------
+
+## What a skill does now (level, gear and its gems).
+func build(skill_id: String) -> Dictionary:
+	return SkillBuild.of(skill_id, level, skill_gems.get(skill_id, []), stats())
+
+func skill_mp(skill_id: String) -> float:
+	return build(skill_id).mp
+
+func gem_slots(skill_id: String) -> int:
+	return Gem.slots_for(Skills.skill_level(skill_id, level))
+
+## Puts the gem in bag slot bag_index into a skill slot; a gem already there goes back to the bag.
+## Returns "" or the reason shown to the player.
+func socket(skill_id: String, slot: int, bag_index: int) -> String:
+	if level < Skills.unlock_level(skill_id): return "ยังไม่ปลด"
+	if slot < 0 or slot >= gem_slots(skill_id): return "ช่องยังไม่เปิด"
+	if bag_index < 0 or bag_index >= inventory.slots.size(): return "ไม่มีเจม"
+	var entry: Dictionary = inventory.slots[bag_index]
+	if not String(entry.id).begins_with("gem_") or entry.has("item"): return "ไม่ใช่เจม"
+	if not Gem.fits(String(entry.id).trim_prefix("gem_"), skill_id): return "ป้ายไม่ตรง"
+	var sockets: Array = skill_gems.get(skill_id, [])
+	while sockets.size() <= slot: sockets.append(null)
+	var type := String(entry.id).trim_prefix("gem_")
+	for i in sockets.size():
+		if i != slot and sockets[i] != null and String(sockets[i].type) == type: return "เจมชนิดนี้ใส่ในสกิลนี้แล้ว"
+	var old = sockets[slot]
+	var single: bool = entry.has("gem") or int(entry.count) == 1
+	# a gem coming out needs a place: the slot the new gem leaves, a plain stack, or a free slot
+	if old != null and not single and not inventory.has_free_slot() and not (Gem.is_plain(old) and _plain_stack_has_room(String(old.type))):
+		return "กระเป๋าเต็ม"
+	var taken := inventory.take_gem(bag_index)
+	if old != null:
+		if single and not Gem.is_plain(old):
+			inventory.slots.insert(mini(bag_index, inventory.slots.size()), {"id": "gem_" + String(old.type), "count": 1, "gem": old})
+		else:
+			inventory.add_gem(old)
+	sockets[slot] = taken
+	skill_gems[skill_id] = sockets
+	gems_changed.emit()
+	return ""
+
+func _plain_stack_has_room(type: String) -> bool:
+	for s in inventory.slots:
+		if s.id == "gem_" + type and not Inventory._unique(s) and int(s.count) < int(Balance.num("bag.stack")): return true
+	return false
+
+func unsocket(skill_id: String, slot: int) -> String:
+	var sockets: Array = skill_gems.get(skill_id, [])
+	if slot < 0 or slot >= sockets.size() or sockets[slot] == null: return "ช่องว่าง"
+	if not inventory.add_gem(sockets[slot]): return "กระเป๋าเต็ม"
+	sockets[slot] = null
+	gems_changed.emit()
+	return ""
+
+func set_skill_gems(sk: Dictionary) -> void:
+	skill_gems = {"piercing": [], "spread": []}
+	for id in sk: skill_gems[id] = sk[id].duplicate(true)
+	gems_changed.emit()
 
 # ---------- equipment ----------
 
@@ -206,7 +283,7 @@ func try_skill(id: String) -> bool:
 	if state in ["roll", "hurt", "dead"]: return false
 	if level < Skills.unlock_level(id): return false
 	if _skill_cd.get(id, 0.0) > 0.0: return false
-	if mp < Skills.mp_cost(id): return false
+	if mp < skill_mp(id): return false
 	if state == "shoot":
 		if _pending_skill != "": return false      # another skill is drawing
 		_queued_skill = id
@@ -423,33 +500,39 @@ func _release() -> void:
 		v = (_aim_target.hurt_point() - start).normalized()
 	if _pending_skill != "":
 		var id := _pending_skill
-		if mp < Skills.mp_cost(id):          # cannot happen today (MP only drops here); stay safe
+		var b := build(id)
+		if mp < b.mp:                         # cannot happen today (MP only drops here); stay safe
 			_pending_skill = ""
 			return
-		mp -= Skills.mp_cost(id)
-		_skill_cd[id] = Skills.cooldown(id, level, stats().skill_cd_cut)
+		mp -= b.mp
+		_skill_cd[id] = b.cooldown
 		skill_released.emit(id, start)
-	match _pending_skill:
-		"piercing":
-			_fire(start, v, Skills.damage_mult("piercing", level), true, Balance.num("skills.piercing.range"))
-		"spread":
-			var n := int(Balance.num("skills.spread.arrows"))
-			var fan := deg_to_rad(Balance.num("skills.spread.fan_deg"))
-			for i in n:
-				_fire(start, v.rotated(-fan / 2.0 + fan * i / (n - 1)), Skills.damage_mult("spread", level), false)
-		_:
-			_fire(start, v, 1.0, false)
+		var range_px := Balance.num("skills.%s.range" % id) if Balance.has("skills.%s.range" % id) else -1.0
+		var n := int(b.arrows)
+		var fan := deg_to_rad(b.fan_deg)
+		for i in n:
+			var dir := v if n == 1 else v.rotated(-fan / 2.0 + fan * i / (n - 1))
+			_fire(start, dir, b.arrow_mult, b.pierce_all, range_px, b)
+	else:
+		_fire(start, v, 1.0, false)
 	_pending_skill = ""
 
-func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1.0) -> void:
+func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1.0, b := {}) -> void:
 	var a: Arrow = ARROW_SCENE.instantiate()
 	a.position = start
 	var st := stats()
 	a.launch(v, st.atk, _enemies(), mult, pierce, range_px)
-	a.crit_chance = st.crit
+	a.crit_chance = float(b.get("crit", st.crit))
 	a.crit_mult = st.crit_mult
+	if not b.is_empty():
+		a.configure(b, self)
+		a.spawned.connect(_on_arrow_spawned)
 	if is_inside_tree():
 		get_parent().add_child(a)
+	shot.emit(a)
+
+func _on_arrow_spawned(a: Arrow) -> void:
+	a.spawned.connect(_on_arrow_spawned)
 	shot.emit(a)
 
 # ---------- visuals ----------

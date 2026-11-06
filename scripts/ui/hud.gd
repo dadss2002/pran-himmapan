@@ -19,6 +19,8 @@ var buttons: TouchButtons
 var touch_ui: Node
 var bag_panel: BagPanel
 var bag_button: Button
+var skill_panel: SkillPanel
+var skills_button: Button
 var dim: ColorRect
 var top_right: HBoxContainer
 const DEAD_DIM := 0.6
@@ -92,8 +94,8 @@ func build() -> void:
 	top_right = tr
 	tr.add_theme_constant_override("separation", 6)
 	tr.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	tr.position = Vector2(640 - 6 - 190, 6)
-	tr.size = Vector2(190, 56)
+	tr.position = Vector2(640 - 6 - 232, 6)
+	tr.size = Vector2(232, 56)
 	tr.alignment = BoxContainer.ALIGNMENT_END
 	root.add_child(tr)
 	var gold := HBoxContainer.new()
@@ -110,6 +112,15 @@ func build() -> void:
 	gold_panel.add_child(gold)
 	gold_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	tr.add_child(gold_panel)
+	var sk := Button.new()
+	sk.text = "สกิล"
+	sk.focus_mode = Control.FOCUS_NONE
+	sk.add_theme_font_size_override("font_size", 8)
+	sk.custom_minimum_size = Vector2(36, 30)
+	sk.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	sk.pressed.connect(open_skills)
+	skills_button = sk
+	tr.add_child(sk)
 	var bag := Button.new()
 	bag.text = "กระเป๋า"
 	bag.focus_mode = Control.FOCUS_NONE
@@ -153,6 +164,9 @@ func build() -> void:
 	bag_panel = BagPanel.new()
 	bag_panel.build()
 	add_child(bag_panel)
+	skill_panel = SkillPanel.new()
+	skill_panel.build()
+	add_child(skill_panel)
 
 static func show_touch() -> bool:
 	return DisplayServer.is_touchscreen_available() or "--touch" in OS.get_cmdline_user_args()
@@ -160,10 +174,19 @@ static func show_touch() -> bool:
 func bind(h: Hero) -> void:
 	hero = h
 	bag_panel.hero = h
+	skill_panel.hero = h
+
+## Opens the skill · gem screen (touch input lets go first, like the bag).
+func open_skills() -> void:
+	if hero == null or skill_panel.is_open() or bag_panel.is_open(): return
+	joystick.release_all()
+	buttons.release_all()
+	hero.external_input = Vector2.ZERO
+	skill_panel.open(hero)
 
 ## Opens the bag; held touch buttons and the joystick let go first so nothing stays pressed.
 func open_bag() -> void:
-	if hero == null or bag_panel.is_open(): return
+	if hero == null or bag_panel.is_open() or skill_panel.is_open(): return
 	joystick.release_all()
 	buttons.release_all()
 	hero.external_input = Vector2.ZERO
@@ -183,22 +206,26 @@ func refresh() -> void:
 	else: exp_bar.value = 100.0 * hero.exp / float(Progression.exp_to_next(hero.level))
 	gold_label.text = str(hero.inventory.gold)
 	dim.color.a = DEAD_DIM if hero.state == "dead" else 0.0
-	var pierce_ok := hero.mp >= Skills.mp_cost("piercing")
-	buttons.set_state("skill1", pierce_ok, "" if pierce_ok else "MP")
+	var pierce_ok := hero.mp >= hero.skill_mp("piercing")
+	buttons.set_state("skill1", pierce_ok, _mp_note("piercing"))
 	if hero.level < Skills.unlock_level("spread"):
 		buttons.set_state("skill2", false, "Lv%d" % Skills.unlock_level("spread"))
 	else:
-		var spread_ok := hero.mp >= Skills.mp_cost("spread")
-		buttons.set_state("skill2", spread_ok, "" if spread_ok else "MP")
+		var spread_ok := hero.mp >= hero.skill_mp("spread")
+		buttons.set_state("skill2", spread_ok, _mp_note("spread"))
 	for k in ["hp", "mp"]:
 		var n := hero.inventory.count_of("potion_" + k)
 		buttons.set_state("potion_" + k, n > 0, str(n))
 		buttons.set_cooldown("potion_" + k, hero.potion_cooldown_left(), Balance.num("potion.cooldown"))
 	var st := hero.stats()
-	buttons.set_cooldown("skill1", hero.skill_cooldown_left("piercing"), Skills.cooldown("piercing", hero.level, st.skill_cd_cut))
-	buttons.set_cooldown("skill2", hero.skill_cooldown_left("spread"), Skills.cooldown("spread", hero.level, st.skill_cd_cut))
+	buttons.set_cooldown("skill1", hero.skill_cooldown_left("piercing"), hero.build("piercing").cooldown)
+	buttons.set_cooldown("skill2", hero.skill_cooldown_left("spread"), hero.build("spread").cooldown)
 	buttons.set_cooldown("shoot", hero.cooldown, st.shot_cd)
 	buttons.set_cooldown("dodge", hero.dodge_cooldown_left(), Balance.dodge(hero.level).cooldown)
+
+## "MP 11.2": the real cost after gems (dim button = not enough MP).
+func _mp_note(skill_id: String) -> String:
+	return "MP %s" % Gear._trim(snappedf(hero.skill_mp(skill_id), 0.1))
 
 func _process(_delta: float) -> void:
 	if hero == null: return

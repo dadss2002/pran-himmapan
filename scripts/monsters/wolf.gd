@@ -55,8 +55,19 @@ func setup() -> void:
 	_wander_to = home
 	_refresh(true)
 
+var status := StatusEffects.new()
+const STATUS_FX_SCALE := 1.5
+var _burn_fx: FxSprite = null
+var _frost_fx: FxSprite = null
+
 func stats() -> Dictionary:
 	return Balance.wolf(level)
+
+## Gem element effects: "burn" (damage per tick, leech fraction, source hero) or "slow".
+func apply_status(kind: String, value := 0.0, leech := 0.0, source: Object = null) -> void:
+	if not is_alive(): return
+	if kind == "burn": status.apply_burn(value, leech, source)
+	elif kind == "slow": status.apply_slow()
 
 func n(key: String) -> float:
 	return Balance.num("wolf." + key)
@@ -97,6 +108,7 @@ func start_chase(h: Hero) -> void:
 
 func revive() -> void:
 	health.setup(stats().hp)
+	status.clear()
 	_set_pos(home + Vector2(randf_range(-16, 16), randf_range(-12, 12)))
 	state = "idle"
 	_t = 0.0
@@ -108,7 +120,26 @@ func revive() -> void:
 	else: shape.disabled = false
 	_refresh(true)
 
+## Flames / ice crystals at the feet while burning / slowed (vfx_workbench strips).
+func _update_status_fx() -> void:
+	if not is_inside_tree(): return
+	_burn_fx = _toggle_fx(_burn_fx, "status_burn", status.is_burning() and is_alive())
+	_frost_fx = _toggle_fx(_frost_fx, "status_frost", status.is_slowed() and is_alive())
+
+func _toggle_fx(fx: FxSprite, fx_name: String, on: bool) -> FxSprite:
+	if on and fx == null:
+		fx = FxSprite.make(fx_name, true)
+		fx.scale = Vector2.ONE * STATUS_FX_SCALE   # the effects were drawn small; match the 80 px wolf
+		add_child(fx)
+		fx.play(fx_name)
+	elif not on and fx != null:
+		fx.queue_free()
+		fx = null
+	return fx
+
 func _on_died() -> void:
+	status.clear()
+	_update_status_fx()
 	_end_lunge()
 	state = "dead"
 	_t = 0.0
@@ -123,6 +154,14 @@ func _on_died() -> void:
 func step(delta: float, hero: Hero) -> void:
 	if hero != null: _hero = hero
 	health.tick(delta)
+	if is_alive():
+		var burn := status.tick(delta)
+		if burn > 0:
+			health.take_hit(burn, false)
+			if status.burn_leech > 0.0 and is_instance_valid(status.burn_source) and status.burn_source.has_method("leech_heal"):
+				status.burn_source.leech_heal(burn * status.burn_leech)
+			if not is_alive(): return
+	_update_status_fx()
 	_flash = maxf(0.0, _flash - delta)
 	_bite_cd = maxf(0.0, _bite_cd - delta)
 	_lunge_cd = maxf(0.0, _lunge_cd - delta)
@@ -265,6 +304,7 @@ func _set_pos(p: Vector2) -> void:
 	else: position = p
 
 func _move(v: Vector2, dt: float) -> void:
+	v *= status.speed_mult()         # ice gem slow: walk, run and lunge
 	velocity = v
 	_face(v)
 	if is_inside_tree(): move_and_collide(v * dt)

@@ -66,7 +66,7 @@ func test_save_v2_roundtrip_with_items():
 	SaveGame.save({"level": 3, "exp": 5, "inventory": inv.to_dict(), "equipped": eq}, TMP)
 	var s := SaveGame.load_or_new(TMP)
 	_cleanup()
-	if s.version != 2: return "version %s" % s.version
+	if s.version != SaveGame.VERSION: return "version %s" % s.version
 	if s.equipped.necklace.base != "necklace" or s.equipped.armor != null: return "equipped %s" % s.equipped
 	var it: Dictionary = s.inventory.slots[0].item
 	return "" if it.rarity == "epic" and it.opts.size() == 3 and is_equal_approx(float(it.opts[0].v), 0.012) else "item %s" % it
@@ -150,3 +150,104 @@ func test_save_clamps_item_level_and_options():
 	eq.ring = {"base": "ring", "rarity": "rare", "level": 3, "opts": [{"k": "hp", "v": 5}, {"k": "hp", "v": 5}]}
 	if r == "" and _save_with(eq, []).level != 1: r = "duplicate option keys should be rejected"
 	return r
+
+func _g(type: String, rarity := "rare", opts: Array = [{"k": "crit", "v": 0.03}], level := 3) -> Dictionary:
+	var g := {"type": type, "level": level, "exp": 40, "rarity": rarity, "opts": opts}
+	if type == "element": g["element"] = "fire"
+	return g
+
+func test_rolled_gems_take_own_slot():
+	var inv := Inventory.new()
+	inv.slots.clear()
+	inv.add_gem(_g("split"))
+	inv.add_gem(_g("split"))
+	inv.add("gem_split", 1)
+	var with_data := 0
+	for s in inv.slots:
+		if s.has("gem"): with_data += 1
+	var r := "" if with_data == 2 and inv.slots.size() == 3 else "slots %s" % [inv.slots]
+	for i in 22: inv.add("junk_%d" % i, 1)
+	if r == "" and inv.add_gem(_g("multiply")): r = "rolled gem added to a full bag"
+	return r
+
+func test_plain_gems_stack_and_split():
+	var inv := Inventory.new()
+	inv.slots.clear()
+	var plain := {"type": "split", "level": 1, "exp": 0, "rarity": "common", "opts": []}
+	inv.add_gem(plain)
+	inv.add_gem(plain.duplicate(true))
+	var r := ""
+	if inv.slots.size() != 1 or inv.slots[0].count != 2: r = "plain gems should stack: %s" % [inv.slots]
+	var g := inv.take_gem(0)
+	if r == "" and (g.type != "split" or g.level != 1 or inv.slots[0].count != 1): r = "split one off: %s / %s" % [g, inv.slots]
+	inv.add("gem_element", 1)
+	var e := inv.take_gem(inv.slots.size() - 1)
+	if r == "" and not (String(e.get("element", "")) in ["fire", "ice", "lightning"]): r = "plain element gem got no element when split off: %s" % e
+	return r
+
+func test_gem_drop_has_data():
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var seen := 0
+	for i in 20000:
+		for it in Loot.roll("wolf", 3, rng):
+			if String(it.id).begins_with("gem_"):
+				seen += 1
+				if not it.has("gem") or "gem_" + String(it.gem.type) != it.id: return "gem drop without data: %s" % it
+				var want := {"common": 0, "good": 1, "rare": 2, "epic": 3, "legend": 4}
+				if it.gem.opts.size() != want[it.gem.rarity]: return "%s gem has %d options" % [it.gem.rarity, it.gem.opts.size()]
+	return "" if seen > 100 else "only %d gems in 20000 kills" % seen
+
+func test_save_v3_roundtrip():
+	_cleanup()
+	var inv := Inventory.new()
+	inv.add_gem(_g("element"))
+	var eq := SaveGame.start_equipped()
+	eq.bow["plus"] = 4
+	var skills := {"piercing": [_g("multiply"), null], "spread": [null]}
+	SaveGame.save({"level": 5, "exp": 0, "inventory": inv.to_dict(), "equipped": eq, "skills": skills}, TMP)
+	var s := SaveGame.load_or_new(TMP)
+	_cleanup()
+	var r := ""
+	if s.version != 3: r = "version %s" % s.version
+	elif s.equipped.bow.plus != 4: r = "plus lost: %s" % s.equipped.bow
+	elif s.skills.piercing[0].type != "multiply" or s.skills.piercing[0].level != 3 or s.skills.piercing[1] != null: r = "sockets %s" % [s.skills]
+	else:
+		var g: Dictionary = s.inventory.slots.back().gem
+		if g.element != "fire" or g.exp != 40 or absf(float(g.opts[0].v) - 0.03) > 1e-6: r = "gem %s" % g
+	return r
+
+func test_v2_save_migrates():
+	_cleanup()
+	var slots := [{"id": "gem_split", "count": 3}, {"id": "gem_element", "count": 1}]
+	for i in 22: slots.append({"id": "potion_hp", "count": 99})
+	var eq := SaveGame.start_equipped()
+	var f := FileAccess.open(TMP, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"version": 2, "level": 6, "exp": 3, "inventory": {"gold": 10, "slots": slots}, "equipped": eq}))
+	f.close()
+	var s := SaveGame.load_or_new(TMP)
+	var bad := FileAccess.file_exists(TMP_BAD)
+	_cleanup()
+	if bad or s.level != 6: return "v2 save rejected: %s" % s
+	if s.inventory.slots.size() != 24 or s.inventory.slots[0].count != 3: return "bag changed: %d slots" % s.inventory.slots.size()
+	if s.equipped.bow.get("plus", -1) != 0: return "plus should default to 0"
+	return "" if typeof(s.get("skills")) == TYPE_DICTIONARY else "skills missing"
+
+func test_bad_gem_rejected():
+	var cases := [
+		{"inv": [{"id": "gem_zzz", "count": 1, "gem": _g("split")}]},
+		{"inv": [{"id": "gem_split", "count": 1, "gem": _g("split", "rare", [], 21)}]},
+		{"inv": [{"id": "gem_split", "count": 1, "gem": _g("split", "rare", [{"k": "crit", "v": 0.03}, {"k": "crit", "v": 0.02}])}]},
+		{"skills": {"piercing": [_g("expand")]}},
+		{"plus": 11},
+	]
+	for c in cases:
+		_cleanup()
+		var eq := SaveGame.start_equipped()
+		if c.has("plus"): eq.bow["plus"] = c.plus
+		SaveGame.save({"level": 3, "exp": 0, "inventory": {"gold": 0, "slots": c.get("inv", [])}, "equipped": eq, "skills": c.get("skills", {})}, TMP)
+		var s := SaveGame.load_or_new(TMP)
+		var kept := FileAccess.file_exists(TMP_BAD)
+		_cleanup()
+		if s.level != 1 or not kept: return "should start fresh: %s" % [c]
+	return ""
