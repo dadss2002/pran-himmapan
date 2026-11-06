@@ -126,32 +126,16 @@
   "packs": [
     {
       "level": 1,
-      "count": 4,
-      "at": [
-        480,
-        320
-      ]
+      "count": 4
     },
     {
       "level": 3,
-      "count": 3,
-      "at": [
-        1440,
-        320
-      ]
+      "count": 3
     },
     {
       "level": 5,
-      "count": 4,
-      "at": [
-        960,
-        1040
-      ]
+      "count": 4
     }
-  ],
-  "hero_spawn": [
-    960,
-    560
   ],
   "map_size": [
     1920,

@@ -115,3 +115,11 @@
 - [ ] **Step 2:** `xvfb-run -a $G --path . --rendering-driver opengl3 --script tests/screenshots_m3b.gd -- --touch`; look at every shot next to the reference.
 - [ ] **Step 3:** Full run `$G --headless --path . --script tests/run_tests.gd` → `RESULT passed=N failed=0`; `xvfb-run … tests/touch_check.gd` → `TOUCH PASS`.
 - [ ] **Step 4:** Budget table final total; PR (draft → ready) with group tags `[แผนที่]` `[พร็อพ]` `[ชน/Y-sort]` `[เครดิต]`, screenshots, real gen used; fresh reviewer on the whole branch; fix findings; report to the owner in Thai. No merge without an order.
+
+## ทำจริงต่างจากแผน (บันทึก 2026-11-07)
+- พื้นทั้ง 3 ชุดรวมเป็นรูปเดียว `assets/map/tiles/ground.png` (แถวละชุด) ใช้ TileMapLayer เดียวชื่อ Ground แทน 3 ชั้น · tile ของ PixelLab ตั้งบิตเมื่อมุมนั้นเป็น "หญ้า" จึงใช้ tile `mask ^ 15` (บันทึกใน manifest)
+- tile ที่ได้มีกรอบเข้ม 1px + เส้นเงาด้านใน → `tools/import_tileset.py` สะท้อนแถบ 2px จากด้านในทับ และเปลี่ยนสีพื้นป่าเทาฟ้าเป็นเขียวมอส (ฟรี) · tile เต็มช่องพลิกตามตำแหน่งให้ลายซ้ำน้อยลง
+- `ForestLayout.load` ชื่อ `open()` (load เป็นฟังก์ชันของ GDScript) · `walk` เป็นสี่เหลี่ยมหน่วย px (สะพานกว้าง 44 px แคบกว่า 1 ช่อง)
+- มุมที่ยื่นออกมามุมเดียว (ปลายวงรี) ถูกเกลี่ยกลับเป็นหญ้า เพื่อไม่ให้ขอบบ่อเป็นติ่ง
+- เลย์เอาต์สร้างจาก `tools/gen_forest_layout.py` (ต้นไม้ 2 แถวรอบขอบ + กลุ่มต้นไม้บนพื้นป่าทึบ) · เพิ่มกฎ: พร็อพที่ตั้งได้ห้ามยืนในน้ำ
+- พร็อพ: ดอกไม้ชุดที่ 3 เจน 2 ครั้งได้ภาพเกือบว่าง และพรมดอกแดงออกมาเป็นก้อนกลม → ไม่ใช้ทั้งคู่ · ใช้ gen รวม 49 (30 พื้น + 19 พร็อพ)
