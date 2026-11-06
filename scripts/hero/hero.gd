@@ -10,6 +10,7 @@ signal rolled(dir: Vector2)
 signal leveled_up(level: int)
 signal exp_changed()
 signal skill_released(id: String, at: Vector2)
+signal gear_changed()
 
 const MANIFEST := "res://assets/hero/manifest.json"
 const ARROW_SCENE := preload("res://scenes/arrow.tscn")
@@ -28,6 +29,7 @@ var spawn_point := Vector2.ZERO
 var external_input := Vector2.ZERO   # touch joystick, added to keyboard input
 var test_enemies: Array = []  # used instead of the "enemies" group when not in a tree
 var inventory := Inventory.new()
+var equipped := SaveGame.start_equipped()   # bow, armor, ring, necklace → item or null
 var _skill_cd := {}
 var _pending_skill := ""
 var _queued_skill := ""      # pressed during a basic shot; starts once that arrow is out
@@ -95,6 +97,38 @@ func gain_exp(amount: int) -> void:
 		leveled_up.emit(level)
 	exp = r.exp
 	exp_changed.emit()
+
+# ---------- equipment ----------
+
+## Wears the item in bag slot i; whatever was worn goes into that same bag slot.
+## Returns "" on success, otherwise the reason shown to the player.
+func equip(slot_index: int) -> String:
+	if slot_index < 0 or slot_index >= inventory.slots.size(): return "ไม่มีของ"
+	var entry: Dictionary = inventory.slots[slot_index]
+	if not entry.has("item"): return "สวมไม่ได้"
+	var it: Dictionary = entry.item
+	if level < Gear.req_level(it.base): return "ต้องเลเวล %d" % Gear.req_level(it.base)
+	var slot := Gear.slot_of(it.base)
+	var old = equipped.get(slot)
+	equipped[slot] = it
+	if old == null: inventory.slots.remove_at(slot_index)
+	else: inventory.slots[slot_index] = {"id": String(old.base), "count": 1, "item": old}
+	_on_gear_changed()
+	return ""
+
+func unequip(slot: String) -> String:
+	if equipped.get(slot) == null: return "ไม่ได้สวม"
+	if not inventory.add_item(equipped[slot]): return "กระเป๋าเต็ม"
+	equipped[slot] = null
+	_on_gear_changed()
+	return ""
+
+func set_equipped(eq: Dictionary) -> void:
+	equipped = eq.duplicate(true)
+	_on_gear_changed()
+
+func _on_gear_changed() -> void:
+	gear_changed.emit()
 
 func dodge_cooldown_left() -> float:
 	return _dodge_cd

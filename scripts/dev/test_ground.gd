@@ -41,6 +41,8 @@ func build() -> void:
 	var state := SaveGame.load_or_new(save_path)
 	hero.set_progress(int(state.level), int(state.exp))
 	hero.inventory.from_dict(state.inventory)
+	hero.set_equipped(state.equipped)
+	hero.gear_changed.connect(func(): save_now())
 	hero.leveled_up.connect(func(_l): save_now())
 	hero.skill_released.connect(_on_skill_released)
 	hero.shot.connect(_on_arrow)
@@ -94,7 +96,7 @@ func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_fx("hit_spark", w.hurt_point())
 
 func save_now() -> bool:
-	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict()}, save_path)
+	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped}, save_path)
 
 func tick_autosave(delta: float) -> void:
 	_autosave_t += delta

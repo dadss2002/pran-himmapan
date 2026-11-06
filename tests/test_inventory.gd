@@ -58,6 +58,40 @@ func test_load_corrupt_save_starts_fresh():
 	if s.level != 1 or s.exp != 0: return "corrupt save should give a new game, got %s" % s
 	return "" if kept else "the broken file should be kept as save.bad.json"
 
+func test_save_v2_roundtrip_with_items():
+	_cleanup()
+	var inv := Inventory.new()
+	inv.add_item({"base": "ring", "rarity": "epic", "level": 3, "opts": [{"k": "crit", "v": 0.012}, {"k": "hp", "v": 9}, {"k": "mp_regen", "v": 0.4}]})
+	var eq := {"bow": Gear.new_item("bow_bamboo"), "armor": null, "ring": null, "necklace": Gear.new_item("necklace")}
+	SaveGame.save({"level": 3, "exp": 5, "inventory": inv.to_dict(), "equipped": eq}, TMP)
+	var s := SaveGame.load_or_new(TMP)
+	_cleanup()
+	if s.version != 2: return "version %s" % s.version
+	if s.equipped.necklace.base != "necklace" or s.equipped.armor != null: return "equipped %s" % s.equipped
+	var it: Dictionary = s.inventory.slots[0].item
+	return "" if it.rarity == "epic" and it.opts.size() == 3 and is_equal_approx(float(it.opts[0].v), 0.012) else "item %s" % it
+
+func test_v1_save_migrates_to_start_kit():
+	_cleanup()
+	var f := FileAccess.open(TMP, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"version": 1, "level": 4, "exp": 10, "inventory": {"gold": 50, "slots": [{"id": "potion_hp", "count": 3}]}}))
+	f.close()
+	var s := SaveGame.load_or_new(TMP)
+	var bad := FileAccess.file_exists(TMP_BAD)
+	_cleanup()
+	if bad: return "a version-1 save was treated as broken"
+	if s.level != 4 or s.inventory.gold != 50: return "progress lost %s" % s
+	return "" if s.equipped.bow.base == "bow_bamboo" and s.equipped.armor.base == "armor_trainee" else "equipped %s" % s.equipped
+
+func test_bad_item_in_save_starts_fresh():
+	_cleanup()
+	var eq := {"bow": {"base": "armor_trainee", "rarity": "common", "level": 1, "opts": []}, "armor": null, "ring": null, "necklace": null}
+	SaveGame.save({"level": 3, "exp": 0, "inventory": Inventory.new().to_dict(), "equipped": eq}, TMP)
+	var s := SaveGame.load_or_new(TMP)
+	var kept := FileAccess.file_exists(TMP_BAD)
+	_cleanup()
+	return "" if s.level == 1 and kept else "armor in the bow slot should be rejected, got %s" % s
+
 func test_load_other_version_starts_fresh():
 	_cleanup()
 	var f := FileAccess.open(TMP, FileAccess.WRITE)

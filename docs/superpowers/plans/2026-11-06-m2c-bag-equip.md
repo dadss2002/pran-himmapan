@@ -66,12 +66,12 @@
 - Consumes: `Gear.*` from Task 1.
 - Produces: `Inventory.add_item(item: Dictionary) -> bool` (needs a free slot; never stacks); slot shape `{id: base, count: 1, item: {...}}`; `Inventory.take_slot(i) -> Dictionary`; `Hero.equipped: Dictionary` (`bow, armor, ring, necklace` → item or null); `Hero.equip(slot_index: int) -> String` ("" = ok, otherwise the Thai reason); `Hero.unequip(slot: String) -> String`; signal `Hero.gear_changed`. Save state adds `equipped`; `SaveGame.VERSION = 2`; v1 files migrate (`equipped` = starting kit) instead of `.bad.json`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   `test_items_never_stack` · `test_equip_swaps_with_bag` (old item goes to the same slot) · `test_equip_refused_above_level` ("ต้องเลเวล 5", nothing moved) · `test_unequip_refused_when_bag_full` · `test_save_v2_roundtrip_with_items` · `test_v1_save_migrates_to_start_kit` · `test_bad_item_in_save_starts_fresh`.
-- [ ] **Step 2: Run** → fail.
-- [ ] **Step 3: Implement.** Equip/unequip emit `gear_changed`; the hero re-applies stats.
-- [ ] **Step 4: Run** → pass, earlier 105 still pass.
-- [ ] **Step 5: Commit** `M2c: items in bag, equip/unequip, save v2`.
+- [x] **Step 2: Run** → fail.
+- [x] **Step 3: Implement.** Equip/unequip emit `gear_changed`; the hero re-applies stats.
+- [x] **Step 4: Run** → pass, earlier 105 still pass.
+- [x] **Step 5: Commit** `M2c: items in bag, equip/unequip, save v2`.
 
 ### Task 3: Stats from gear, bow in hand
 
