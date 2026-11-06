@@ -13,7 +13,7 @@ Usage:
 import argparse, json, os
 from PIL import Image
 
-ROOT = os.path.join(os.path.dirname(__file__), "..", "assets", "hero")
+ROOT = os.path.join(os.path.dirname(__file__), "..", "assets", "hero")  # overridden by --root
 CELL = 64
 ANCHOR = [32, 54]
 
@@ -56,7 +56,12 @@ def main():
     b = sub.add_parser("replace"); b.add_argument("anim"); b.add_argument("dir"); b.add_argument("sheet")
     b.add_argument("--row", type=int, required=True); b.add_argument("--frames", type=int, required=True)
     c = sub.add_parser("anchor"); c.add_argument("anim")
+    ap.add_argument("--root", default="assets/hero")
+    ap.add_argument("--anchor", default="32,54")
     a_ = ap.parse_args()
+    global ROOT, ANCHOR
+    ROOT = os.path.join(os.path.dirname(__file__), "..", a_.root)
+    ANCHOR = [int(v) for v in a_.anchor.split(",")]
     if a_.cmd == "pad":
         ox, oy = (int(v) for v in a_.offset.split(","))
         pad(a_.anim, ox, oy)
