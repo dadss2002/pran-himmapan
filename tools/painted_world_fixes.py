@@ -129,7 +129,118 @@ def heal_crease(w, axis, y0, y1, box, width=10, seed=3, notch=None):
 
 
 
-POINTS = {"1": p1}
+def blur_mask(w, box, cell=8, limit=20):
+    """Blocks left soft by the earlier multiband seam blend: a crisp pixel-art 8x8 block has few
+    colours, a blended one has many. Returns a world bool mask of those blocks inside box."""
+    x0, y0, x1, y1 = box
+    a = w[y0:y1, x0:x1].astype(np.int64)
+    code = (a[..., 0] << 16) | (a[..., 1] << 8) | a[..., 2]
+    m = np.zeros(w.shape[:2], bool)
+    for by in range(0, y1 - y0 - cell + 1, cell):
+        for bx in range(0, x1 - x0 - cell + 1, cell):
+            if len(np.unique(code[by:by + cell, bx:bx + cell])) >= limit:
+                m[y0 + by:y0 + by + cell, x0 + bx:x0 + bx + cell] = True
+    return m
+
+
+def recrisp(w, box, sample_box, seed=2, limit=20):
+    """Re-synthesise the soft blocks inside box from crisp pixels of sample_box (texture-synthesis),
+    in 384px crops along the box."""
+    hole = blur_mask(w, box, limit=limit)
+    sx0, sy0, sx1, sy1 = sample_box
+    samp = np.zeros(w.shape[:2], bool); samp[sy0:sy1, sx0:sx1] = True
+    samp &= ~blur_mask(w, sample_box, limit=limit)
+    x0, y0, x1, y1 = box
+    cy = max(0, (y0 + y1) // 2 - 192)
+    for cx in range(x0, x1, 300):
+        cx = min(cx, w.shape[1] - 384)
+        h = hole.copy(); h[:, :cx] = False; h[:, min(cx + 300, x1):] = False
+        if h.any():
+            ts_fill(w, h, cx, cy, sample=samp, seed=seed)
+
+
+def tree_mask(ref, ellipses, seed_xy, crown_bottom=None):
+    """Silhouette of one whole tree/bush in the un-edited picture: crown (dark teal) + trunk (dark
+    purple-brown) inside the given ellipses, the blob connected to seed_xy, holes filled. Below
+    crown_bottom only trunk pixels are kept, so the shadow under the crown is not cut out as a block."""
+    import cv2
+    a = ref.astype(int); r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    lum = 0.3 * r + 0.59 * g + 0.11 * b
+    roi = Image.new("L", ref.shape[1::-1], 0); d = ImageDraw.Draw(roi)
+    for e in ellipses:
+        d.ellipse(e, fill=255)
+    roi = np.asarray(roi) > 0
+    trunk = (g < r + 6) & (lum < 80)
+    m = (((lum < 120) & (b > r)) | trunk) & roi
+    m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8)) > 0
+    _, lab = cv2.connectedComponents(m.astype(np.uint8), connectivity=8)
+    k = lab[seed_xy[1], seed_xy[0]]
+    if k == 0:   # seed on a light leaf: take the biggest blob inside the ellipses
+        k = np.bincount(lab[roi & (lab > 0)]).argmax()
+    m = lab == k
+    ff = (~m).astype(np.uint8) * 255; fm = np.zeros((ff.shape[0] + 2, ff.shape[1] + 2), np.uint8)
+    cv2.floodFill(ff, fm, (0, 0), 0); m |= (ff > 0) & roi
+    if crown_bottom is not None:
+        tk = cv2.dilate(trunk.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+        m[crown_bottom:] &= tk[crown_bottom:]
+        _, lab = cv2.connectedComponents(m.astype(np.uint8), connectivity=8)
+        m = lab == lab[seed_xy[1], seed_xy[0]]
+    return m
+
+
+def stamp(w, ref, mask, dx, dy):
+    """Paste the masked tree from `ref` moved by (dx, dy): a whole tree placed over a cut one."""
+    ys, xs = np.where(mask)
+    w[ys + dy, xs + dx] = ref[ys, xs]
+
+
+PROPS = os.path.join(os.path.dirname(__file__), "..", "assets", "map", "painted", "props")
+
+
+def place_bush(w, name, cx, by, pal_box, shadow=True):
+    """Paste a PixelLab bush prop (assets/map/painted/props/<name>.png, 0 gen - already paid) with its
+    feet at (cx, by): colours snapped to the palette of pal_box, interior near-black softened to the
+    forest's dark teal, 1px outline in the tree-outline colour, soft contact shadow underneath."""
+    import cv2
+    b = Image.open(os.path.join(PROPS, name + ".png")).convert("RGBA")
+    b = b.crop(b.getbbox()); a = np.asarray(b).astype(np.float32)
+    rgb, al = a[..., :3], a[..., 3] > 0
+    x0, y0, x1, y1 = pal_box
+    _, _, pal = cv2.kmeans(w[y0:y1, x0:x1].reshape(-1, 3).astype(np.float32), 40, None,
+                           (3, 20, 1.0), 3, cv2.KMEANS_PP_CENTERS)
+    d = ((rgb[al][:, None, :] - pal[None]) ** 2).sum(-1); rgb[al] = pal[d.argmin(1)]
+    er = cv2.erode(al.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+    dark = er & (rgb.sum(-1) < 150)
+    rgb[dark] = rgb[dark] * 0.45 + np.array([22, 74, 80], np.float32) * 0.55
+    rgb[al & ~er] = (9, 40, 65)
+    h, wd = al.shape; X, Y = int(cx - wd / 2), int(by - h)
+    if shadow:
+        sh = Image.new("L", w.shape[1::-1], 0)
+        ImageDraw.Draw(sh).ellipse((cx - wd * 0.48, by - h * 0.30, cx + wd * 0.48, by + 5), fill=120)
+        sa = np.asarray(sh.filter(ImageFilter.GaussianBlur(4))).astype(np.float32)[..., None] / 255.0
+        w[:] = w * (1 - sa) + np.array([8, 30, 28], np.float32) * sa
+    reg = w[Y:Y + h, X:X + wd]; reg[al] = rgb[al]
+
+
+def p2(w):
+    """Point 2 (row seam y=768, x 688-1180 beside the stone road): texture-synthesis band over the
+    line, then whole trees from elsewhere in the map stamped over the cut ones (owner: method 1)."""
+    ref = w.copy()
+    pts = [(690, 768), (760, 769), (840, 767), (920, 769), (1000, 768), (1080, 767), (1180, 768)]
+    band = organic_band(w.shape[1::-1], pts, 18, seed=2, wobble=5) > 0
+    band[:, :689] = False
+    samp = np.zeros(w.shape[:2], bool); samp[700:840, 688:1200] = True; samp &= ~band
+    b1 = band.copy(); b1[:, 1000:] = False; ts_fill(w, b1, 688, 600, sample=samp, seed=2)
+    b2 = band.copy(); b2[:, :1000] = False; ts_fill(w, b2, 880, 600, sample=samp, seed=2)
+    # ค+จ: whole tree from above the dirt path (x 748-880, y 596-727), trunk on จ's trunk (approved).
+    # Stamped bushes for ก, ข, ง were tried and looked pasted (owner 2026-11-07) - left as the healed forest.
+    t_path = tree_mask(ref, [(748, 592, 884, 700), (775, 680, 860, 732)], (815, 650), 694)
+    stamp(w, ref, t_path, 96, 126)
+    # ฉ: the seam blur continued right of the old band up to x 1376 - re-synthesise it crisp
+    recrisp(w, (1166, 740, 1376, 800), (1166, 690, 1376, 860), seed=2)
+
+
+POINTS = {"1": p1, "2": p2}
 
 
 def main(src, dst, pts):
