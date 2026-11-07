@@ -21,7 +21,12 @@ var room_id := ""
 var warps: Array = []
 var cam: Camera2D
 var fade: ColorRect
-const FADE := 0.3
+const FADE_OUT := 0.25           # M4c §1 approved: screen goes dark, then the new room
+const FADE_IN := 0.25
+const CALM := 1.0                # the new room's monsters ignore the hero this long after arrival
+var warping := false             # between touching a ring and the new room appearing
+var _hero_was_on := true
+var _fade_tween: Tween
 var _navs := {}
 var layout: PaintedLayout
 var forest: PaintedMap
@@ -124,6 +129,9 @@ func build() -> void:
 ## Swap to room id. via_warp = the warp you come out of there ("" = the room's spawn). The old room's
 ## map, monsters, drops and warps go; the new room's are built fresh; the game saves.
 func go_to(id: String, via_warp := "", with_fade := true) -> void:
+	if warping:                          # the fade out ended (or anything else moved the hero on)
+		warping = false
+		hero.set_physics_process(_hero_was_on)
 	for p in packs:
 		if is_instance_valid(p): p.free()
 	packs.clear()
@@ -131,7 +139,9 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		if is_instance_valid(d): d.free()
 	drops.clear()
 	for w in warps:
-		if is_instance_valid(w): w.free()
+		if is_instance_valid(w):
+			if is_instance_valid(w.label): w.label.free()
+			w.free()
 	warps.clear()
 	if forest and is_instance_valid(forest): forest.free()
 	room_id = id
@@ -154,19 +164,43 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		hero.reset_physics_interpolation()   # M3k: a warp is a jump; the camera rides on the hero
 		cam.reset_physics_interpolation()
 	for w in rooms.room(id).warps:
-		var n := Warp.make(w)
+		var n := Warp.make(w, rooms.room(String(w.to)) if rooms.has(String(w.to)) else {})
 		n.armed = String(w.id) != via_warp
 		world.add_child(n)
+		overlay.add_child(n.make_label())
+		n.place_label(sz)
 		warps.append(n)
 	if not _navs.has(id): _navs[id] = layout.make_nav()
 	for m in rooms.room(id).get("monsters", []):
 		_add_group(m, _navs[id])
 	if with_fade and is_inside_tree():
 		fade.color.a = 1.0
-		create_tween().tween_property(fade, "color:a", 0.0, FADE)
-		for p in packs: p.calm = FADE        # nobody notices the hero while the screen is still dark
+		_new_fade().tween_property(fade, "color:a", 0.0, FADE_IN)
+		for p in packs: p.calm = CALM        # nobody notices the hero during the fade and just after
 	save_now()
 	room_changed.emit(id)
+
+## Touching a ring: the screen fades out (FADE_OUT), the room changes, then fades in (go_to). The hero
+## stands still and the old room's monsters ignore him while it is dark.
+func warp_through(w: Warp) -> void:
+	if warping: return
+	if not is_inside_tree():
+		go_to(w.to_room, w.to_warp)
+		return
+	warping = true
+	_hero_was_on = hero.is_physics_processing()
+	hero.set_physics_process(false)
+	hero.velocity = Vector2.ZERO
+	for p in packs: p.calm = maxf(p.calm, FADE_OUT + 0.1)
+	var to_room := w.to_room
+	var to_warp := w.to_warp
+	_new_fade().tween_property(fade, "color:a", 1.0, FADE_OUT)
+	_fade_tween.tween_callback(func(): go_to(to_room, to_warp))
+
+func _new_fade() -> Tween:
+	if _fade_tween and _fade_tween.is_valid(): _fade_tween.kill()
+	_fade_tween = create_tween()
+	return _fade_tween
 
 ## The room covers the whole screen, portrait or landscape (ScreenFit): the world view is the room's
 ## pixels that fit on screen, shown enlarged by the cover scale.
@@ -269,10 +303,10 @@ func _blocked(p: Vector2) -> bool:
 func _physics_process(delta: float) -> void:
 	tick_autosave(delta)
 	_follow_lock_ring()
-	if hero and hero.state != "dead":
+	if hero and hero.state != "dead" and not warping:
 		for w in warps:
 			if is_instance_valid(w) and w.step(hero.global_position):
-				go_to.call_deferred(w.to_room, w.to_warp)
+				warp_through.call_deferred(w)
 				break
 	_bag_full_cd = maxf(0.0, _bag_full_cd - delta)
 	for d in drops.duplicate():
@@ -295,6 +329,9 @@ func _text(at: Vector2, t: String, c: Color) -> void:
 func _process(delta: float) -> void:
 	if overlay and cam and cam.is_inside_tree():
 		overlay.transform = Transform2D(0.0, Vector2(_scale, _scale), 0.0, -_view_origin() * _scale)
+	if hero:
+		for w in warps:
+			if is_instance_valid(w) and w.label: w.label.visible = w.show_label(hero.global_position) and not warping
 	if watch_fps and saver.step(delta, Engine.get_frames_per_second()): apply_saver()
 
 ## Saver on: pond ripples hidden and stopped; dust and pickup puffs skipped (PerfSaver.decorative).

@@ -1,5 +1,5 @@
 {
- "note": "Hand data for tools/painted_rooms.py. Room-local pixels (each room is its picture size, 512x512 since M4b). links: room:side pairs (side = north/south/east/west); a warp sits on the open ground nearest that edge's middle, or nearest hints[side]. edits: walk/block pixel rects. monsters: kind/level/count (M3g); groups of <=6 are placed by the tool unless 'at' is given. monster_sets (e0): the arena sets in level order (w1, e0, e2, w3 of M3f); 'monsters' is the default set.",
+ "note": "Hand data for tools/painted_rooms.py. Room-local pixels (each room is its picture size, 512x512 since M4b). links: room:side pairs (side = north/south/east/west); a warp sits on the open ground nearest that edge's middle, or nearest hints[side]. edits: walk/block pixel rects. monsters: kind/level/count (M3g); groups of <=6 are placed by the tool unless 'at' is given. name: the room's Thai name (exit labels, M4c); arena: true for a boss arena (red exit label). monster_sets (e0): the arena sets in level order (w1, e0, e2, w3 of M3f); 'monsters' is the default set.",
  "start": "c1r1",
  "links": [
   [
@@ -53,6 +53,7 @@
  ],
  "rooms": {
   "c0r0": {
+   "name": "ลานบ่อน้ำเก่า",
    "monsters": [
     {
      "kind": "boar",
@@ -119,6 +120,7 @@
    ]
   },
   "c0r1": {
+   "name": "ทางหินโบราณ",
    "monsters": [
     {
      "kind": "boar",
@@ -175,6 +177,7 @@
    ]
   },
   "c0r2": {
+   "name": "บึงในป่า",
    "fx": [
     {
      "id": "water_ripple",
@@ -198,6 +201,7 @@
    ]
   },
   "c0r3": {
+   "name": "ฐานวิหารร้าง",
    "monsters": [
     {
      "kind": "viper",
@@ -284,6 +288,7 @@
    ]
   },
   "c1r0": {
+   "name": "ลานเสาหิน",
    "monsters": [
     {
      "kind": "wolf",
@@ -380,6 +385,7 @@
    ]
   },
   "c1r1": {
+   "name": "ศาลหินเริ่มต้น",
    "spawn": [
     260,
     373
@@ -510,6 +516,7 @@
    ]
   },
   "c1r2": {
+   "name": "ลำธารวงเห็ด",
    "monsters": [
     {
      "kind": "wolf",
@@ -566,6 +573,7 @@
    ]
   },
   "c1r3": {
+   "name": "หนองน้ำ",
    "fx": [
     {
      "id": "water_ripple",
@@ -589,6 +597,7 @@
    ]
   },
   "c2r0": {
+   "name": "ปรางค์ร้าง",
    "monsters": [
     {
      "kind": "deer",
@@ -675,6 +684,7 @@
    ]
   },
   "c2r1": {
+   "name": "ทางแยกขอนไม้",
    "monsters": [
     {
      "kind": "boar",
@@ -731,6 +741,7 @@
    ]
   },
   "c2r2": {
+   "name": "ป่าไผ่",
    "monsters": [
     {
      "kind": "wolf",
@@ -757,6 +768,7 @@
    ]
   },
   "c2r3": {
+   "name": "ลานหญ้ากลางป่า",
    "monsters": [
     {
      "kind": "kongkoi",
@@ -798,11 +810,12 @@
    ]
   },
   "e0": {
+   "name": "ลานเนินตะวันออก",
+   "arena": true,
    "grid": [
     3,
     0
    ],
-   "name": "ลานเนินตะวันออก",
    "monsters": [
     {
      "kind": "wolf",

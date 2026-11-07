@@ -26,7 +26,10 @@ func _onto_warp(g: Node2D, warp_id: String) -> void:
 	var h: Hero = g.hero
 	h.set_physics_process(false)
 	h.global_position = g.rooms.warp_at(g.room_id, warp_id)
-	for i in 3: await tree.physics_frame
+	var from: String = g.room_id
+	for i in 90:                         # M4c: 0.25 s fade out before the room changes
+		await tree.physics_frame
+		if g.room_id != from and not g.warping: break
 
 func test_starts_in_start_room():
 	var g := _ground(false)
@@ -154,7 +157,9 @@ func test_no_warp_while_paused():
 	for i in 30: await tree.process_frame
 	var r := "" if g.room_id == "c1r1" else "warped while the bag was open"
 	g.hud.bag_panel.close()
-	for i in 4: await tree.physics_frame
+	for i in 90:
+		await tree.physics_frame
+		if g.room_id != "c1r1" and not g.warping: break
 	if r == "" and g.room_id != "c0r1": r = "did not warp after closing the bag (in %s)" % g.room_id
 	await _done(g)
 	return r
@@ -170,6 +175,9 @@ func test_roll_into_warp():
 	h.try_dodge(Vector2.RIGHT)
 	for i in 30:
 		h.step(1.0 / 60.0, Vector2.ZERO)
+		await tree.physics_frame
+	for i in 90:
+		if g.room_id == "c2r1" and not g.warping: break
 		await tree.physics_frame
 	var r := ""
 	if g.room_id != "c2r1": r = "rolled into the warp but stayed in %s" % g.room_id
@@ -218,5 +226,78 @@ func test_drops_avoid_blocked():
 			for p in LootDrop.scatter(center, 6, rng, g._blocked):
 				if p != center and g.layout.blocked_at(p): r = "%s drop at %s blocked" % [id, p]
 		if r != "": break
+	await _done(g)
+	return r
+
+## M4c §1 approved timings: 0.25 s fade out, then the new room, 0.25 s fade in; monsters calm 1.0 s.
+func test_fade_and_calm_numbers():
+	var g := _ground(false)
+	var r := ""
+	if g.FADE_OUT != 0.25 or g.FADE_IN != 0.25: r = "fade %s out / %s in" % [g.FADE_OUT, g.FADE_IN]
+	elif g.CALM != 1.0: r = "calm %s" % g.CALM
+	await _done(g)
+	return r
+
+## Walking into the ring starts the fade at once; the room changes when the screen is dark (~0.25 s),
+## then the screen clears in ~0.25 s and the new room's monsters stay calm for 1.0 s.
+func test_warp_fades_out_then_in():
+	var g := _ground()
+	await tree.physics_frame
+	var h: Hero = g.hero
+	h.set_physics_process(false)
+	for i in 10: await tree.process_frame   # let the heavy set-up frame pass (its delta would feed the tween)
+	h.global_position = g.rooms.warp_at("c1r1", "east")
+	var t0 := Time.get_ticks_msec()
+	await tree.physics_frame
+	await tree.physics_frame
+	var r := ""
+	if g.room_id != "c1r1": r = "room changed before the fade out"
+	elif not g.warping: r = "no fade started on the ring"
+	var waited := 0
+	while r == "" and g.room_id == "c1r1" and waited < 120:
+		await tree.physics_frame
+		waited += 1
+	var dt := (Time.get_ticks_msec() - t0) / 1000.0
+	if r == "" and g.room_id != "c2r1": r = "never warped (in %s)" % g.room_id
+	elif r == "" and (dt < 0.2 or dt > 0.5): r = "room changed after %.2f s (want ~0.25)" % dt
+	elif r == "" and g.fade.color.a < 0.9: r = "screen not dark at the swap (alpha %.2f)" % g.fade.color.a
+	if r == "":
+		for p in g.packs:
+			if p.calm < 0.9: r = "pack calm %.2f after arrival (want 1.0)" % p.calm
+	if r == "":
+		await tree.create_timer(0.4).timeout
+		if g.fade.color.a > 0.01: r = "screen still dark 0.4 s after arrival (alpha %.2f)" % g.fade.color.a
+		elif g.warping: r = "still warping"
+		else:
+			for p in g.packs:
+				if p.calm <= 0.0: r = "pack calm ran out before 1.0 s"
+	await _done(g)
+	return r
+
+## The exit label shows in the game only near the ring, with the next room's name.
+func test_exit_label_near_ring():
+	var g := _ground()
+	await tree.physics_frame
+	var h: Hero = g.hero
+	h.set_physics_process(false)
+	var north: Vector2 = g.rooms.warp_at("c1r1", "north")
+	h.global_position = north + Vector2(0, 100)
+	for i in 3: await tree.process_frame
+	var lab: Control = null
+	for w in g.warps:
+		if w.warp_id == "north": lab = w.label
+	var r := ""
+	if lab == null or not lab.is_inside_tree(): r = "north exit has no label in the game"
+	elif lab.visible: r = "label shown 100 px away"
+	if r == "":
+		h.global_position = north + Vector2(0, 40)
+		for i in 3: await tree.process_frame
+		if not lab.visible: r = "label hidden 40 px away"
+		elif not lab.has_node("Text") or lab.get_node("Text").text != "→ ลานเสาหิน": r = "label text wrong"
+	if r == "":
+		var w0 = g.warps[0]
+		g.go_to("c1r0", "south", false)
+		await tree.process_frame
+		if is_instance_valid(w0) or is_instance_valid(lab): r = "old room's warp or label left behind"
 	await _done(g)
 	return r

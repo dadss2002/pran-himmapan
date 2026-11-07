@@ -237,6 +237,8 @@ def main():
                 "blocked": ["".join("." if v else "#" for v in row) for row in walk],
                 "warps": warps, "fx": rs.get("fx", []), "monsters": monsters}
         if sets: room["monster_sets"] = sets
+        if rs.get("name"): room["name"] = rs["name"]       # M4c: exit labels "→ <name>"
+        if rs.get("arena"): room["arena"] = True
         if spawn: room["spawn"] = spawn
         rooms[rid] = room
         # debug tile

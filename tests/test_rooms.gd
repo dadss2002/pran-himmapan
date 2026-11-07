@@ -178,3 +178,58 @@ func test_hero_walks_every_route():
 		await tree.process_frame
 	hero.free()
 	return "" if fails.is_empty() else "%d routes failed, e.g. %s" % [fails.size(), fails.slice(0, 3)]
+
+## M4c §1: every room has a short Thai name (copied from rooms_src.json); e0 is the only arena.
+func test_room_names_and_arena_flag():
+	var rs := RoomSet.open()
+	var want := {"c1r1": "ศาลหินเริ่มต้น", "c0r1": "ทางหินโบราณ", "c0r0": "ลานบ่อน้ำเก่า", "c0r2": "บึงในป่า",
+		"c0r3": "ฐานวิหารร้าง", "c1r0": "ลานเสาหิน", "c1r2": "ลำธารวงเห็ด", "c1r3": "หนองน้ำ",
+		"c2r0": "ปรางค์ร้าง", "c2r1": "ทางแยกขอนไม้", "c2r2": "ป่าไผ่", "c2r3": "ลานหญ้ากลางป่า",
+		"e0": "ลานเนินตะวันออก"}
+	for id in rs.ids():
+		if String(rs.room(id).get("name", "")) != String(want.get(id, "?")): return "%s name '%s'" % [id, rs.room(id).get("name", "")]
+		var arena := bool(rs.room(id).get("arena", false))
+		if arena != (id == "e0"): return "%s arena flag %s" % [id, arena]
+	return ""
+
+## M4c §1: an exit's label is "→ <next room's name>"; the way into the arena (e0) is red.
+func test_warp_label_text():
+	var rs := RoomSet.open()
+	var n := Warp.make(rs.warp("c1r1", "north"), rs.room("c1r0"))
+	var a := Warp.make(rs.warp("c2r0", "east"), rs.room("e0"))
+	var r := ""
+	if n.label_text() != "→ ลานเสาหิน": r = "c1r1 north label '%s'" % n.label_text()
+	elif n.to_arena: r = "c1r0 marked as arena"
+	elif a.label_text() != "→ ลานเนินตะวันออก": r = "c2r0 east label '%s'" % a.label_text()
+	elif not a.to_arena: r = "the way into e0 is not marked as arena"
+	elif a.label_color() == n.label_color() or a.label_color().r < 0.8 or a.label_color().g > 0.5: r = "arena label colour %s not red" % a.label_color()
+	n.free()
+	a.free()
+	return r
+
+## M4c §1: the label shows within 48 px of the ring (approved number), not further.
+func test_warp_label_within_48px():
+	var rs := RoomSet.open()
+	var w := Warp.make(rs.warp("c1r1", "north"), rs.room("c1r0"))
+	var at := w.position
+	var r := ""
+	if Warp.LABEL_RANGE != 48.0: r = "LABEL_RANGE %s" % Warp.LABEL_RANGE
+	elif not w.show_label(at): r = "hidden on the ring"
+	elif not w.show_label(at + Vector2(0, 48)): r = "hidden at 48 px"
+	elif not w.show_label(at + Vector2(30, 37)): r = "hidden at 47.6 px diagonal"
+	elif w.show_label(at + Vector2(0, 49)): r = "shown at 49 px"
+	elif w.show_label(at + Vector2(40, 40)): r = "shown at 56.6 px diagonal"
+	w.free()
+	return r
+
+## M4c §1: a small arrow at each exit points out of the room (north exit points up, etc.).
+func test_warp_arrow_points_out():
+	var rs := RoomSet.open()
+	var want := {"north": Vector2.UP, "south": Vector2.DOWN, "east": Vector2.RIGHT, "west": Vector2.LEFT}
+	for id in rs.ids():
+		for wd in rs.room(id).warps:
+			var w := Warp.make(wd, rs.room(String(wd.to)))
+			var d := w.out_dir()
+			w.free()
+			if d != want[String(wd.id)]: return "%s %s arrow points %s" % [id, wd.id, d]
+	return ""
