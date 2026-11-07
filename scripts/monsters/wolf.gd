@@ -38,6 +38,9 @@ var _stuck_from := Vector2.ZERO
 var _hero: Hero = null
 var _telegraph: FxSprite = null
 var _setup_done := false
+var elite := false            # M3h: tougher, worth more, ★ + HP bar over the head
+var _tag: Node2D
+const ELITE_TAG := preload("res://scripts/monsters/elite_tag.gd")
 var _anchors := {}
 
 func _ready() -> void:
@@ -68,7 +71,28 @@ var _burn_fx: FxSprite = null
 var _frost_fx: FxSprite = null
 
 func stats() -> Dictionary:
-	return Balance.wolf(level)
+	return with_elite(Balance.wolf(level))
+
+## M3h: an elite has elite.* on top of its normal stats.
+func with_elite(s: Dictionary) -> Dictionary:
+	return Balance.elite_stats(s) if elite else s
+
+## Rolled on every spawn and respawn (elite.chance); shows or hides the ★ + HP tag.
+## The test runner turns random elites off so older tests stay deterministic.
+static var elites_enabled := true
+
+func roll_elite(rng: RandomNumberGenerator = null) -> void:
+	var x := rng.randf() if rng else randf()
+	set_elite(elites_enabled and x < Balance.num("elite.chance"))
+
+func set_elite(on: bool) -> void:
+	elite = on
+	if on and _tag == null:
+		_tag = ELITE_TAG.new()
+		_tag.monster = self
+		add_child(_tag)
+	if _tag: _tag.visible = on
+	if health and is_alive(): health.setup(stats().hp)
 
 func manifest_path() -> String:
 	return MANIFEST
@@ -127,7 +151,7 @@ func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, cr
 	health.take_hit(r.amount, r.crit)
 	if not is_alive(): return r.amount
 	_flash = n("hit_flash")
-	if state != "bite":
+	if state != "bite" and not elite:          # elites do not get knocked back (M3h)
 		var away := _pos() - from
 		if away.length() > 0.01:
 			_push(away.normalized() * n("hit_knockback"))
@@ -142,6 +166,7 @@ func start_chase(h: Hero) -> void:
 		_t = 0.0
 
 func revive() -> void:
+	roll_elite()
 	health.setup(stats().hp)
 	status.clear()
 	_set_pos(home + Vector2(randf_range(-16, 16), randf_range(-12, 12)))

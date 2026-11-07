@@ -56,6 +56,17 @@ func _run() -> void:
 	for id in g.rooms.ids():
 		await _room(id)
 		await _snap("m3d_room_%s.png" % id)
+	# M3h elites: one elite per group in c1r2, one of them hurt so the HP bar shows
+	await _room("c1r2")
+	var first := true
+	for p in g.packs:
+		var e: Wolf = p.wolves[0]
+		e.set_elite(true)
+		if first:
+			e.health.take_hit(int(e.health.max_hp * 0.4), false)
+			first = false
+	await _frames(4)
+	await _snap("m3h_elite.png")
 	# line-up: one of each kind beside the hero in the start room
 	await _room("c1r1")
 	var x := 250.0

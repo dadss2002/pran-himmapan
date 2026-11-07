@@ -34,6 +34,7 @@ func spawn() -> void:
 		w.position = home + Vector2(Balance.num("wolf.pack_ring"), 0).rotated(TAU * i / count) * Vector2(1, 0.7)
 		add_child(w)
 		w.setup()
+		w.roll_elite()
 		w.died.connect(_on_wolf_died)
 		wolves.append(w)
 

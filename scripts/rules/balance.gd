@@ -54,6 +54,13 @@ static func wolf(level: int) -> Dictionary:
 		"exp": int(num("wolf.exp_base") + num("wolf.exp_per_level") * level),
 	})
 
+## M3h elite: the stats again x elite.* (DEF unchanged).
+static func elite_stats(s: Dictionary) -> Dictionary:
+	s.hp = int(round(s.hp * num("elite.hp_mult")))
+	s.atk = int(round(s.atk * num("elite.atk_mult")))
+	s.exp = int(round(s.exp * num("elite.exp_mult")))
+	return s
+
 ## M3g hack-and-slash multiplier for every monster (horde.<key>, 1 when absent).
 static func horde(key: String) -> float:
 	return num("horde." + key) if has("horde." + key) else 1.0
