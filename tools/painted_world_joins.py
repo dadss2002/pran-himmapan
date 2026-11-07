@@ -12,6 +12,7 @@ JOINS = {  # name: top-left of the inpaint window in world pixels (340x340 or 51
     "J1": (432, 384),
     "J1e": (720, 500),      # one whole tree + top stump removed (256x256)
     "J2": (432, 1152),
+    "J3": (2496, 0),
     "J2b": (680, 1250),     # path end + bush fix on top of J2 (256x256)
 }
 
@@ -62,7 +63,19 @@ def grass_fill(w, box, tile_box, fade=None, seed=4):
                 if abs(H[y, x] - 30) < 25 and S[y, x] < 0.5 and (x - fx0) / (fx1 - fx0) + rng.normal(0, 0.2) > 0.6:
                     w[y, x] = g(y, x)
 
+def tone_seam(w, x, y0, y1, falloff=90, sigma=24):
+    """Free: an inpaint can keep the old colour split across a room seam. Spread the low-frequency
+    colour step at column x (rows y0..y1) over `falloff` px on both sides, half each."""
+    from scipy import ndimage
+    dl = w[y0:y1, x - 6:x].mean(axis=1); dr = w[y0:y1, x:x + 6].mean(axis=1)
+    d = ndimage.gaussian_filter1d(dr - dl, sigma, axis=0)[:, None, :] / 2.0
+    ramp = np.clip(1.0 - np.arange(falloff) / falloff, 0, 1)[None, :, None]
+    w[y0:y1, x - falloff:x] += d * ramp[:, ::-1]
+    w[y0:y1, x:x + falloff] -= d * ramp
+
 POST = {}   # J2 grass fill replaced by the J2b patch (owner 2026-11-07: the filled strip showed)
+
+TONE = {"J3": [(2752, 0, 384)]}   # seam columns whose colour split survived the inpaint
 
 def main(src, dst, root="assets/map/painted/world"):
     w = np.asarray(Image.open(src).convert("RGB")).astype(np.float32)
@@ -72,6 +85,9 @@ def main(src, dst, root="assets/map/painted/world"):
         inp = np.asarray(Image.open(f"{root}/{name}_inpaint.png").convert("RGB")).astype(np.float32)
         msk = np.asarray(Image.open(f"{root}/{name}_mask.png").convert("L")).astype(np.float32) / 255
         place(w, inp, msk, x0 + P, y0 + P)
+        if name in TONE:
+            for (x, ya, yb) in TONE[name]:
+                tone_seam(w, x + P, ya + P, yb + P)
         if name in POST:
             f = POST[name]
             sh = lambda b: tuple(v + P for v in b)
