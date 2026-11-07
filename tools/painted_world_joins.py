@@ -11,6 +11,7 @@ LV, P, CORE = 5, 64, 20
 JOINS = {  # name: top-left of the inpaint window in world pixels (340x340 or 512x384)
     "J1": (432, 384),
     "J2": (432, 1152),
+    "J2b": (680, 1250),     # path end + bush fix on top of J2 (256x256)
 }
 
 def lap_blend(a, b, m):
@@ -60,7 +61,7 @@ def grass_fill(w, box, tile_box, fade=None, seed=4):
                 if abs(H[y, x] - 30) < 25 and S[y, x] < 0.5 and (x - fx0) / (fx1 - fx0) + rng.normal(0, 0.2) > 0.6:
                     w[y, x] = g(y, x)
 
-POST = {"J2": dict(box=(778, 1316, 800, 1392), tile_box=(805, 1352, 835, 1386), fade=(766, 1326, 790, 1386))}
+POST = {}   # J2 grass fill replaced by the J2b patch (owner 2026-11-07: the filled strip showed)
 
 def main(src, dst, root="assets/map/painted/world"):
     w = np.asarray(Image.open(src).convert("RGB")).astype(np.float32)
