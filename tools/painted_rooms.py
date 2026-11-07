@@ -167,16 +167,18 @@ def main():
         if spawn:
             d.ellipse((spawn[0] - 5, spawn[1] - 5, spawn[0] + 5, spawn[1] + 5), fill=(255, 255, 255, 255))
         d.text((6, 6), rid, fill=(255, 255, 255, 255))
-        debug.append((rid, im))
+        grid = rs.get("grid") or [int(rid[1]), int(rid[3])]   # c?r? rooms; others give their place
+        debug.append((tuple(grid), im))
     out = {"start": src["start"], "size": list(SIZE), "cell": CELL, "rooms": rooms}
     with open(f"{ROOT}/data/rooms.json", "w") as f:
         json.dump(out, f, ensure_ascii=False, indent=0)
-    order = sorted(debug, key=lambda t: (int(t[0][3]), int(t[0][1])))
-    gc = max(int(r[1]) for r, _ in order) + 1
-    gr = max(int(r[3]) for r, _ in order) + 1
+    c0 = min(g[0] for g, _ in debug)
+    r0 = min(g[1] for g, _ in debug)
+    gc = max(g[0] for g, _ in debug) - c0 + 1
+    gr = max(g[1] for g, _ in debug) - r0 + 1
     sheet = Image.new("RGBA", (gc * SIZE[0] // 2, gr * SIZE[1] // 2), (0, 0, 0, 255))
-    for rid, im in order:
-        sheet.paste(im.resize((SIZE[0] // 2, SIZE[1] // 2), Image.NEAREST), (int(rid[1]) * SIZE[0] // 2, int(rid[3]) * SIZE[1] // 2))
+    for (gx, gy), im in debug:
+        sheet.paste(im.resize((SIZE[0] // 2, SIZE[1] // 2), Image.NEAREST), ((gx - c0) * SIZE[0] // 2, (gy - r0) * SIZE[1] // 2))
     sheet.save(f"{ROOT}/docs/preview/m3c_rooms_debug.png")
     print("rooms %d, links %d" % (len(rooms), len(src["links"])))
 

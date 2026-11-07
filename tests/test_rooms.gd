@@ -5,7 +5,9 @@ extends RefCounted
 const LINKS := [["c0r0:south", "c0r1:north"], ["c0r1:south", "c0r2:north"], ["c0r2:south", "c0r3:north"],
 	["c0r1:east", "c1r1:west"], ["c1r0:south", "c1r1:north"], ["c1r1:east", "c2r1:west"],
 	["c2r0:south", "c2r1:north"], ["c2r1:south", "c2r2:north"], ["c0r2:east", "c1r2:west"],
-	["c1r2:south", "c1r3:north"], ["c1r3:east", "c2r3:west"]]
+	["c1r2:south", "c1r3:north"], ["c1r3:east", "c2r3:west"],
+	# M3f arenas on the outer edges
+	["w1:east", "c0r1:west"], ["e0:west", "c2r0:east"], ["w3:east", "c0r3:west"], ["e2:west", "c2r2:east"]]
 
 var tree: SceneTree
 
@@ -15,7 +17,7 @@ func setup(t: SceneTree) -> void:
 func test_rooms_data_valid():
 	var rs := RoomSet.open()
 	if rs == null: return "data/rooms.json missing"
-	if rs.ids().size() != 12: return "%d rooms" % rs.ids().size()
+	if rs.ids().size() != 16: return "%d rooms (12 map + 4 arenas)" % rs.ids().size()
 	if rs.start != "c1r1": return "start %s" % rs.start
 	var errs := rs.validate()
 	return "" if errs.is_empty() else "%d problems, first: %s" % [errs.size(), errs.slice(0, 4)]
@@ -45,7 +47,7 @@ func test_every_room_reachable_from_start():
 			if not seen.has(String(w.to)):
 				seen[String(w.to)] = true
 				todo.append(String(w.to))
-	return "" if seen.size() == 12 else "only %d rooms reachable: %s" % [seen.size(), seen.keys()]
+	return "" if seen.size() == 16 else "only %d rooms reachable: %s" % [seen.size(), seen.keys()]
 
 func test_warps_connected_in_room():
 	var rs := RoomSet.open()

@@ -45,6 +45,22 @@
   [
    "c1r3:east",
    "c2r3:west"
+  ],
+  [
+   "w1:east",
+   "c0r1:west"
+  ],
+  [
+   "e0:west",
+   "c2r0:east"
+  ],
+  [
+   "w3:east",
+   "c0r3:west"
+  ],
+  [
+   "e2:west",
+   "c2r2:east"
   ]
  ],
  "rooms": {
@@ -271,8 +287,8 @@
      "level": 4,
      "count": 2,
      "at": [
-      540,
-      160
+      380,
+      100
      ]
     }
    ]
@@ -306,8 +322,8 @@
      "level": 3,
      "count": 1,
      "at": [
-      520,
-      260
+      150,
+      220
      ]
     }
    ]
@@ -339,6 +355,160 @@
      "at": [
       380,
       180
+     ]
+    }
+   ]
+  },
+  "w1": {
+   "grid": [
+    -1,
+    1
+   ],
+   "name": "ลานหญ้าตะวันตก",
+   "monsters": [
+    {
+     "kind": "boar",
+     "level": 2,
+     "count": 3,
+     "at": [
+      200,
+      150
+     ]
+    },
+    {
+     "kind": "deer",
+     "level": 2,
+     "count": 3,
+     "at": [
+      220,
+      290
+     ]
+    },
+    {
+     "kind": "wolf",
+     "level": 3,
+     "count": 3,
+     "at": [
+      360,
+      250
+     ]
+    }
+   ]
+  },
+  "e0": {
+   "grid": [
+    3,
+    0
+   ],
+   "name": "ลานเนินตะวันออก",
+   "monsters": [
+    {
+     "kind": "boar",
+     "level": 5,
+     "count": 2,
+     "at": [
+      250,
+      140
+     ]
+    },
+    {
+     "kind": "wolf",
+     "level": 5,
+     "count": 4,
+     "at": [
+      420,
+      260
+     ]
+    },
+    {
+     "kind": "macaque",
+     "level": 4,
+     "count": 3,
+     "at": [
+      560,
+      140
+     ]
+    }
+   ]
+  },
+  "w3": {
+   "grid": [
+    -1,
+    3
+   ],
+   "name": "ลานหินตะวันตก",
+   "monsters": [
+    {
+     "kind": "viper",
+     "level": 9,
+     "count": 3,
+     "at": [
+      130,
+      130
+     ]
+    },
+    {
+     "kind": "kongkoi",
+     "level": 9,
+     "count": 3,
+     "at": [
+      230,
+      230
+     ]
+    },
+    {
+     "kind": "kongkoi",
+     "level": 10,
+     "count": 1,
+     "at": [
+      340,
+      110
+     ]
+    },
+    {
+     "kind": "macaque",
+     "level": 8,
+     "count": 2,
+     "at": [
+      420,
+      300
+     ]
+    }
+   ]
+  },
+  "e2": {
+   "grid": [
+    3,
+    2
+   ],
+   "name": "ลานป่าทึบตะวันออก",
+   "note": "art: w1 flipped and darkened (the generated marsh came out framed twice; budget cap reached)",
+   "monsters": [
+    {
+     "kind": "shroom",
+     "level": 6,
+     "count": 3,
+     "at": [
+      250,
+      140
+     ]
+    },
+    {
+     "kind": "viper",
+     "level": 7,
+     "count": 2,
+     "at": [
+      420,
+      290
+     ]
+    },
+    {
+     "kind": "wolf",
+     "level": 7,
+     "count": 4,
+     "at": [
+      520,
+      150
      ]
     }
    ]

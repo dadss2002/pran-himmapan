@@ -217,9 +217,12 @@ func test_rooms_hold_the_spec_monsters():
 		"c0r0": {"boar": 2, "deer": 2}, "c2r2": {"wolf": 3, "macaque": 1}, "c2r0": {"deer": 2, "macaque": 2},
 		"c0r2": {"shroom": 3, "viper": 1}, "c1r2": {"wolf": 4, "shroom": 2}, "c0r3": {"kongkoi": 2, "viper": 2},
 		"c1r3": {"viper": 3, "shroom": 2}, "c2r3": {"kongkoi": 3},
+		# M3f arenas (docs/superpowers/specs/2026-11-07-m3f-arena-rooms-design.md §2)
+		"w1": {"boar": 3, "deer": 3, "wolf": 3}, "e0": {"macaque": 3, "wolf": 4, "boar": 2},
+		"e2": {"shroom": 3, "viper": 2, "wolf": 4}, "w3": {"kongkoi": 4, "viper": 3, "macaque": 2},
 	}
 	var lv := {"c1r1": 1, "c1r0": 1, "c0r1": 2, "c2r1": 3, "c0r0": 3, "c2r2": 3, "c2r0": 4, "c0r2": 4,
-		"c1r2": 5, "c0r3": 7, "c1r3": 8, "c2r3": 9}
+		"c1r2": 5, "c0r3": 7, "c1r3": 8, "c2r3": 9, "w1": 2, "e0": 4, "e2": 6, "w3": 8}
 	var rooms := RoomSet.open()
 	for id in want:
 		var got := {}
@@ -231,7 +234,7 @@ func test_rooms_hold_the_spec_monsters():
 			high = maxi(high, int(m.level))
 		if got != want[id]: return "%s has %s (spec %s)" % [id, got, want[id]]
 		if low != lv[id]: return "%s lowest level %d (spec %d)" % [id, low, lv[id]]
-		if id == "c2r3" and high != 10: return "c2r3 has no Lv10 kongkoi"
+		if (id == "c2r3" or id == "w3") and high != 10: return "%s has no Lv10 kongkoi" % id
 	return ""
 
 ## Review fix: a passive monster that was hit fights alone; its calm group-mates stay calm.
