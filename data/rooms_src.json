@@ -482,7 +482,7 @@
     2
    ],
    "name": "ลานป่าทึบตะวันออก",
-   "note": "art: composed by Claude from PixelLab props (tools/compose_room.py, data/compose/e2.json), 0 gen",
+   "note": "art: w1 flipped and darkened (owner 2026-11-07 preferred the painted look over the composed try, data/compose/e2_try.json)",
    "monsters": [
     {
      "kind": "shroom",

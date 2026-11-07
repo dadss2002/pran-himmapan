@@ -1,5 +1,5 @@
 {
- "note": "M3f e2 ลานป่าทึบ composed by Claude from PixelLab props (owner 2026-11-07): dense shady forest, open middle with a little cover, ground cut from painted rooms, big trees + canopy, bushes/flowers/mushrooms",
+ "note": "KEPT AS AN EXAMPLE ONLY - owner preferred the painted e2. Running compose_room.py e2_try writes raw/e2_try.png (not a room). Use the composer only when the owner asks. M3f e2 ลานป่าทึบ composed by Claude from PixelLab props (owner 2026-11-07): dense shady forest, open middle with a little cover, ground cut from painted rooms, big trees + canopy, bushes/flowers/mushrooms",
  "seed": 11,
  "ground": {
   "from": [
