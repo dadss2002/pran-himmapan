@@ -332,7 +332,7 @@ func build() -> void:
 	_d_action = Button.new()
 	_d_action.custom_minimum_size = Vector2(0, 32)
 	_d_action.focus_mode = Control.FOCUS_NONE
-	_d_action.add_theme_font_size_override("font_size", 11)
+	_d_action.add_theme_font_size_override("font_size", UiKit.fs(11))
 	_d_action.pressed.connect(func(): press_action())
 	dv.add_child(_d_action)
 
@@ -363,7 +363,7 @@ func refresh() -> void:
 			(c.get_node("Icon") as TextureRect).texture = load(LootDrop.icon_path("gem_" + String(g.type))) if g != null else null
 			if g == null:
 				c.text = "ว่าง" if unlocked else "ล็อก"
-				c.add_theme_font_size_override("font_size", 8)
+				c.add_theme_font_size_override("font_size", UiKit.fs(8))
 				c.add_theme_color_override("font_color", Color("#a59c86"))
 			var on: bool = _sel.has("socket") and _sel.socket[0] == id and int(_sel.socket[1]) == i
 			UiKit.style_cell(c, Gear.rarity_color(String(g.rarity)) if g != null else Color("#6b6450"), g != null, on)

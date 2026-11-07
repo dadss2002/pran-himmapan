@@ -22,9 +22,9 @@ func _ready() -> void:
 ## Portrait (360 px wide): the skill arc stays in the bottom-right corner; dodge and the potions move
 ## up over it so the whole left half stays free for the joystick. Offsets from the bottom-right corner.
 const PORTRAIT_OFF := {
-	"dodge": Vector2(-145, -150),
-	"potion_hp": Vector2(-56, -182),
-	"potion_mp": Vector2(-95, -182),
+	"dodge": Vector2(-150, -170),
+	"potion_hp": Vector2(-56, -215),
+	"potion_mp": Vector2(-104, -212),
 }
 
 ## Every button keeps its distance from the bottom-right corner (wider screens, portrait).
@@ -53,14 +53,16 @@ func _notification(what: int) -> void:
 		release_all()
 
 func build_default() -> void:
-	_add("shoot", "attack", Vector2(584, 302), 34, "res://assets/skills/basic_shot.png", true, "ยิง")
-	_add("skill1", "skill_1", Vector2(506, 302), 20, "res://assets/skills/piercing.png", true, "")
-	_add("skill2", "skill_2", Vector2(516.5, 263), 20, "res://assets/skills/spread.png", false, "Lv3")
-	_add("skill3", "", Vector2(545, 234.5), 20, "res://assets/skills/arrow_rain.png", false, "Lv7")
-	_add("skill4", "", Vector2(584, 224), 20, "res://assets/skills/slot_empty.png", false, "")
-	_add("dodge", "dodge", Vector2(447, 314), 23, "res://assets/skills/dodge.png", true, "กลิ้ง")
-	_add("potion_hp", "potion_hp", Vector2(394, 321), 17, "res://assets/items/potion_hp.png", true, "5")
-	_add("potion_mp", "potion_mp", Vector2(355, 321), 17, "res://assets/items/potion_mp.png", true, "3")
+	# Sizes follow the touch-target guidance (docs/design/design-research.md §4): skills r24 ≈ 48+ pt
+	# across, dodge r26, potions r20; the skill arc sits on a 97 px circle round the shoot button.
+	_add("shoot", "attack", Vector2(584, 302), 36, "res://assets/skills/basic_shot.png", true, "ยิง")
+	_add("skill1", "skill_1", Vector2(487, 302), 24, "res://assets/skills/piercing.png", true, "")
+	_add("skill2", "skill_2", Vector2(500, 253.5), 24, "res://assets/skills/spread.png", false, "Lv3")
+	_add("skill3", "", Vector2(535.5, 218), 24, "res://assets/skills/arrow_rain.png", false, "Lv7")
+	_add("skill4", "", Vector2(584, 205), 24, "res://assets/skills/slot_empty.png", false, "")
+	_add("dodge", "dodge", Vector2(430, 312), 26, "res://assets/skills/dodge.png", true, "กลิ้ง")
+	_add("potion_hp", "potion_hp", Vector2(446, 262), 20, "res://assets/items/potion_hp.png", true, "5")
+	_add("potion_mp", "potion_mp", Vector2(398, 276), 20, "res://assets/items/potion_mp.png", true, "3")
 
 func _add(name: String, action: String, c: Vector2, r: float, icon: String, enabled: bool, note: String) -> void:
 	buttons[name] = {"action": action, "center": c, "radius": r, "enabled": enabled, "note": note, "off": c - BASE}
@@ -133,8 +135,8 @@ func _draw() -> void:
 				pts.append(b.center + Vector2(cos(a), sin(a)) * b.radius)
 			draw_colored_polygon(pts, Color(0, 0, 0, 0.55))
 			var t := "%.1f" % _cd[name][0]
-			draw_string(FONT, b.center + Vector2(-10, 5), t, HORIZONTAL_ALIGNMENT_CENTER, 20, 12, Color.WHITE)
+			draw_string(FONT, b.center + Vector2(-15, 6), t, HORIZONTAL_ALIGNMENT_CENTER, 30, UiKit.fs(12), Color.WHITE)
 		if b.note != "":
-			var y: float = b.radius + 9
-			draw_string_outline(FONT, b.center + Vector2(-30, y), b.note, HORIZONTAL_ALIGNMENT_CENTER, 60, 9, 3, Color(0, 0, 0, 0.8))
-			draw_string(FONT, b.center + Vector2(-30, y), b.note, HORIZONTAL_ALIGNMENT_CENTER, 60, 9, Color("#fde39a"))
+			var y: float = b.radius + 11
+			draw_string_outline(FONT, b.center + Vector2(-30, y), b.note, HORIZONTAL_ALIGNMENT_CENTER, 60, UiKit.fs(9), 3, Color(0, 0, 0, 0.8))
+			draw_string(FONT, b.center + Vector2(-30, y), b.note, HORIZONTAL_ALIGNMENT_CENTER, 60, UiKit.fs(9), Color("#fde39a"))

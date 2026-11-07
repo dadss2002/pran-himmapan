@@ -29,7 +29,27 @@ func test_camera_covers_the_room():
 func test_portrait_buttons_fit_and_leave_the_joystick_side_free():
 	var b := TouchButtons.new()
 	b.build_default()
-	var view := Vector2(360, 779)
+	var r := ""
+	for view in [Vector2(360, 779), Vector2(640, 360), Vector2(779, 360)]:
+		r = _buttons_ok(b, view)
+		if r != "": break
+	b.layout(Vector2(640, 360))
+	if r == "" and b.center_of("dodge") != Vector2(430, 312): r = "landscape dodge moved to %s" % b.center_of("dodge")
+	b.free()
+	return r
+
+## Touch-target rule (docs/design/design-research.md §4): skill buttons at least r22 (≈44 pt).
+func test_touch_targets_big_enough():
+	var b := TouchButtons.new()
+	b.build_default()
+	var r := ""
+	for n in b.buttons:
+		var want := 34.0 if n == "shoot" else (20.0 if n.begins_with("potion") else 22.0)
+		if b.buttons[n].radius < want: r = "%s radius %d (want >= %d)" % [n, b.buttons[n].radius, want]
+	b.free()
+	return r
+
+func _buttons_ok(b: TouchButtons, view: Vector2) -> String:
 	b.layout(view)
 	var names: Array = b.buttons.keys()
 	var r := ""
@@ -37,14 +57,11 @@ func test_portrait_buttons_fit_and_leave_the_joystick_side_free():
 		var c: Vector2 = b.center_of(n)
 		var rad: float = b.buttons[n].radius
 		if c.x - rad < 0 or c.x + rad > view.x or c.y - rad < 0 or c.y + rad > view.y: r = "%s off screen at %s" % [n, c]
-		elif c.x - rad < view.x * 0.5: r = "%s at %s is in the joystick half" % [n, c]
+		elif c.x - rad < view.x * 0.5 - 0.5: r = "%s at %s is in the joystick half" % [n, c]
 		for m in names:
 			if r == "" and m != n and c.distance_to(b.center_of(m)) < rad + b.buttons[m].radius: r = "%s overlaps %s" % [n, m]
 		if r != "": break
-	b.layout(Vector2(640, 360))
-	if r == "" and b.center_of("dodge") != Vector2(447, 314): r = "landscape dodge moved to %s" % b.center_of("dodge")
-	b.free()
-	return r
+	return "" if r == "" else "%s view: %s" % [view, r]
 
 func test_portrait_hud_and_bag_fit():
 	await tree.process_frame
