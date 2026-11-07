@@ -6,8 +6,8 @@ const LINKS := [["c0r0:south", "c0r1:north"], ["c0r1:south", "c0r2:north"], ["c0
 	["c0r1:east", "c1r1:west"], ["c1r0:south", "c1r1:north"], ["c1r1:east", "c2r1:west"],
 	["c2r0:south", "c2r1:north"], ["c2r1:south", "c2r2:north"], ["c0r2:east", "c1r2:west"],
 	["c1r2:south", "c1r3:north"], ["c1r3:east", "c2r3:west"],
-	# M3f arenas on the outer edges
-	["w1:east", "c0r1:west"], ["e0:west", "c2r0:east"], ["w3:east", "c0r3:west"], ["e2:west", "c2r2:east"]]
+	# M4b: e0 is the only arena (w1, w3, e2 removed; c0r1 west, c0r3 west, c2r2 east are dead ends)
+	["e0:west", "c2r0:east"]]
 
 var tree: SceneTree
 
@@ -17,10 +17,21 @@ func setup(t: SceneTree) -> void:
 func test_rooms_data_valid():
 	var rs := RoomSet.open()
 	if rs == null: return "data/rooms.json missing"
-	if rs.ids().size() != 16: return "%d rooms (12 map + 4 arenas)" % rs.ids().size()
+	if rs.ids().size() != 13: return "%d rooms (12 map + arena e0)" % rs.ids().size()
 	if rs.start != "c1r1": return "start %s" % rs.start
 	var errs := rs.validate()
 	return "" if errs.is_empty() else "%d problems, first: %s" % [errs.size(), errs.slice(0, 4)]
+
+## M4b: each room has its own size, read from its picture (all 512x512 now; old rooms were 688x384).
+func test_room_sizes_from_rooms_json():
+	var rs := RoomSet.open()
+	for id in rs.ids():
+		var l := rs.layout(id)
+		if l.size_px() != Vector2(512, 512): return "%s layout size %s (want 512x512)" % [id, l.size_px()]
+		if l.cols * l.cell != 512 or l.rows * l.cell != 512: return "%s walk grid %dx%d cells" % [id, l.cols, l.rows]
+		var tex: Texture2D = load(String(rs.room(id).image))
+		if tex == null or Vector2(tex.get_size()) != l.size_px(): return "%s picture size differs from layout" % id
+	return ""
 
 func test_links_are_pairs():
 	var rs := RoomSet.open()
@@ -47,7 +58,7 @@ func test_every_room_reachable_from_start():
 			if not seen.has(String(w.to)):
 				seen[String(w.to)] = true
 				todo.append(String(w.to))
-	return "" if seen.size() == 16 else "only %d rooms reachable: %s" % [seen.size(), seen.keys()]
+	return "" if seen.size() == 13 else "only %d rooms reachable: %s" % [seen.size(), seen.keys()]
 
 func test_warps_connected_in_room():
 	var rs := RoomSet.open()

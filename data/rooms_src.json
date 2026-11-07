@@ -1,5 +1,5 @@
 {
- "note": "Hand data for tools/painted_rooms.py. Room-local pixels (688x384). links: room:side pairs (side = north/south/east/west); a warp sits on the open ground nearest that edge's middle, or nearest hints[side]. edits: walk/block pixel rects. monsters: kind/level/count (M3g); groups of <=6 are placed by the tool unless 'at' is given.",
+ "note": "Hand data for tools/painted_rooms.py. Room-local pixels (each room is its picture size, 512x512 since M4b). links: room:side pairs (side = north/south/east/west); a warp sits on the open ground nearest that edge's middle, or nearest hints[side]. edits: walk/block pixel rects. monsters: kind/level/count (M3g); groups of <=6 are placed by the tool unless 'at' is given. monster_sets (e0): the arena sets in level order (w1, e0, e2, w3 of M3f); 'monsters' is the default set.",
  "start": "c1r1",
  "links": [
   [
@@ -47,36 +47,12 @@
    "c2r3:west"
   ],
   [
-   "w1:east",
-   "c0r1:west"
-  ],
-  [
    "e0:west",
    "c2r0:east"
-  ],
-  [
-   "w3:east",
-   "c0r3:west"
-  ],
-  [
-   "e2:west",
-   "c2r2:east"
   ]
  ],
  "rooms": {
   "c0r0": {
-   "edits": [
-    {
-     "op": "walk",
-     "rect": [
-      372,
-      0,
-      76,
-      384
-     ],
-     "why": "stone road incl. stairs"
-    }
-   ],
    "monsters": [
     {
      "kind": "boar",
@@ -91,18 +67,6 @@
    ]
   },
   "c0r1": {
-   "edits": [
-    {
-     "op": "walk",
-     "rect": [
-      372,
-      0,
-      76,
-      384
-     ],
-     "why": "stone road incl. stairs"
-    }
-   ],
    "monsters": [
     {
      "kind": "boar",
@@ -114,6 +78,48 @@
      "level": 2,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      342,
+      284,
+      40,
+      36
+     ],
+     "why": "boulder"
+    },
+    {
+     "op": "block",
+     "rect": [
+      316,
+      326,
+      60,
+      44
+     ],
+     "why": "boulder"
+    },
+    {
+     "op": "block",
+     "rect": [
+      86,
+      302,
+      38,
+      42
+     ],
+     "why": "rock"
+    },
+    {
+     "op": "block",
+     "rect": [
+      136,
+      316,
+      44,
+      38
+     ],
+     "why": "fallen stone"
+    }
    ]
   },
   "c0r2": {
@@ -121,21 +127,9 @@
     {
      "id": "water_ripple",
      "at": [
-      212,
-      272
+      60,
+      260
      ]
-    }
-   ],
-   "edits": [
-    {
-     "op": "walk",
-     "rect": [
-      372,
-      0,
-      76,
-      384
-     ],
-     "why": "stone road incl. stairs"
     }
    ],
    "monsters": [
@@ -163,6 +157,38 @@
      "level": 7,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      290,
+      106,
+      32,
+      40
+     ],
+     "why": "statue"
+    },
+    {
+     "op": "block",
+     "rect": [
+      382,
+      160,
+      30,
+      40
+     ],
+     "why": "statue"
+    },
+    {
+     "op": "block",
+     "rect": [
+      400,
+      300,
+      46,
+      52
+     ],
+     "why": "rock pile"
+    }
    ]
   },
   "c1r0": {
@@ -177,12 +203,94 @@
      "level": 2,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      196,
+      118,
+      50,
+      40
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      270,
+      118,
+      50,
+      40
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      335,
+      96,
+      50,
+      61
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      382,
+      165,
+      45,
+      62
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      100,
+      158,
+      40,
+      68
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      40,
+      380,
+      60,
+      64
+     ],
+     "why": "fallen column"
+    },
+    {
+     "op": "block",
+     "rect": [
+      90,
+      345,
+      55,
+      60
+     ],
+     "why": "fallen column"
+    },
+    {
+     "op": "block",
+     "rect": [
+      140,
+      322,
+      50,
+      45
+     ],
+     "why": "fallen column"
+    }
    ]
   },
   "c1r1": {
    "spawn": [
-    350,
-    280
+    260,
+    373
    ],
    "monsters": [
     {
@@ -194,6 +302,118 @@
      "kind": "boar",
      "level": 1,
      "count": 8
+    }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      197,
+      222,
+      16,
+      48
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      220,
+      205,
+      20,
+      38
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      244,
+      220,
+      18,
+      15
+     ],
+     "why": "stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      266,
+      194,
+      32,
+      54
+     ],
+     "why": "trilithon"
+    },
+    {
+     "op": "block",
+     "rect": [
+      296,
+      242,
+      14,
+      38
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      314,
+      215,
+      24,
+      53
+     ],
+     "why": "lantern shrine"
+    },
+    {
+     "op": "block",
+     "rect": [
+      201,
+      272,
+      20,
+      28
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      228,
+      270,
+      22,
+      40
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      272,
+      272,
+      20,
+      36
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      320,
+      330,
+      60,
+      45
+     ],
+     "why": "boulder"
+    },
+    {
+     "op": "block",
+     "rect": [
+      195,
+      140,
+      36,
+      30
+     ],
+     "why": "boulder"
     }
    ]
   },
@@ -209,6 +429,48 @@
      "level": 5,
      "count": 8
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      305,
+      355,
+      95,
+      40
+     ],
+     "why": "fallen log"
+    },
+    {
+     "op": "block",
+     "rect": [
+      55,
+      335,
+      65,
+      50
+     ],
+     "why": "mossy log"
+    },
+    {
+     "op": "block",
+     "rect": [
+      10,
+      195,
+      40,
+      30
+     ],
+     "why": "log"
+    },
+    {
+     "op": "block",
+     "rect": [
+      310,
+      150,
+      60,
+      40
+     ],
+     "why": "stump and rocks"
+    }
    ]
   },
   "c1r3": {
@@ -216,8 +478,8 @@
     {
      "id": "water_ripple",
      "at": [
-      212,
-      272
+      158,
+      363
      ]
     }
    ],
@@ -246,6 +508,78 @@
      "level": 4,
      "count": 8
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      195,
+      30,
+      130,
+      238
+     ],
+     "why": "prang"
+    },
+    {
+     "op": "block",
+     "rect": [
+      168,
+      135,
+      25,
+      65
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      338,
+      145,
+      25,
+      55
+     ],
+     "why": "stele"
+    },
+    {
+     "op": "block",
+     "rect": [
+      320,
+      195,
+      60,
+      45
+     ],
+     "why": "fallen blocks"
+    },
+    {
+     "op": "block",
+     "rect": [
+      330,
+      240,
+      20,
+      40
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      165,
+      265,
+      40,
+      35
+     ],
+     "why": "fallen block"
+    },
+    {
+     "op": "block",
+     "rect": [
+      315,
+      330,
+      65,
+      48
+     ],
+     "why": "boulder"
+    }
    ]
   },
   "c2r1": {
@@ -259,6 +593,28 @@
      "kind": "macaque",
      "level": 3,
      "count": 8
+    }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      318,
+      328,
+      65,
+      45
+     ],
+     "why": "boulder"
+    },
+    {
+     "op": "block",
+     "rect": [
+      30,
+      155,
+      50,
+      40
+     ],
+     "why": "rock"
     }
    ]
   },
@@ -274,18 +630,21 @@
      "level": 4,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      290,
+      40,
+      60,
+      70
+     ],
+     "why": "shrine"
+    }
    ]
   },
   "c2r3": {
-   "fx": [
-    {
-     "id": "water_ripple",
-     "at": [
-      522,
-      178
-     ]
-    }
-   ],
    "monsters": [
     {
      "kind": "kongkoi",
@@ -300,25 +659,6 @@
     {
      "kind": "viper",
      "level": 9,
-     "count": 8
-    }
-   ]
-  },
-  "w1": {
-   "grid": [
-    -1,
-    1
-   ],
-   "name": "ลานหญ้าตะวันตก",
-   "monsters": [
-    {
-     "kind": "boar",
-     "level": 2,
-     "count": 10
-    },
-    {
-     "kind": "wolf",
-     "level": 3,
      "count": 8
     }
    ]
@@ -340,49 +680,72 @@
      "level": 4,
      "count": 8
     }
-   ]
-  },
-  "w3": {
-   "grid": [
-    -1,
-    3
    ],
-   "name": "ลานหินตะวันตก",
-   "monsters": [
-    {
-     "kind": "kongkoi",
-     "level": 9,
-     "count": 10
-    },
-    {
-     "kind": "kongkoi",
-     "level": 10,
-     "count": 2
-    },
-    {
-     "kind": "macaque",
-     "level": 8,
-     "count": 8
-    }
-   ]
-  },
-  "e2": {
-   "grid": [
-    3,
-    2
+   "monster_sets": [
+    [
+     {
+      "kind": "boar",
+      "level": 2,
+      "count": 10
+     },
+     {
+      "kind": "wolf",
+      "level": 3,
+      "count": 8
+     }
+    ],
+    [
+     {
+      "kind": "wolf",
+      "level": 5,
+      "count": 12
+     },
+     {
+      "kind": "macaque",
+      "level": 4,
+      "count": 8
+     }
+    ],
+    [
+     {
+      "kind": "shroom",
+      "level": 6,
+      "count": 12
+     },
+     {
+      "kind": "wolf",
+      "level": 7,
+      "count": 10
+     }
+    ],
+    [
+     {
+      "kind": "kongkoi",
+      "level": 9,
+      "count": 10
+     },
+     {
+      "kind": "kongkoi",
+      "level": 10,
+      "count": 2
+     },
+     {
+      "kind": "macaque",
+      "level": 8,
+      "count": 8
+     }
+    ]
    ],
-   "name": "ลานป่าทึบตะวันออก",
-   "note": "art: w1 flipped and darkened (owner 2026-11-07 preferred the painted look over the composed try, data/compose/e2_try.json)",
-   "monsters": [
+   "edits": [
     {
-     "kind": "shroom",
-     "level": 6,
-     "count": 12
-    },
-    {
-     "kind": "wolf",
-     "level": 7,
-     "count": 10
+     "op": "walk",
+     "rect": [
+      180,
+      185,
+      230,
+      150
+     ],
+     "why": "scorched centre of the arena (dark ground read as blocked)"
     }
    ]
   }

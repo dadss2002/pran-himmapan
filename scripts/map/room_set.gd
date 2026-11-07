@@ -9,7 +9,7 @@ const WARP_RADIUS := 14.0
 const REARM := 22.0
 
 var start := ""
-var size := Vector2.ZERO
+var size := Vector2.ZERO      # fallback for rooms without their own "size" (M4b: each room has one)
 var cell := 8
 var _rooms: Dictionary = {}
 var _layouts: Dictionary = {}
@@ -39,7 +39,7 @@ func room(id: String) -> Dictionary:
 func layout(id: String) -> PaintedLayout:
 	if not _layouts.has(id):
 		var d: Dictionary = _rooms[id].duplicate()
-		d["size"] = [size.x, size.y]
+		if not d.has("size"): d["size"] = [size.x, size.y]
 		d["cell"] = cell
 		if not d.has("spawn"): d["spawn"] = [0, 0]
 		var l := PaintedLayout.from_dict(d)
@@ -67,7 +67,7 @@ func arrival(id: String, warp_id: String) -> Vector2:
 
 func _arrival_on(l: PaintedLayout, w: Dictionary) -> Vector2:
 	var at := Vector2(w.at[0], w.at[1])
-	var want := at + (size / 2.0 - at).normalized() * ARRIVAL
+	var want := at + (l.size_px() / 2.0 - at).normalized() * ARRIVAL
 	var best := at
 	var best_d := INF
 	for y in l.rows:

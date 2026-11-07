@@ -171,10 +171,11 @@ func test_colliders_match_blocked_at_every_room():
 		var space: PhysicsDirectSpaceState2D = g.world.get_world_2d().direct_space_state   # the room lives in world_vp (M3j)
 		var q := PhysicsPointQueryParameters2D.new()
 		q.collision_mask = 1
+		var sz: Vector2 = g.layout.size_px()   # each room's own size (M4b: 512x512)
 		var y := 3.5
-		while y < 384.0 and r == "":
+		while y < sz.y and r == "":
 			var x := 3.5
-			while x < 688.0:
+			while x < sz.x:
 				q.position = Vector2(x, y)
 				var solid := false
 				for hit in space.intersect_point(q, 4):

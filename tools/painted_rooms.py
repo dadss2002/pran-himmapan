@@ -2,13 +2,15 @@
 """Builds the forest rooms (M3c) from the raw painted chunks.
 
 Inputs
-  assets/map/painted/raw/c{col}r{row}.png   one 688x384 PixelLab scene per room (seamless on its own)
+  assets/map/painted/raw/<id>.png          one PixelLab scene per room; the room's size is its picture's
+                                            (512x512 since M4b, 688x384 before)
   data/rooms_src.json                       hand data: start room, links (room/side pairs), spawns,
                                             optional warp hints, walk edits, fx, monsters
 Outputs
   data/rooms.json                           what the game reads (see RoomSet)
   assets/map/painted/rooms/overlay_<id>.png leaves hanging over walkable ground, drawn above characters
-  docs/preview/m3c_rooms_debug.png          every room at half size: blocked tinted red, warps blue, spawn white
+  docs/preview/m3c_rooms_debug.png          every room at half size on its grid place: blocked tinted red, warps blue,
+                                            spawn white, monster homes orange
 
 Walkable is guessed from colour (small palette): yellow-greens = grass, light low-saturation greys and
 browns = stone/dirt; blue-greens, teal, purples (canopy, water, trunks, cliffs) block. The 8 px grid is
@@ -29,7 +31,6 @@ from scipy import ndimage
 
 ROOT = "."
 CELL = 8
-SIZE = (688, 384)
 OVERHANG_UP = 48
 OVERHANG_SIDE = 12
 SIDES = {"north": (0.5, 0.0), "south": (0.5, 1.0), "west": (0.0, 0.5), "east": (1.0, 0.5)}
@@ -142,6 +143,31 @@ def spread_home(roomy: np.ndarray, homes: list, arrivals: list, keep_off: float,
     return [int(cx[i]), int(cy[i])]
 
 
+def place_monsters(src_monsters: list, roomy: np.ndarray, arrivals: list):
+    """Group homes for one monster list: given "at" points move onto the main open ground; others are
+    split into groups of at most GROUP_MAX and spread over the room (farthest from the other homes),
+    out of aggro range of every warp arrival for kinds that attack first (M3g)."""
+    monsters = []
+    homes = []
+    for m in src_monsters:
+        m = dict(m)
+        if "at" in m:
+            m["at"] = nearest_roomy(roomy, m["at"])
+            homes.append(m["at"])
+            monsters.append(m)
+            continue
+        n = -(-int(m["count"]) // GROUP_MAX)
+        sizes = [int(m["count"]) // n + (1 if i < int(m["count"]) % n else 0) for i in range(n)]
+        first = attacks_first(m["kind"])
+        keep_off = aggro_of(m["kind"]) + 40 if first else 90
+        hard_off = aggro_of(m["kind"]) + 12 if first else 60
+        for sz in sizes:
+            at = spread_home(roomy, homes, arrivals, keep_off, hard_off)
+            homes.append(at)
+            monsters.append({"kind": m["kind"], "level": m["level"], "count": sz, "at": at})
+    return monsters, homes
+
+
 def overlay(rgb: np.ndarray, walk: np.ndarray):
     _, canopy = classify(rgb)
     h, w = rgb.shape[:2]
@@ -167,6 +193,7 @@ def main():
     debug = []
     for rid, rs in src["rooms"].items():
         rgb = np.asarray(Image.open(f"{ROOT}/assets/map/painted/raw/{rid}.png").convert("RGB"))
+        size = (rgb.shape[1], rgb.shape[0])
         # rooms composed from props (tools/compose_room.py) bring exact walk / over-the-hero masks
         walk_file = Path(f"{ROOT}/assets/map/painted/raw/{rid}_walk.png")
         over_file = Path(f"{ROOT}/assets/map/painted/raw/{rid}_over.png")
@@ -186,46 +213,30 @@ def main():
         for (r, side), (to, to_side) in sorted(links.items()):
             if r != rid: continue
             fx, fy = SIDES[side]
-            hint = rs.get("hints", {}).get(side, [fx * SIZE[0], fy * SIZE[1]])
+            hint = rs.get("hints", {}).get(side, [fx * size[0], fy * size[1]])
             warps.append({"id": side, "at": nearest_roomy(roomy, hint), "to": to, "to_warp": to_side})
         spawn = nearest_roomy(roomy, rs["spawn"]) if "spawn" in rs else None
-        monsters = []
         arrivals = []
         for wp in warps:
             ax, ay = wp["at"]
-            dx, dy = SIZE[0] / 2 - ax, SIZE[1] / 2 - ay
+            dx, dy = size[0] / 2 - ax, size[1] / 2 - ay
             ln = max((dx * dx + dy * dy) ** 0.5, 1e-6)
             arrivals.append(nearest_roomy(roomy, [ax + dx / ln * ARRIVAL, ay + dy / ln * ARRIVAL]))
         if "spawn" in rs:
             arrivals.append(nearest_roomy(roomy, rs["spawn"]))   # the hero's start point counts too
-        homes = []
-        for m in rs.get("monsters", []):
-            m = dict(m)
-            if "at" in m:
-                m["at"] = nearest_roomy(roomy, m["at"])   # a group's home on the main open ground
-                homes.append(m["at"])
-                monsters.append(m)
-                continue
-            # M3g: split into groups of at most GROUP_MAX, spread over the room (farthest from the other
-            # homes), and out of aggro range of every warp arrival for kinds that attack first
-            n = -(-int(m["count"]) // GROUP_MAX)
-            sizes = [int(m["count"]) // n + (1 if i < int(m["count"]) % n else 0) for i in range(n)]
-            first = attacks_first(m["kind"])
-            keep_off = aggro_of(m["kind"]) + 40 if first else 90
-            hard_off = aggro_of(m["kind"]) + 12 if first else 60
-            for sz in sizes:
-                at = spread_home(roomy, homes, arrivals, keep_off, hard_off)
-                homes.append(at)
-                monsters.append({"kind": m["kind"], "level": m["level"], "count": sz, "at": at})
+        monsters, homes = place_monsters(rs.get("monsters", []), roomy, arrivals)
+        # e0 (M4b): the arena sets in level order; each set is placed on its own like "monsters"
+        sets = [place_monsters(ms, roomy, arrivals)[0] for ms in rs.get("monster_sets", [])]
         over = np.asarray(Image.open(over_file).convert("L")) > 127 if over_file.exists() else overlay(rgb, walk)
         ov_file = None
         if over.any():
             ov_file = f"res://assets/map/painted/rooms/overlay_{rid}.png"
             Image.fromarray(np.dstack([rgb, (over * 255).astype(np.uint8)]), "RGBA").save(
                 f"{ROOT}/assets/map/painted/rooms/overlay_{rid}.png")
-        room = {"image": f"res://assets/map/painted/raw/{rid}.png", "overlay": ov_file,
+        room = {"image": f"res://assets/map/painted/raw/{rid}.png", "overlay": ov_file, "size": list(size),
                 "blocked": ["".join("." if v else "#" for v in row) for row in walk],
                 "warps": warps, "fx": rs.get("fx", []), "monsters": monsters}
+        if sets: room["monster_sets"] = sets
         if spawn: room["spawn"] = spawn
         rooms[rid] = room
         # debug tile
@@ -239,21 +250,28 @@ def main():
             x, y = wp["at"]
             d.ellipse((x - 14, y - 9, x + 14, y + 9), outline=(80, 160, 255, 255), width=3)
             d.text((x - 18, y - 24), f"{wp['id']}>{wp['to']}", fill=(255, 255, 255, 255))
+        for m in monsters:
+            x, y = m["at"]
+            d.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(255, 150, 0, 255))
         if spawn:
             d.ellipse((spawn[0] - 5, spawn[1] - 5, spawn[0] + 5, spawn[1] + 5), fill=(255, 255, 255, 255))
         d.text((6, 6), rid, fill=(255, 255, 255, 255))
         grid = rs.get("grid") or [int(rid[1]), int(rid[3])]   # c?r? rooms; others give their place
         debug.append((tuple(grid), im))
-    out = {"start": src["start"], "size": list(SIZE), "cell": CELL, "rooms": rooms}
+    # top-level size: the start room's (older readers / rooms without their own size fall back to it)
+    out = {"start": src["start"], "size": rooms[src["start"]]["size"], "cell": CELL, "rooms": rooms}
     with open(f"{ROOT}/data/rooms.json", "w") as f:
         json.dump(out, f, ensure_ascii=False, indent=0)
     c0 = min(g[0] for g, _ in debug)
     r0 = min(g[1] for g, _ in debug)
     gc = max(g[0] for g, _ in debug) - c0 + 1
     gr = max(g[1] for g, _ in debug) - r0 + 1
-    sheet = Image.new("RGBA", (gc * SIZE[0] // 2, gr * SIZE[1] // 2), (0, 0, 0, 255))
+    # one slot per grid place, as big as the largest room at half size; smaller rooms sit top-left
+    tw = max(im.width for _, im in debug) // 2
+    th = max(im.height for _, im in debug) // 2
+    sheet = Image.new("RGBA", (gc * tw, gr * th), (0, 0, 0, 255))
     for (gx, gy), im in debug:
-        sheet.paste(im.resize((SIZE[0] // 2, SIZE[1] // 2), Image.NEAREST), ((gx - c0) * SIZE[0] // 2, (gy - r0) * SIZE[1] // 2))
+        sheet.paste(im.resize((im.width // 2, im.height // 2), Image.NEAREST), ((gx - c0) * tw, (gy - r0) * th))
     sheet.save(f"{ROOT}/docs/preview/m3c_rooms_debug.png")
     print("rooms %d, links %d" % (len(rooms), len(src["links"])))
 

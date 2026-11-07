@@ -13,17 +13,21 @@ func test_base_view_by_orientation():
 	return ""
 
 func test_camera_covers_the_room():
-	var room := Vector2(688, 384)
-	var cases := [
-		[Vector2(360, 779), 779.0 / 384.0],    # portrait phone: room height fills the screen
-		[Vector2(779, 360), 779.0 / 688.0],    # landscape phone: room width fills the screen
-		[Vector2(640, 360), 1.0],              # 16:9: the room is already bigger than the view
-	]
-	for c in cases:
-		var z := ScreenFit.camera_zoom(c[0], room)
-		if absf(z - c[1]) > 0.001: return "view %s zoom %.3f (want %.3f)" % [c[0], z, c[1]]
-		var seen: Vector2 = c[0] / z
-		if seen.x > room.x + 0.5 or seen.y > room.y + 0.5: return "view %s still shows %s of a %s room" % [c[0], seen, room]
+	# every room's own size (M4b: 512x512; the 688x384 rooms before it worked the same way)
+	var rs := RoomSet.open()
+	for id in rs.ids():
+		var room: Vector2 = rs.layout(id).size_px()
+		var cases := [
+			[Vector2(360, 779), maxf(779.0 / room.y, 360.0 / room.x)],    # portrait phone
+			[Vector2(779, 360), maxf(779.0 / room.x, 360.0 / room.y)],    # landscape phone
+			[Vector2(640, 360), maxf(1.0, maxf(640.0 / room.x, 360.0 / room.y))],   # 16:9 base view
+		]
+		for c in cases:
+			var z := ScreenFit.camera_zoom(c[0], room)
+			if absf(z - c[1]) > 0.001: return "%s view %s zoom %.3f (want %.3f)" % [id, c[0], z, c[1]]
+			var seen: Vector2 = c[0] / z
+			if seen.x > room.x + 0.5 or seen.y > room.y + 0.5: return "%s view %s still shows %s of a %s room" % [id, c[0], seen, room]
+			if seen.x < room.x - 0.5 and seen.y < room.y - 0.5: return "%s view %s zoomed in past the room's edges" % [id, c[0]]
 	return ""
 
 func test_portrait_buttons_fit_and_leave_the_joystick_side_free():
@@ -116,7 +120,8 @@ func test_world_drawn_at_pixel_size():
 	var r := ""
 	var px: Vector2 = Vector2(g.world_vp.size)
 	var s: float = g._scale
-	if px.x > 688.0 + 1 or px.y > 384.0 + 1: r = "world view %s is bigger than a room" % px
+	var room: Vector2 = g.layout.size_px()
+	if px.x > room.x + 1 or px.y > room.y + 1: r = "world view %s is bigger than the %s room" % [px, room]
 	elif g.view.size.x < v.x - 0.5 or g.view.size.y < v.y - 0.5: r = "world picture %s does not cover the %s screen" % [g.view.size, v]
 	elif absf(g.view.size.x / px.x - s) > 0.001: r = "picture scale %.3f != cover scale %.3f" % [g.view.size.x / px.x, s]
 	elif g.hero.get_viewport() != g.world_vp: r = "the hero is not drawn in the world view"

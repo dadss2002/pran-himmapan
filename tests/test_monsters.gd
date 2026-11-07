@@ -212,33 +212,47 @@ func test_deer_drops_double_gold():
 	return "" if t == "kongkoi" else "kongkoi loot table %s" % t
 
 ## Spec M3g §2: which monsters live in which room (kind: count, lowest level); 2 kinds, 15-25 each.
+## M4b: w1, e2, w3 were removed; their sets live on in e0's monster_sets (level order w1, e0, e2, w3).
 func test_rooms_hold_the_spec_monsters():
 	var want := {
 		"c1r1": {"deer": 8, "boar": 8}, "c1r0": {"wolf": 10, "deer": 6}, "c0r1": {"boar": 10, "deer": 6},
-		"w1": {"boar": 10, "wolf": 8}, "c0r0": {"boar": 10, "macaque": 6}, "c2r1": {"boar": 10, "macaque": 8},
+		"c0r0": {"boar": 10, "macaque": 6}, "c2r1": {"boar": 10, "macaque": 8},
 		"c2r2": {"wolf": 10, "macaque": 6}, "c2r0": {"deer": 8, "macaque": 8}, "c0r2": {"shroom": 10, "viper": 6},
-		"e0": {"wolf": 12, "macaque": 8}, "c1r2": {"wolf": 12, "shroom": 8}, "e2": {"shroom": 12, "wolf": 10},
+		"e0": {"wolf": 12, "macaque": 8}, "c1r2": {"wolf": 12, "shroom": 8},
 		"c0r3": {"viper": 10, "kongkoi": 6}, "c1r3": {"viper": 10, "shroom": 10},
-		"c2r3": {"kongkoi": 10, "viper": 8}, "w3": {"kongkoi": 12, "macaque": 8},
+		"c2r3": {"kongkoi": 10, "viper": 8},
 	}
-	var lv := {"c1r1": 1, "c1r0": 1, "c0r1": 2, "w1": 2, "c0r0": 3, "c2r1": 3, "c2r2": 3, "c2r0": 4,
-		"c0r2": 4, "e0": 4, "c1r2": 5, "e2": 6, "c0r3": 7, "c1r3": 8, "c2r3": 9, "w3": 8}
+	var lv := {"c1r1": 1, "c1r0": 1, "c0r1": 2, "c0r0": 3, "c2r1": 3, "c2r2": 3, "c2r0": 4,
+		"c0r2": 4, "e0": 4, "c1r2": 5, "c0r3": 7, "c1r3": 8, "c2r3": 9}
+	var sets_want := [[{"boar": 10, "wolf": 8}, 2], [{"wolf": 12, "macaque": 8}, 4],
+		[{"shroom": 12, "wolf": 10}, 6], [{"kongkoi": 12, "macaque": 8}, 8]]
 	var rooms := RoomSet.open()
+	if rooms.ids().size() != want.size(): return "%d rooms (spec %d)" % [rooms.ids().size(), want.size()]
 	for id in want:
-		var got := {}
-		var low := 99
-		var high := 0
-		var total := 0
-		for m in rooms.room(id).get("monsters", []):
-			got[m.kind] = got.get(m.kind, 0) + int(m.count)
-			total += int(m.count)
-			low = mini(low, int(m.level))
-			high = maxi(high, int(m.level))
-			if int(m.count) > 6: return "%s has a group of %d (max 6)" % [id, m.count]
-		if got != want[id]: return "%s has %s (spec %s)" % [id, got, want[id]]
-		if total < 15 or total > 25: return "%s has %d monsters (15-25)" % [id, total]
-		if low != lv[id]: return "%s lowest level %d (spec %d)" % [id, low, lv[id]]
-		if (id == "c2r3" or id == "w3") and high != 10: return "%s has no Lv10 kongkoi" % id
+		var e := _check_list(id, rooms.room(id).get("monsters", []), want[id], lv[id], id == "c2r3")
+		if e != "": return e
+	var sets: Array = rooms.room("e0").get("monster_sets", [])
+	if sets.size() != 4: return "e0 has %d monster sets (spec 4: w1, e0, e2, w3)" % sets.size()
+	for i in 4:
+		var e := _check_list("e0 set %d" % i, sets[i], sets_want[i][0], sets_want[i][1], i == 3)
+		if e != "": return e
+	return ""
+
+func _check_list(id: String, list: Array, want: Dictionary, lv: int, lv10: bool) -> String:
+	var got := {}
+	var low := 99
+	var high := 0
+	var total := 0
+	for m in list:
+		got[m.kind] = got.get(m.kind, 0) + int(m.count)
+		total += int(m.count)
+		low = mini(low, int(m.level))
+		high = maxi(high, int(m.level))
+		if int(m.count) > 6: return "%s has a group of %d (max 6)" % [id, m.count]
+	if got != want: return "%s has %s (spec %s)" % [id, got, want]
+	if total < 15 or total > 25: return "%s has %d monsters (15-25)" % [id, total]
+	if low != lv: return "%s lowest level %d (spec %d)" % [id, low, lv]
+	if lv10 and high != 10: return "%s has no Lv10 kongkoi" % id
 	return ""
 
 ## M3g §1: respawn 9 s; gold and drop chances x0.5 per kill.
