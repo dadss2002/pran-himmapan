@@ -94,3 +94,45 @@
 16. U of Toronto — Blending (optimal window): https://www.cs.toronto.edu/~guerzhoy/320/lec/blending.pdf
 17. Godot Forum — Y-sort tilemap scene collection tiles: https://forum.godotengine.org/t/is-it-possible-to-y-sort-tilemap-scene-collection-tiles/77659
 18. Red Blob Games — Autotiling: https://www.redblobgames.com/articles/autotile/claude/
+
+## ภาคต่อ: วิธีแก้ภาพฟรี (เจ้าของ: "เรียนรู้วิธีแก้ภาพเพิ่มได้ไหม", 2026-11-07)
+
+### 1. ตัวเติมภาพ AI ฟรีที่รันในเครื่อง: LaMa
+- **ที่มา:** Samsung AI, WACV 2022, Apache-2.0
+- **ทำไมเหมาะ:** ใช้ Fourier convolution จึงมองเห็นทั้งภาพ เติมพื้นที่ใหญ่และลายซ้ำได้ดี
+- **วิธีรันในงานนี้:**
+  - ใช้รุ่น ONNX (`lama_fp32.onnx`) กับ onnxruntime บน CPU ซึ่งไม่ใช้ gen เลย
+  - เครื่องมืออยู่ที่ `tools/lama_fill.py`
+  - ดาวน์โหลดโมเดลจาก GitHub mirror แล้วตรวจ SHA-256 ตรงกับต้นฉบับ
+  - หลังเติม จะดึงสีของพิกเซลใหม่เข้าจานสีของบริเวณรอบๆ ให้ภาพยังคม
+- **ทดลองกับ J3:**
+  - ลบเส้นตั้งในพุ่มไม้ด้านบนได้ดี
+  - พุ่มไม้ใต้ทางกลายเป็นก้อนเขียวเรียบ เพราะ LaMa ไม่วาดรูปทรงวัตถุ
+  - สรุป: เหมาะกับลบเส้นในเนื้อพื้นผิว (ใบไม้ หญ้า ดิน) ไม่เหมาะกับวาดต้นไม้หรือพุ่มไม้ใหม่
+- **ทางเลือกอื่นที่ดูแล้ว:**
+  - OpenCV inpaint (Telea/NS) เบลอมากกับภาพพิกเซล
+  - PatchMatch / content-aware fill ต้อง compile
+  - PyTorch โหลดไม่ได้ในเครื่องนี้ (โดเมนถูกปิด)
+
+### 2. เครื่องมือฟรีของ PixelLab (pixelart_workbench)
+- **ฟรีสำหรับสมาชิก**
+- **คำสั่งที่ใช้ได้:**
+  - `crop`/`paste`: ตัดบริเวณเล็กออกมาเป็นตัวอักษรแล้วแก้ทีละพิกเซล
+  - `cluster`: เปลี่ยนสีหรือลบกลุ่มสีเดียวกัน
+  - `repair`: ลบพิกเซลหลง เติมรู
+  - `edit`: ใช้ copy_region / patch_pixels / map_colors
+- **ข้อจำกัด:**
+  - เหมาะกับการเก็บรายละเอียดจุดเล็ก เช่นโคนต้นไม้ซ้ำหรือเส้นขอบไม่กี่พิกเซล
+  - ไม่เหมาะกับบริเวณใหญ่
+  - ต้องส่งภาพเป็น URL ที่ PixelLab เปิดได้ ซึ่งใช้ raw.githubusercontent.com ได้
+
+### ลำดับใช้งานที่แนะนำ
+1. เส้นในเนื้อพื้นผิว → LaMa (ฟรี)
+2. สีสองฝั่งไม่เท่ากัน → tone_seam / multiband (ฟรี)
+3. จุดเล็กไม่กี่พิกเซล → pixelart_workbench (ฟรี)
+4. รูปทรงต้นไม้หรือพุ่มไม้ผิด → PixelLab inpaint (ใช้ gen) หรือคัดลอกวัตถุทั้งชิ้นจากภาพเดียวกัน (ฟรี แต่ซ้ำได้)
+
+แหล่งเพิ่ม:
+- LaMa paper (arXiv 2109.07161): https://arxiv.org/pdf/2109.07161
+- Carve LaMa-ONNX: https://huggingface.co/Carve/LaMa-ONNX
+- GitHub mirror: https://github.com/neureps/carousel-fit-models/releases
