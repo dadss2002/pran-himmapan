@@ -59,7 +59,7 @@ func test_side_lunge_hits_in_tree():
 	var w: Wolf = p.wolves[0]
 	await tree.physics_frame
 	w.global_position = Vector2(300, 300)     # 100 px to the side: lunge range
-	await _tick(p, h, 60)
+	await _tick(p, h, 75)                    # 0.6 s warning + 0.4 s lunge (M3i)
 	var lost := 120 - h.health.hp
 	var hit: float = w.stats().atk * 1.5                     # x1.5 lunge (atk 5 after M3g x0.8)
 	world.queue_free()

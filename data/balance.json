@@ -99,7 +99,7 @@
     "leash": 320,
     "wander_speed": 50,
     "wander_radius": 48,
-    "run": 140,
+    "run": 100,
     "bite_range": 22,
     "bite_hit_range": 30,
     "bite_windup": 0.35,
@@ -107,9 +107,9 @@
     "bite_cooldown": 1.2,
     "lunge_min": 60,
     "lunge_max": 130,
-    "lunge_warn": 0.5,
-    "lunge_distance": 140,
-    "lunge_time": 0.3,
+    "lunge_warn": 0.6,
+    "lunge_distance": 100,
+    "lunge_time": 0.4,
     "lunge_mult": 1.5,
     "lunge_cooldown": 5.0,
     "lunge_hit_radius": 20,
@@ -625,7 +625,7 @@
       "cloud_radius": 32,
       "cloud_time": 2.0
     },
-    "macaque": {
+    "macaque": {"run": 140, 
       "temper": "aggressive",
       "attack": "throw",
       "hp_base": 35,
@@ -669,7 +669,7 @@
       "lunge_mult": 1.4,
       "lunge_cooldown": 2.0
     },
-    "kongkoi": {
+    "kongkoi": {"run": 140, 
       "temper": "aggressive",
       "attack": "ring",
       "hp_base": 70,
