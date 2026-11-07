@@ -168,7 +168,7 @@ func test_colliders_match_blocked_at_every_room():
 		g.go_to(id, "", false)
 		await tree.physics_frame
 		await tree.physics_frame
-		var space: PhysicsDirectSpaceState2D = g.get_world_2d().direct_space_state
+		var space: PhysicsDirectSpaceState2D = g.world.get_world_2d().direct_space_state   # the room lives in world_vp (M3j)
 		var q := PhysicsPointQueryParameters2D.new()
 		q.collision_mask = 1
 		var y := 3.5
