@@ -1,0 +1,487 @@
+{
+ "note": "KEPT AS AN EXAMPLE ONLY - owner preferred the painted e2. Running compose_room.py e2_try writes raw/e2_try.png (not a room). Use the composer only when the owner asks. M3f e2 ลานป่าทึบ composed by Claude from PixelLab props (owner 2026-11-07): dense shady forest, open middle with a little cover, ground cut from painted rooms, big trees + canopy, bushes/flowers/mushrooms",
+ "seed": 11,
+ "ground": {
+  "from": [
+   "w1",
+   "e0"
+  ],
+  "quilt": 320,
+  "brightness": 0.86,
+  "saturation": 0.92
+ },
+ "decor": [
+  "flowers_a",
+  "flowers_b",
+  "mushroom",
+  "mushroom"
+ ],
+ "props": [
+  {
+   "name": "clump:k3",
+   "at": [
+    -30,
+    46
+   ],
+   "flip": false,
+   "dark": 0.79
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    55,
+    45
+   ],
+   "flip": false,
+   "dark": 0.89
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    122,
+    44
+   ],
+   "flip": true,
+   "dark": 0.79
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    196,
+    52
+   ],
+   "flip": true,
+   "dark": 0.85
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    279,
+    54
+   ],
+   "flip": false,
+   "dark": 0.83
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    357,
+    44
+   ],
+   "flip": true,
+   "dark": 0.8
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    431,
+    53
+   ],
+   "flip": false,
+   "dark": 0.86
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    509,
+    53
+   ],
+   "flip": true,
+   "dark": 0.85
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    586,
+    53
+   ],
+   "flip": false,
+   "dark": 0.84
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    679,
+    50
+   ],
+   "flip": true,
+   "dark": 0.89
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    7,
+    80
+   ],
+   "flip": false,
+   "dark": 0.86
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    99,
+    77
+   ],
+   "flip": false,
+   "dark": 0.89
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    211,
+    83
+   ],
+   "flip": false,
+   "dark": 0.79
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    300,
+    82
+   ],
+   "flip": false,
+   "dark": 0.8
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    395,
+    82
+   ],
+   "flip": false,
+   "dark": 0.79
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    493,
+    85
+   ],
+   "flip": true,
+   "dark": 0.82
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    587,
+    85
+   ],
+   "flip": true,
+   "dark": 0.79
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    676,
+    83
+   ],
+   "flip": true,
+   "dark": 0.86
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    -10,
+    433
+   ],
+   "flip": true,
+   "dark": 0.83
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    61,
+    424
+   ],
+   "flip": true,
+   "dark": 0.85
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    145,
+    424
+   ],
+   "flip": false,
+   "dark": 0.8
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    217,
+    430
+   ],
+   "flip": false,
+   "dark": 0.84
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    295,
+    431
+   ],
+   "flip": false,
+   "dark": 0.89
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    383,
+    432
+   ],
+   "flip": false,
+   "dark": 0.9
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    462,
+    427
+   ],
+   "flip": true,
+   "dark": 0.8
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    537,
+    424
+   ],
+   "flip": false,
+   "dark": 0.8
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    619,
+    424
+   ],
+   "flip": true,
+   "dark": 0.82
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    708,
+    429
+   ],
+   "flip": false,
+   "dark": 0.84
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    35,
+    410
+   ],
+   "flip": true,
+   "dark": 0.88
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    153,
+    410
+   ],
+   "flip": true,
+   "dark": 0.83
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    251,
+    410
+   ],
+   "flip": true,
+   "dark": 0.79
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    352,
+    407
+   ],
+   "flip": true,
+   "dark": 0.85
+  },
+  {
+   "name": "clump:k1",
+   "at": [
+    459,
+    400
+   ],
+   "flip": false,
+   "dark": 0.89
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    585,
+    400
+   ],
+   "flip": false,
+   "dark": 0.85
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    680,
+    410
+   ],
+   "flip": false,
+   "dark": 0.85
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    701,
+    110
+   ],
+   "flip": true,
+   "dark": 0.84
+  },
+  {
+   "name": "clump:k3",
+   "at": [
+    700,
+    172
+   ],
+   "flip": true,
+   "dark": 0.79
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    689,
+    234
+   ],
+   "flip": false,
+   "dark": 0.84
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    691,
+    296
+   ],
+   "flip": true,
+   "dark": 0.89
+  },
+  {
+   "name": "clump:k2",
+   "at": [
+    -6,
+    120
+   ],
+   "flip": true,
+   "dark": 0.85
+  },
+  {
+   "name": "clump:k0",
+   "at": [
+    -6,
+    330
+   ],
+   "flip": false,
+   "dark": 0.82
+  },
+  {
+   "name": "tree_round_b",
+   "at": [
+    300,
+    150
+   ],
+   "base_decor": 3,
+   "dark": 0.84
+  },
+  {
+   "name": "bush_a",
+   "at": [
+    338,
+    166
+   ],
+   "dark": 0.84
+  },
+  {
+   "name": "tree_round_c",
+   "at": [
+    480,
+    272
+   ],
+   "base_decor": 3,
+   "flip": true,
+   "dark": 0.84
+  },
+  {
+   "name": "bush_b",
+   "at": [
+    446,
+    284
+   ],
+   "dark": 0.84
+  },
+  {
+   "name": "bush_a",
+   "at": [
+    590,
+    178
+   ],
+   "base_decor": 2,
+   "dark": 0.84
+  },
+  {
+   "name": "bush_b",
+   "at": [
+    196,
+    292
+   ],
+   "base_decor": 2,
+   "dark": 0.84
+  },
+  {
+   "name": "tree_round_a",
+   "at": [
+    120,
+    118
+   ],
+   "base_decor": 2,
+   "dark": 0.84
+  },
+  {
+   "name": "tree_round_c",
+   "at": [
+    630,
+    120
+   ],
+   "base_decor": 2,
+   "dark": 0.84
+  },
+  {
+   "name": "tree_round_a",
+   "at": [
+    560,
+    340
+   ],
+   "base_decor": 2,
+   "flip": true,
+   "dark": 0.84
+  }
+ ],
+ "scatter": [
+  {
+   "names": [
+    "flowers_b",
+    "mushroom",
+    "flowers_a"
+   ],
+   "count": 7,
+   "area": [
+    60,
+    110,
+    600,
+    220
+   ]
+  }
+ ]
+}

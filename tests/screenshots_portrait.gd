@@ -1,7 +1,8 @@
 extends SceneTree
 ## Phone screenshots, portrait and landscape:
 ## xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_portrait.gd
-## Saves docs/preview/phone_<name>.png at the window size (portrait 390x844, landscape 844x390).
+## Saves docs/preview/phone_<name>.png at the window size: a 2x phone (portrait 780x1688, landscape
+## 1688x780), so text sharpness is what a real phone shows. Run with -s "-screen 0 1800x1800x24".
 ## Add `-- --touch` to show the touch controls.
 
 const OUT := "res://docs/preview/"
@@ -43,7 +44,7 @@ func _run() -> void:
 	g.hero.global_position = Vector2(290, 240)
 	for p in g.packs:
 		p.set_physics_process(false)
-	await _size(390, 844)
+	await _size(780, 1688)
 	await _snap("portrait")
 	g.hud.open_bag()
 	await _snap("portrait_bag")
@@ -51,6 +52,6 @@ func _run() -> void:
 	g.hud.open_skills()
 	await _snap("portrait_skills")
 	g.hud.skill_panel.close()
-	await _size(844, 390)
+	await _size(1688, 780)
 	await _snap("landscape")
 	quit(0)
