@@ -9,7 +9,7 @@ from PIL import Image
 
 LV, P, CORE = 5, 64, 20
 JOINS = {  # name: top-left of the inpaint window in world pixels (340x340 or 512x384)
-    "J1": (594, 394),
+    "J1": (432, 384),
     "J2": (432, 1152),
 }
 
