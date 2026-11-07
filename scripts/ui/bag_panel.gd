@@ -296,7 +296,7 @@ func build() -> void:
 	_gold = _label("0", 11, TEXT)
 	head.add_child(_gold)
 	var x := Button.new()
-	x.text = "✕"
+	x.text = "×"
 	x.custom_minimum_size = Vector2(30, 26)
 	x.focus_mode = Control.FOCUS_NONE
 	x.pressed.connect(close)

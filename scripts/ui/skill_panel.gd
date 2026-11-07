@@ -224,7 +224,7 @@ func build() -> void:
 	_mp = UiKit.label("", 10, Color("#9ad0ff"))
 	head.add_child(_mp)
 	_close_button = Button.new()
-	_close_button.text = "✕"
+	_close_button.text = "×"
 	_close_button.custom_minimum_size = Vector2(30, 26)
 	_close_button.focus_mode = Control.FOCUS_NONE
 	_close_button.pressed.connect(close)
