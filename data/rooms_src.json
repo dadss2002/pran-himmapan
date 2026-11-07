@@ -1,5 +1,5 @@
 {
- "note": "Hand data for tools/painted_rooms.py. Room-local pixels (688x384). links: room:side pairs (side = north/south/east/west); a warp sits on the open ground nearest that edge's middle, or nearest hints[side]. edits: walk/block pixel rects.",
+ "note": "Hand data for tools/painted_rooms.py. Room-local pixels (688x384). links: room:side pairs (side = north/south/east/west); a warp sits on the open ground nearest that edge's middle, or nearest hints[side]. edits: walk/block pixel rects. monsters: kind/level/count (M3g); groups of <=6 are placed by the tool unless 'at' is given.",
  "start": "c1r1",
  "links": [
   [
@@ -81,20 +81,12 @@
     {
      "kind": "boar",
      "level": 3,
-     "count": 2,
-     "at": [
-      220,
-      200
-     ]
+     "count": 10
     },
     {
-     "kind": "deer",
+     "kind": "macaque",
      "level": 3,
-     "count": 2,
-     "at": [
-      520,
-      160
-     ]
+     "count": 6
     }
    ]
   },
@@ -115,11 +107,12 @@
     {
      "kind": "boar",
      "level": 2,
-     "count": 3,
-     "at": [
-      200,
-      200
-     ]
+     "count": 10
+    },
+    {
+     "kind": "deer",
+     "level": 2,
+     "count": 6
     }
    ]
   },
@@ -149,42 +142,26 @@
     {
      "kind": "shroom",
      "level": 4,
-     "count": 3,
-     "at": [
-      520,
-      200
-     ]
+     "count": 10
     },
     {
      "kind": "viper",
-     "level": 4,
-     "count": 1,
-     "at": [
-      230,
-      150
-     ]
+     "level": 5,
+     "count": 6
     }
    ]
   },
   "c0r3": {
    "monsters": [
     {
-     "kind": "kongkoi",
-     "level": 7,
-     "count": 2,
-     "at": [
-      330,
-      300
-     ]
-    },
-    {
      "kind": "viper",
      "level": 7,
-     "count": 2,
-     "at": [
-      560,
-      160
-     ]
+     "count": 10
+    },
+    {
+     "kind": "kongkoi",
+     "level": 7,
+     "count": 6
     }
    ]
   },
@@ -193,11 +170,12 @@
     {
      "kind": "wolf",
      "level": 1,
-     "count": 4,
-     "at": [
-      330,
-      120
-     ]
+     "count": 10
+    },
+    {
+     "kind": "deer",
+     "level": 2,
+     "count": 6
     }
    ]
   },
@@ -210,11 +188,12 @@
     {
      "kind": "deer",
      "level": 1,
-     "count": 3,
-     "at": [
-      500,
-      150
-     ]
+     "count": 8
+    },
+    {
+     "kind": "boar",
+     "level": 1,
+     "count": 8
     }
    ]
   },
@@ -223,20 +202,12 @@
     {
      "kind": "wolf",
      "level": 5,
-     "count": 4,
-     "at": [
-      470,
-      100
-     ]
+     "count": 12
     },
     {
      "kind": "shroom",
      "level": 5,
-     "count": 2,
-     "at": [
-      560,
-      250
-     ]
+     "count": 8
     }
    ]
   },
@@ -254,20 +225,12 @@
     {
      "kind": "viper",
      "level": 8,
-     "count": 3,
-     "at": [
-      300,
-      210
-     ]
+     "count": 10
     },
     {
      "kind": "shroom",
      "level": 8,
-     "count": 2,
-     "at": [
-      520,
-      280
-     ]
+     "count": 10
     }
    ]
   },
@@ -276,33 +239,26 @@
     {
      "kind": "deer",
      "level": 4,
-     "count": 2,
-     "at": [
-      250,
-      250
-     ]
+     "count": 8
     },
     {
      "kind": "macaque",
      "level": 4,
-     "count": 2,
-     "at": [
-      380,
-      100
-     ]
+     "count": 8
     }
    ]
   },
   "c2r1": {
    "monsters": [
     {
+     "kind": "boar",
+     "level": 3,
+     "count": 10
+    },
+    {
      "kind": "macaque",
      "level": 3,
-     "count": 3,
-     "at": [
-      560,
-      200
-     ]
+     "count": 8
     }
    ]
   },
@@ -311,20 +267,12 @@
     {
      "kind": "wolf",
      "level": 3,
-     "count": 3,
-     "at": [
-      330,
-      300
-     ]
+     "count": 10
     },
     {
      "kind": "macaque",
-     "level": 3,
-     "count": 1,
-     "at": [
-      150,
-      220
-     ]
+     "level": 4,
+     "count": 6
     }
    ]
   },
@@ -342,20 +290,17 @@
     {
      "kind": "kongkoi",
      "level": 9,
-     "count": 2,
-     "at": [
-      250,
-      250
-     ]
+     "count": 8
     },
     {
      "kind": "kongkoi",
      "level": 10,
-     "count": 1,
-     "at": [
-      380,
-      180
-     ]
+     "count": 2
+    },
+    {
+     "kind": "viper",
+     "level": 9,
+     "count": 8
     }
    ]
   },
@@ -369,29 +314,12 @@
     {
      "kind": "boar",
      "level": 2,
-     "count": 3,
-     "at": [
-      200,
-      150
-     ]
-    },
-    {
-     "kind": "deer",
-     "level": 2,
-     "count": 3,
-     "at": [
-      220,
-      290
-     ]
+     "count": 10
     },
     {
      "kind": "wolf",
      "level": 3,
-     "count": 3,
-     "at": [
-      360,
-      250
-     ]
+     "count": 8
     }
    ]
   },
@@ -403,31 +331,14 @@
    "name": "ลานเนินตะวันออก",
    "monsters": [
     {
-     "kind": "boar",
-     "level": 5,
-     "count": 2,
-     "at": [
-      250,
-      140
-     ]
-    },
-    {
      "kind": "wolf",
      "level": 5,
-     "count": 4,
-     "at": [
-      420,
-      260
-     ]
+     "count": 12
     },
     {
      "kind": "macaque",
      "level": 4,
-     "count": 3,
-     "at": [
-      560,
-      140
-     ]
+     "count": 8
     }
    ]
   },
@@ -439,40 +350,19 @@
    "name": "ลานหินตะวันตก",
    "monsters": [
     {
-     "kind": "viper",
-     "level": 9,
-     "count": 3,
-     "at": [
-      130,
-      130
-     ]
-    },
-    {
      "kind": "kongkoi",
      "level": 9,
-     "count": 3,
-     "at": [
-      230,
-      230
-     ]
+     "count": 10
     },
     {
      "kind": "kongkoi",
      "level": 10,
-     "count": 1,
-     "at": [
-      340,
-      110
-     ]
+     "count": 2
     },
     {
      "kind": "macaque",
      "level": 8,
-     "count": 2,
-     "at": [
-      420,
-      300
-     ]
+     "count": 8
     }
    ]
   },
@@ -487,29 +377,12 @@
     {
      "kind": "shroom",
      "level": 6,
-     "count": 3,
-     "at": [
-      250,
-      140
-     ]
-    },
-    {
-     "kind": "viper",
-     "level": 7,
-     "count": 2,
-     "at": [
-      420,
-      290
-     ]
+     "count": 12
     },
     {
      "kind": "wolf",
      "level": 7,
-     "count": 4,
-     "at": [
-      520,
-      150
-     ]
+     "count": 10
     }
    ]
   }

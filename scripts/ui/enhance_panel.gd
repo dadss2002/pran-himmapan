@@ -199,7 +199,7 @@ func build() -> void:
 	_button = Button.new()
 	_button.custom_minimum_size = Vector2(0, 34)
 	_button.focus_mode = Control.FOCUS_NONE
-	_button.add_theme_font_size_override("font_size", 13)
+	_button.add_theme_font_size_override("font_size", UiKit.fs(13))
 	_button.pressed.connect(func(): press())
 	col.add_child(_button)
 

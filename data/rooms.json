@@ -75,19 +75,28 @@
 {
 "kind": "boar",
 "level": 3,
-"count": 2,
+"count": 5,
 "at": [
-236,
-196
+412,
+52
 ]
 },
 {
-"kind": "deer",
+"kind": "boar",
 "level": 3,
-"count": 2,
+"count": 5,
 "at": [
-516,
-156
+484,
+180
+]
+},
+{
+"kind": "macaque",
+"level": 3,
+"count": 6,
+"at": [
+292,
+148
 ]
 }
 ]
@@ -188,10 +197,28 @@
 {
 "kind": "boar",
 "level": 2,
-"count": 3,
+"count": 5,
 "at": [
-212,
+444,
 196
+]
+},
+{
+"kind": "boar",
+"level": 2,
+"count": 5,
+"at": [
+484,
+292
+]
+},
+{
+"kind": "deer",
+"level": 2,
+"count": 6,
+"at": [
+340,
+204
 ]
 }
 ]
@@ -291,19 +318,28 @@
 {
 "kind": "shroom",
 "level": 4,
-"count": 3,
+"count": 5,
 "at": [
-516,
+276,
+204
+]
+},
+{
+"kind": "shroom",
+"level": 4,
+"count": 5,
+"at": [
+388,
 196
 ]
 },
 {
 "kind": "viper",
-"level": 4,
-"count": 1,
+"level": 5,
+"count": 6,
 "at": [
-228,
-148
+460,
+92
 ]
 }
 ]
@@ -384,21 +420,30 @@
 "fx": [],
 "monsters": [
 {
-"kind": "kongkoi",
+"kind": "viper",
 "level": 7,
-"count": 2,
+"count": 5,
 "at": [
-332,
-300
+452,
+284
 ]
 },
 {
 "kind": "viper",
 "level": 7,
-"count": 2,
+"count": 5,
 "at": [
-548,
-180
+308,
+348
+]
+},
+{
+"kind": "kongkoi",
+"level": 7,
+"count": 6,
+"at": [
+516,
+204
 ]
 }
 ]
@@ -472,10 +517,28 @@
 {
 "kind": "wolf",
 "level": 1,
-"count": 4,
+"count": 5,
 "at": [
-332,
+540,
+212
+]
+},
+{
+"kind": "wolf",
+"level": 1,
+"count": 5,
+"at": [
+324,
 116
+]
+},
+{
+"kind": "deer",
+"level": 2,
+"count": 6,
+"at": [
+204,
+188
 ]
 }
 ]
@@ -567,10 +630,37 @@
 {
 "kind": "deer",
 "level": 1,
-"count": 3,
+"count": 4,
 "at": [
-500,
-148
+412,
+172
+]
+},
+{
+"kind": "deer",
+"level": 1,
+"count": 4,
+"at": [
+276,
+172
+]
+},
+{
+"kind": "boar",
+"level": 1,
+"count": 4,
+"at": [
+228,
+284
+]
+},
+{
+"kind": "boar",
+"level": 1,
+"count": 4,
+"at": [
+460,
+284
 ]
 }
 ],
@@ -657,19 +747,37 @@
 {
 "kind": "wolf",
 "level": 5,
-"count": 4,
+"count": 6,
 "at": [
-516,
-148
+508,
+244
+]
+},
+{
+"kind": "wolf",
+"level": 5,
+"count": 6,
+"at": [
+236,
+188
 ]
 },
 {
 "kind": "shroom",
 "level": 5,
-"count": 2,
+"count": 4,
 "at": [
-548,
-252
+172,
+308
+]
+},
+{
+"kind": "shroom",
+"level": 5,
+"count": 4,
+"at": [
+356,
+180
 ]
 }
 ]
@@ -760,19 +868,37 @@
 {
 "kind": "viper",
 "level": 8,
-"count": 3,
+"count": 5,
 "at": [
-300,
-212
+324,
+268
+]
+},
+{
+"kind": "viper",
+"level": 8,
+"count": 5,
+"at": [
+396,
+196
 ]
 },
 {
 "kind": "shroom",
 "level": 8,
-"count": 2,
+"count": 5,
 "at": [
-516,
-276
+268,
+180
+]
+},
+{
+"kind": "shroom",
+"level": 8,
+"count": 5,
+"at": [
+444,
+124
 ]
 }
 ]
@@ -855,19 +981,37 @@
 {
 "kind": "deer",
 "level": 4,
-"count": 2,
+"count": 4,
 "at": [
-252,
-244
+308,
+132
+]
+},
+{
+"kind": "deer",
+"level": 4,
+"count": 4,
+"at": [
+372,
+212
 ]
 },
 {
 "kind": "macaque",
 "level": 4,
-"count": 2,
+"count": 4,
 "at": [
-380,
-108
+260,
+164
+]
+},
+{
+"kind": "macaque",
+"level": 4,
+"count": 4,
+"at": [
+356,
+148
 ]
 }
 ]
@@ -957,12 +1101,39 @@
 "fx": [],
 "monsters": [
 {
+"kind": "boar",
+"level": 3,
+"count": 5,
+"at": [
+228,
+204
+]
+},
+{
+"kind": "boar",
+"level": 3,
+"count": 5,
+"at": [
+156,
+260
+]
+},
+{
 "kind": "macaque",
 "level": 3,
-"count": 3,
+"count": 4,
 "at": [
-484,
-276
+204,
+252
+]
+},
+{
+"kind": "macaque",
+"level": 3,
+"count": 4,
+"at": [
+212,
+164
 ]
 }
 ]
@@ -1045,19 +1216,28 @@
 {
 "kind": "wolf",
 "level": 3,
-"count": 3,
+"count": 5,
 "at": [
-332,
-300
+100,
+236
+]
+},
+{
+"kind": "wolf",
+"level": 3,
+"count": 5,
+"at": [
+292,
+292
 ]
 },
 {
 "kind": "macaque",
-"level": 3,
-"count": 1,
+"level": 4,
+"count": 6,
 "at": [
-148,
-220
+212,
+196
 ]
 }
 ]
@@ -1139,19 +1319,46 @@
 {
 "kind": "kongkoi",
 "level": 9,
-"count": 2,
+"count": 4,
 "at": [
-252,
-252
+356,
+292
+]
+},
+{
+"kind": "kongkoi",
+"level": 9,
+"count": 4,
+"at": [
+276,
+156
 ]
 },
 {
 "kind": "kongkoi",
 "level": 10,
-"count": 1,
+"count": 2,
 "at": [
-372,
-172
+228,
+300
+]
+},
+{
+"kind": "viper",
+"level": 9,
+"count": 4,
+"at": [
+188,
+204
+]
+},
+{
+"kind": "viper",
+"level": 9,
+"count": 4,
+"at": [
+140,
+276
 ]
 }
 ]
@@ -1225,28 +1432,37 @@
 {
 "kind": "boar",
 "level": 2,
-"count": 3,
+"count": 5,
 "at": [
-212,
-156
+132,
+236
 ]
 },
 {
-"kind": "deer",
+"kind": "boar",
 "level": 2,
-"count": 3,
+"count": 5,
 "at": [
-220,
-292
+324,
+108
 ]
 },
 {
 "kind": "wolf",
 "level": 3,
-"count": 3,
+"count": 4,
 "at": [
-356,
-252
+380,
+308
+]
+},
+{
+"kind": "wolf",
+"level": 3,
+"count": 4,
+"at": [
+268,
+236
 ]
 }
 ]
@@ -1318,30 +1534,39 @@
 "fx": [],
 "monsters": [
 {
-"kind": "boar",
+"kind": "wolf",
 "level": 5,
-"count": 2,
+"count": 6,
 "at": [
-252,
-140
+612,
+188
 ]
 },
 {
 "kind": "wolf",
 "level": 5,
-"count": 4,
+"count": 6,
 "at": [
-420,
-260
+380,
+308
 ]
 },
 {
 "kind": "macaque",
 "level": 4,
-"count": 3,
+"count": 4,
 "at": [
-556,
-140
+340,
+124
+]
+},
+{
+"kind": "macaque",
+"level": 4,
+"count": 4,
+"at": [
+244,
+252
 ]
 }
 ]
@@ -1413,39 +1638,48 @@
 "fx": [],
 "monsters": [
 {
-"kind": "viper",
+"kind": "kongkoi",
 "level": 9,
-"count": 3,
+"count": 5,
 "at": [
-116,
-140
+44,
+220
 ]
 },
 {
 "kind": "kongkoi",
 "level": 9,
-"count": 3,
+"count": 5,
 "at": [
-228,
-228
+292,
+292
 ]
 },
 {
 "kind": "kongkoi",
 "level": 10,
-"count": 1,
+"count": 2,
 "at": [
-332,
-124
+396,
+156
 ]
 },
 {
 "kind": "macaque",
 "level": 8,
-"count": 2,
+"count": 4,
 "at": [
-420,
-300
+220,
+140
+]
+},
+{
+"kind": "macaque",
+"level": 8,
+"count": 4,
+"at": [
+452,
+316
 ]
 }
 ]
@@ -1519,28 +1753,37 @@
 {
 "kind": "shroom",
 "level": 6,
-"count": 3,
+"count": 6,
 "at": [
-252,
-140
+484,
+268
 ]
 },
 {
-"kind": "viper",
-"level": 7,
-"count": 2,
+"kind": "shroom",
+"level": 6,
+"count": 6,
 "at": [
-420,
-292
+348,
+116
 ]
 },
 {
 "kind": "wolf",
 "level": 7,
-"count": 4,
+"count": 5,
 "at": [
-500,
-172
+292,
+308
+]
+},
+{
+"kind": "wolf",
+"level": 7,
+"count": 5,
+"at": [
+260,
+196
 ]
 }
 ]

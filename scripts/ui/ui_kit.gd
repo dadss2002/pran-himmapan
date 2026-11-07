@@ -1,10 +1,17 @@
 class_name UiKit
 ## Small shared builders for the pause-screen panels (skill screen, enhance window).
 
+## Every UI font size goes through fs(): sizes were set for a desktop view and read too small on phones
+## (owner 2026-11-07 "ขยายตัวหนังสือ"; docs/design/design-research.md §4). One knob for the whole UI.
+const FONT_SCALE := 1.3
+
+static func fs(n: int) -> int:
+	return int(round(n * FONT_SCALE))
+
 static func label(t: String, font_size: int, c: Color) -> Label:
 	var l := Label.new()
 	l.text = t
-	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_font_size_override("font_size", fs(font_size))
 	l.add_theme_color_override("font_color", c)
 	return l
 

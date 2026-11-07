@@ -350,7 +350,7 @@ func build() -> void:
 		var b := Button.new()
 		b.text = TABS[i]
 		b.focus_mode = Control.FOCUS_NONE
-		b.add_theme_font_size_override("font_size", 9)
+		b.add_theme_font_size_override("font_size", UiKit.fs(9))
 		b.custom_minimum_size = Vector2(0, 20)
 		b.pressed.connect(set_tab.bind(i))
 		tabs.add_child(b)
@@ -421,7 +421,7 @@ func build() -> void:
 	_d_action = Button.new()
 	_d_action.custom_minimum_size = Vector2(0, 32)
 	_d_action.focus_mode = Control.FOCUS_NONE
-	_d_action.add_theme_font_size_override("font_size", 12)
+	_d_action.add_theme_font_size_override("font_size", UiKit.fs(12))
 	_d_action.pressed.connect(func(): press_action())
 	var btns := HBoxContainer.new()
 	btns.add_theme_constant_override("separation", 6)
@@ -432,7 +432,7 @@ func build() -> void:
 	_d_enhance.text = "ตีบวก"
 	_d_enhance.custom_minimum_size = Vector2(56, 32)
 	_d_enhance.focus_mode = Control.FOCUS_NONE
-	_d_enhance.add_theme_font_size_override("font_size", 12)
+	_d_enhance.add_theme_font_size_override("font_size", UiKit.fs(12))
 	_d_enhance.pressed.connect(func(): press_enhance())
 	btns.add_child(_d_enhance)
 	enhance_panel = EnhancePanel.new()
@@ -453,7 +453,7 @@ func _worn_button(slot: String) -> Button:
 	ic.size = Vector2(CELL - 4, CELL - 4)
 	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(ic)
-	b.add_theme_font_size_override("font_size", 8)
+	b.add_theme_font_size_override("font_size", UiKit.fs(8))
 	b.add_theme_color_override("font_color", Color("#a59c86"))
 	b.pressed.connect(func(): if hero and hero.equipped.get(slot) != null: select_worn(slot))
 	_worn_buttons[slot] = b
@@ -549,7 +549,7 @@ func _layout() -> void:
 func _label(t: String, font_size: int, c: Color) -> Label:
 	var l := Label.new()
 	l.text = t
-	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_font_size_override("font_size", UiKit.fs(font_size))
 	l.add_theme_color_override("font_color", c)
 	return l
 

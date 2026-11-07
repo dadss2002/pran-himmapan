@@ -39,12 +39,12 @@ func attack_kind() -> String:
 static func stats_for(k: String, lv: int) -> Dictionary:
 	var t := "monsters." + k
 	var l := lv - 1
-	return {
+	return Balance.horde_stats({
 		"hp": int(Balance.num(t + ".hp_base") + Balance.num(t + ".hp_per_level") * l),
 		"atk": int(Balance.num(t + ".atk_base") + Balance.num(t + ".atk_per_level") * l),
 		"def": int(Balance.num(t + ".def_base") + Balance.num(t + ".def_per_level") * lv),
 		"exp": int(Balance.num(t + ".exp_base") + Balance.num(t + ".exp_per_level") * lv),
-	}
+	})
 
 func stats() -> Dictionary:
 	return stats_for(kind, level)

@@ -118,7 +118,7 @@ func build() -> void:
 	var fs := Button.new()                 # full screen on/off (hides the browser bars on phones)
 	fs.text = "เต็มจอ"
 	fs.focus_mode = Control.FOCUS_NONE
-	fs.add_theme_font_size_override("font_size", 8)
+	fs.add_theme_font_size_override("font_size", UiKit.fs(8))
 	fs.custom_minimum_size = Vector2(36, 30)
 	fs.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	fs.pressed.connect(ScreenFit.toggle_fullscreen)
@@ -127,7 +127,7 @@ func build() -> void:
 	var sk := Button.new()
 	sk.text = "สกิล"
 	sk.focus_mode = Control.FOCUS_NONE
-	sk.add_theme_font_size_override("font_size", 8)
+	sk.add_theme_font_size_override("font_size", UiKit.fs(8))
 	sk.custom_minimum_size = Vector2(36, 30)
 	sk.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	sk.pressed.connect(open_skills)
@@ -138,7 +138,7 @@ func build() -> void:
 	bag.focus_mode = Control.FOCUS_NONE
 	bag.pressed.connect(open_bag)
 	bag_button = bag
-	bag.add_theme_font_size_override("font_size", 8)
+	bag.add_theme_font_size_override("font_size", UiKit.fs(8))
 	bag.custom_minimum_size = Vector2(36, 30)
 	bag.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	tr.add_child(bag)
@@ -247,7 +247,7 @@ func _process(_delta: float) -> void:
 func _label(t: String, size: int, c: Color) -> Label:
 	var l := Label.new()
 	l.text = t
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", UiKit.fs(size))
 	l.add_theme_color_override("font_color", c)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	l.add_theme_constant_override("outline_size", 2)

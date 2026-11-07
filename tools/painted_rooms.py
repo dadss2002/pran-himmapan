@@ -99,6 +99,49 @@ def nearest_roomy(roomy: np.ndarray, target) -> list:
     return [int(cx[i]), int(cy[i])]
 
 
+GROUP_MAX = 6
+ARRIVAL = 40          # scripts/map/room_set.gd ARRIVAL
+EDGE_CELLS = 3        # homes keep this many cells from blocked ground so the group's ring fits
+_BAL = json.load(open(f"{ROOT}/data/balance.json"))
+
+
+def _mon(kind: str, key: str, default=None):
+    if kind == "wolf":
+        return _BAL["wolf"].get(key, default)
+    return _BAL["monsters"][kind].get(key, _BAL["wolf"].get(key, default))
+
+
+def attacks_first(kind: str) -> bool:
+    return kind == "wolf" or _mon(kind, "temper") in ("aggressive", "ambush")
+
+
+def aggro_of(kind: str) -> float:
+    return float(_mon(kind, "aggro", 160))
+
+
+def spread_home(roomy: np.ndarray, homes: list, arrivals: list, keep_off: float, hard_off: float) -> list:
+    """The open cell farthest from every other group home (and the arrivals), keep_off from each
+    arrival if the room allows, else at least hard_off (the test's minimum), else as far as possible."""
+    inner = ndimage.binary_erosion(roomy, np.ones((2 * EDGE_CELLS + 1, 2 * EDGE_CELLS + 1), bool))
+    if not inner.any(): inner = roomy
+    ys, xs = np.nonzero(inner)
+    cx, cy = (xs + 0.5) * CELL, (ys + 0.5) * CELL
+    d_arr = np.full(len(xs), 1e9)
+    for a in arrivals:
+        d_arr = np.minimum(d_arr, np.hypot(cx - a[0], cy - a[1]))
+    d_home = np.full(len(xs), 1e9)
+    for h in homes:
+        d_home = np.minimum(d_home, np.hypot(cx - h[0], cy - h[1]))
+    score = np.minimum(d_home, d_arr * 0.75)
+    for off in (keep_off, hard_off):
+        ok = d_arr >= off
+        if ok.any():
+            score = np.where(ok, score, -1.0)
+            break
+    i = int(np.argmax(score))
+    return [int(cx[i]), int(cy[i])]
+
+
 def overlay(rgb: np.ndarray, walk: np.ndarray):
     _, canopy = classify(rgb)
     h, w = rgb.shape[:2]
@@ -147,10 +190,33 @@ def main():
             warps.append({"id": side, "at": nearest_roomy(roomy, hint), "to": to, "to_warp": to_side})
         spawn = nearest_roomy(roomy, rs["spawn"]) if "spawn" in rs else None
         monsters = []
+        arrivals = []
+        for wp in warps:
+            ax, ay = wp["at"]
+            dx, dy = SIZE[0] / 2 - ax, SIZE[1] / 2 - ay
+            ln = max((dx * dx + dy * dy) ** 0.5, 1e-6)
+            arrivals.append(nearest_roomy(roomy, [ax + dx / ln * ARRIVAL, ay + dy / ln * ARRIVAL]))
+        if "spawn" in rs:
+            arrivals.append(nearest_roomy(roomy, rs["spawn"]))   # the hero's start point counts too
+        homes = []
         for m in rs.get("monsters", []):
             m = dict(m)
-            m["at"] = nearest_roomy(roomy, m["at"])   # a group's home on the main open ground
-            monsters.append(m)
+            if "at" in m:
+                m["at"] = nearest_roomy(roomy, m["at"])   # a group's home on the main open ground
+                homes.append(m["at"])
+                monsters.append(m)
+                continue
+            # M3g: split into groups of at most GROUP_MAX, spread over the room (farthest from the other
+            # homes), and out of aggro range of every warp arrival for kinds that attack first
+            n = -(-int(m["count"]) // GROUP_MAX)
+            sizes = [int(m["count"]) // n + (1 if i < int(m["count"]) % n else 0) for i in range(n)]
+            first = attacks_first(m["kind"])
+            keep_off = aggro_of(m["kind"]) + 40 if first else 90
+            hard_off = aggro_of(m["kind"]) + 12 if first else 60
+            for sz in sizes:
+                at = spread_home(roomy, homes, arrivals, keep_off, hard_off)
+                homes.append(at)
+                monsters.append({"kind": m["kind"], "level": m["level"], "count": sz, "at": at})
         over = np.asarray(Image.open(over_file).convert("L")) > 127 if over_file.exists() else overlay(rgb, walk)
         ov_file = None
         if over.any():
