@@ -10,6 +10,7 @@ from PIL import Image
 LV, P, CORE = 5, 64, 20
 JOINS = {  # name: top-left of the inpaint window in world pixels (340x340 or 512x384)
     "J1": (432, 384),
+    "J1e": (720, 500),      # one whole tree + top stump removed (256x256)
     "J2": (432, 1152),
     "J2b": (680, 1250),     # path end + bush fix on top of J2 (256x256)
 }
