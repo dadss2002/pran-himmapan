@@ -25,6 +25,7 @@ var _notice := ""                  # why the last action was refused; cleared on
 var _items := {}
 var _root: Control
 var _panel: PanelContainer
+var _body: BoxContainer        # the columns; stacked top-to-bottom in portrait
 var _gold: Label
 var _cells: Array = []             # Buttons
 var _worn_buttons := {}
@@ -302,7 +303,8 @@ func build() -> void:
 	_close_button = x
 	head.add_child(x)
 
-	var body := HBoxContainer.new()
+	var body := BoxContainer.new()     # side by side; stacked in portrait (_layout)
+	_body = body
 	body.add_theme_constant_override("separation", 10)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(body)
@@ -525,10 +527,24 @@ func _style_cell(b: Button, border: Color, filled: bool, selected: bool) -> void
 	sb.set_border_width_all(2)
 	for k in ["normal", "hover", "pressed"]: b.add_theme_stylebox_override(k, sb)
 
+## Landscape: the 624x344 three-column panel. Portrait: the columns stack and the panel takes the
+## screen width (scaled down only if it would still not fit).
 func _layout() -> void:
 	if _panel == null or not is_inside_tree(): return
 	var size := get_viewport().get_visible_rect().size
-	_panel.position = Vector2(floorf((size.x - _panel.size.x) / 2.0), floorf((size.y - _panel.size.y) / 2.0))
+	var portrait := ScreenFit.is_portrait(size)
+	if _body.vertical != portrait:
+		_body.vertical = portrait
+		_panel.size = Vector2.ZERO
+	if portrait:
+		_panel.size = Vector2(size.x - 12, 0)
+		_panel.size = Vector2(size.x - 12, _panel.get_combined_minimum_size().y)
+	else:
+		_panel.size = Vector2(624, 344)
+	var fit := minf(1.0, minf((size.x - 8) / _panel.size.x, (size.y - 8) / _panel.size.y))
+	_panel.scale = Vector2(fit, fit)
+	var shown := _panel.size * fit
+	_panel.position = Vector2(floorf((size.x - shown.x) / 2.0), floorf((size.y - shown.y) / 2.0))
 
 func _label(t: String, font_size: int, c: Color) -> Label:
 	var l := Label.new()

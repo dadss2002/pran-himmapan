@@ -23,6 +23,7 @@ var skill_panel: SkillPanel
 var skills_button: Button
 var dim: ColorRect
 var top_right: HBoxContainer
+var fullscreen_button: Button
 const DEAD_DIM := 0.6
 
 func _ready() -> void:
@@ -34,6 +35,8 @@ func _ready() -> void:
 ## Wider phones (aspect "expand"): keep the top-right block and EXP bar on the real edges.
 func layout(size: Vector2) -> void:
 	top_right.position.x = size.x - 6 - top_right.size.x
+	# portrait (360 wide): no room beside the status panel, so the block goes on a second row
+	top_right.position.y = 60.0 if ScreenFit.is_portrait(size) else 6.0
 	exp_bar.position = Vector2(0, size.y - 4)
 	exp_bar.size.x = size.x
 	exp_bar.custom_minimum_size.x = size.x
@@ -112,6 +115,15 @@ func build() -> void:
 	gold_panel.add_child(gold)
 	gold_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	tr.add_child(gold_panel)
+	var fs := Button.new()                 # full screen on/off (hides the browser bars on phones)
+	fs.text = "เต็มจอ"
+	fs.focus_mode = Control.FOCUS_NONE
+	fs.add_theme_font_size_override("font_size", 8)
+	fs.custom_minimum_size = Vector2(36, 30)
+	fs.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	fs.pressed.connect(ScreenFit.toggle_fullscreen)
+	fullscreen_button = fs
+	tr.add_child(fs)
 	var sk := Button.new()
 	sk.text = "สกิล"
 	sk.focus_mode = Control.FOCUS_NONE

@@ -242,7 +242,11 @@ func refresh() -> void:
 	_button.text = d.button
 	UiKit.style_action(_button, d.can)
 
+## Centred; on a narrow portrait view it is scaled down to fit the width.
 func _layout() -> void:
 	if _panel == null or not is_inside_tree(): return
 	var size := get_viewport().get_visible_rect().size
-	_panel.position = Vector2(floorf((size.x - _panel.size.x) / 2.0), floorf((size.y - _panel.size.y) / 2.0))
+	var fit := minf(1.0, minf((size.x - 8) / _panel.size.x, (size.y - 8) / _panel.size.y))
+	_panel.scale = Vector2(fit, fit)
+	var shown := _panel.size * fit
+	_panel.position = Vector2(floorf((size.x - shown.x) / 2.0), floorf((size.y - shown.y) / 2.0))
