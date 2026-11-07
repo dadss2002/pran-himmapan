@@ -136,3 +136,26 @@
 - LaMa paper (arXiv 2109.07161): https://arxiv.org/pdf/2109.07161
 - Carve LaMa-ONNX: https://huggingface.co/Carve/LaMa-ONNX
 - GitHub mirror: https://github.com/neureps/carousel-fit-models/releases
+
+## ภาคต่อ 2: เครื่องมือฟรีจาก GitHub / เว็บ / สกิล (เจ้าของสั่ง 2026-11-07)
+
+| เครื่องมือ | ทำอะไร | เหมาะกับเรา | สถานะในเครื่องนี้ |
+|---|---|---|---|
+| **EmbarkStudios/texture-synthesis** (Rust, Apache-2.0, มี CLI) | เติมภาพแบบอิงตัวอย่าง คัดลอกพิกเซลจริงจากภาพตัวอย่างมาเรียงต่อ มีโหมด inpaint และ guided | เหมาะมาก เพราะใช้พิกเซลจริงจึงคมแบบพิกเซลอาร์ต ไม่เบลอเหมือน LaMa | ระบบความปลอดภัยไม่ให้ติดตั้ง binary จากภายนอกเอง ต้องให้เจ้าของอนุญาต |
+| **PyPatchMatch** (MIT; PatchMatch, Barnes 2009 = content-aware fill ของ Photoshop) | เติมรูด้วย patch จากส่วนอื่นของภาพ | เหมาะ คมแบบพิกเซลอาร์ต | ต้อง compile C++ จึงติดเรื่องเดียวกัน |
+| **Resynthesizer** (GIMP "Heal selection") | เติมภาพแบบอิงตัวอย่าง วิธีเดียวกับ PatchMatch | ใช้ได้ถ้ามี GIMP | ไม่มีในเครื่อง |
+| **LaMa ONNX** (ทำแล้ว) | เติมภาพด้วย AI | ลบเส้นในเนื้อพื้นผิวได้ดี แต่วาดรูปทรงวัตถุไม่ได้ | ใช้ได้แล้ว `tools/lama_fill.py` |
+| **SpriteCook** (plugin ใน Claude directory) | สร้าง sprite, tileset, dual-grid tileset สำหรับ Godot | สร้างของใหม่ได้ แต่ไม่ได้ไว้ซ่อมภาพเดิม | ยังไม่ติดตั้ง และอาจเป็นบริการเสียเงิน |
+| skill สำหรับซ่อมภาพหรือแผนที่ | — | — | ค้นแล้วไม่พบใน catalog |
+
+บทเรียนจากเว็บและบทความนักทำเกม:
+- **Nectarmancer:** โลกไร้รอยต่อทำจาก "ห้อง" ที่เรียงขอบให้ตรงกันด้วยมือ ซึ่งยุ่งแต่ได้ผลจริง
+- **Sprite AI:** ใช้เทคนิค offset ของ tile คือเลื่อนภาพครึ่งหนึ่งแล้ววาดทับรอยที่โผล่กลางภาพ หลักการเดียวกับการซ่อมรอยต่อของเรา
+- **สรุป:** เกมพิกเซลที่โลกใหญ่ส่วนมากใช้ tile หรือชิ้นที่ออกแบบขอบให้ต่อกันได้ตั้งแต่แรก ส่วนภาพวาดผืนเดียวแบบของเราต้องซ่อมรอยต่อทีละจุด ซึ่งเป็นงานที่เราทำอยู่
+
+แหล่ง:
+- texture-synthesis: https://github.com/EmbarkStudios/texture-synthesis
+- PyPatchMatch: https://pypi.org/project/pypatchmatch
+- Resynthesizer: https://github.com/bootchk/resynthesizerJulia
+- Nectarmancer (80.lv): https://80.lv/articles/how-pixel-art-lighting-was-set-up-in-seamless-world-of-nectarmancer
+- Sprite AI seamless tiles: https://www.sprite-ai.art/guides/seamless-tiles
