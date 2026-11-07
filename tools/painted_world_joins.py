@@ -103,6 +103,9 @@ TONE = {"J3": [(2752, 0, 384)]}
 # (x, y0, y1, dx, dy, fade the top) - offsets found by an SSD search over the overlap bands
 QUILT = {"J3": [(2752, 0, 150, -110, 0, False), (2752, 262, 384, -98, 8, True)]}   # seam columns whose colour split survived the inpaint
 
+# exact finished areas (free tools: LaMa + texture-synthesis, owner-approved 2026-11-07), pasted last
+FINAL = {"J3_final": (2496, 0)}
+
 def main(src, dst, root="assets/map/painted/world"):
     w = np.asarray(Image.open(src).convert("RGB")).astype(np.float32)
     H, W = w.shape[:2]
@@ -120,6 +123,9 @@ def main(src, dst, root="assets/map/painted/world"):
             f = POST[name]
             sh = lambda b: tuple(v + P for v in b)
             grass_fill(w, sh(f["box"]), sh(f["tile_box"]), sh(f["fade"]) if f.get("fade") else None)
+    for name, (x0, y0) in FINAL.items():
+        f = np.asarray(Image.open(f"{root}/{name}.png").convert("RGB")).astype(np.float32)
+        w[y0 + P:y0 + P + f.shape[0], x0 + P:x0 + P + f.shape[1]] = f
     Image.fromarray(w[P:P + H, P:P + W].astype(np.uint8)).save(dst)
 
 if __name__ == "__main__":
