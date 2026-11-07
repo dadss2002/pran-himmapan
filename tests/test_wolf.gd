@@ -56,7 +56,7 @@ func test_aggro_at_160_alerts_pack():
 	_done(p, h)
 	return r
 
-func test_chase_speed_140():
+func test_chase_speed_100():
 	var p := _pack(1, 1)
 	var w := _solo(p, Vector2.ZERO)
 	var h := _hero(Vector2(155, 0))
@@ -67,7 +67,7 @@ func test_chase_speed_140():
 	_run(p, h, 0.25)
 	var speed := (w.position.x - x0) / 0.25
 	_done(p, h)
-	return "" if absf(speed - 140.0) < 3.0 else "speed %.1f != 140" % speed
+	return "" if absf(speed - 100.0) < 3.0 else "speed %.1f != 100 (M3i: slower than the hero's 110)" % speed
 
 func test_bite_after_windup():
 	Combat.rng.seed = 3
@@ -95,12 +95,12 @@ func test_lunge_warns_then_dashes():
 	var r := ""
 	if w.state != "lunge_warn": r = "state %s, expected lunge_warn" % w.state
 	elif not w.telegraph_visible(): r = "warning circle not shown"
-	_run(p, h, 0.45)
-	if r == "" and (w.state != "lunge_warn" or w.position != Vector2.ZERO): r = "wolf must hold still for 0.5 s"
+	_run(p, h, 0.55)
+	if r == "" and (w.state != "lunge_warn" or w.position != Vector2.ZERO): r = "wolf must hold still for 0.6 s (M3i)"
 	if r == "" and h.health.hp != 120: r = "hit during the warning"
-	_run(p, h, 0.05 + 0.3 + DT)
+	_run(p, h, 0.05 + 0.4 + DT)
 	var lost := 120 - h.health.hp
-	if r == "" and absf(w.position.x - 140.0) > 1.5: r = "lunge travelled %.1f, want 140" % w.position.x
+	if r == "" and absf(w.position.x - 100.0) > 1.5: r = "lunge travelled %.1f, want 100 (M3i)" % w.position.x
 	var hit: float = w.stats().atk * 1.5                     # x1.5 lunge, minus a little for the hero's DEF and the roll
 	if r == "" and (lost < int(hit) - 1 or lost > int(ceil(hit))): r = "lunge did %d, expected about %.1f (x1.5)" % [lost, hit]
 	_done(p, h)
@@ -141,7 +141,7 @@ func test_leash_returns_and_heals():
 	var r := ""
 	if w.state != "return": r = "state %s, expected return" % w.state
 	elif w.health.hp != w.health.max_hp: r = "not healed on return"
-	_run(p, h, 3.0)
+	_run(p, h, 4.0)                          # 330 px home at run 100 (M3i)
 	if r == "" and w.state != "idle": r = "should be idle at home, is %s" % w.state
 	_done(p, h)
 	return r

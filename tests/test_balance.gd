@@ -24,7 +24,7 @@ func test_dodge_switches_at_lv5():
 func test_missing_key_reports_path():
 	if Balance.has("wolf.nope"): return "wolf.nope should not exist"
 	if not Balance.has("wolf.run"): return "wolf.run should exist"
-	return "" if Balance.num("wolf.run") == 140.0 else "wolf.run should be 140"
+	return "" if Balance.num("wolf.run") == 100.0 else "wolf.run should be 100 (M3i)"
 
 func test_packs_total_eleven():
 	var n := 0

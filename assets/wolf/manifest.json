@@ -85,9 +85,9 @@
   },
   "fps": {
     "pose": 1,
-    "run": 14,
+    "run": 10,
     "bite": 17,
-    "lunge": 27,
+    "lunge": 20,
     "death": 12
   },
   "anchor": {
