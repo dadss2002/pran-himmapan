@@ -159,3 +159,11 @@
 - Resynthesizer: https://github.com/bootchk/resynthesizerJulia
 - Nectarmancer (80.lv): https://80.lv/articles/how-pixel-art-lighting-was-set-up-in-seamless-world-of-nectarmancer
 - Sprite AI seamless tiles: https://www.sprite-ai.art/guides/seamless-tiles
+
+### ทดลอง texture-synthesis กับ J3 (เจ้าของอนุญาตให้ติดตั้ง 2026-11-07)
+- ติดตั้ง binary 0.8.2 x86_64-musl จาก GitHub release ทางการ (Apache-2.0/MIT)
+- โหมด inpaint: `--inpaint mask.png` โดยในหน้ากาก **สีขาว = เก็บไว้ ดำ = เติม**
+- `--sample-masks` บอกว่าให้คัดลอกพิกเซลจากบริเวณไหน ถ้าให้คัดลอกจากพุ่มไม้/ต้นไม้เท่านั้น ส่วนที่เติมจะเป็นพุ่มไม้ ไม่ใช่หินหรือดิน
+- ผล: เส้นตั้งบนและล่างหาย พิกเซลคมเหมือนภาพเดิม ไม่ต้องใช้ gen
+- ข้อเสีย: ขอบวงรีของบริเวณที่เติมยังเห็นจางๆ ครั้งหน้าควรใช้หน้ากากขอบไม่เรียบ
+- PyPatchMatch ยังติดตั้งไม่ได้ เพราะเครื่องไม่มี OpenCV dev headers สำหรับ compile
