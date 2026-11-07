@@ -82,6 +82,23 @@ func test_bad_room_in_save():
 	await _done(g)
 	return r
 
+## M4b removed rooms w1, w3, e2: a save made in one of them loads into the start room at its spawn
+## (saves store only the room, not the position).
+func test_save_in_removed_room_loads_at_start():
+	var r := ""
+	for gone in ["w1", "w3", "e2"]:
+		var st := SaveGame.new_state()
+		st["room"] = gone
+		SaveGame.save(st, TMP_SAVE)
+		var g := _ground(false, true)
+		if g.rooms.has(gone): r = "%s still exists" % gone
+		elif g.room_id != g.rooms.start: r = "save in %s loaded into %s" % [gone, g.room_id]
+		elif g.hero.position != g.rooms.spawn(g.rooms.start): r = "save in %s: hero at %s, spawn %s" % [gone, g.hero.position, g.rooms.spawn(g.rooms.start)]
+		elif g.layout.blocked_at(g.hero.position): r = "save in %s: hero on blocked ground" % gone
+		await _done(g)
+		if r != "": break
+	return r
+
 func test_leaving_clears_drops_and_monsters():
 	var g := _ground()
 	await tree.physics_frame

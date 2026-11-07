@@ -13,21 +13,25 @@ func test_base_view_by_orientation():
 	return ""
 
 func test_camera_covers_the_room():
-	# every room's own size (M4b: 512x512; the 688x384 rooms before it worked the same way)
+	var cases := [
+		# M4b rooms, 512x512
+		[Vector2(512, 512), Vector2(360, 779), 779.0 / 512.0],    # portrait phone: room height fills the screen
+		[Vector2(512, 512), Vector2(779, 360), 779.0 / 512.0],    # landscape phone: room width fills the screen
+		[Vector2(512, 512), Vector2(640, 360), 1.25],             # 16:9 base view: width fills, camera scrolls up/down
+		# pre-M4b rooms, 688x384
+		[Vector2(688, 384), Vector2(360, 779), 779.0 / 384.0],
+		[Vector2(688, 384), Vector2(779, 360), 779.0 / 688.0],
+		[Vector2(688, 384), Vector2(640, 360), 1.0],              # the room is already bigger than the view
+	]
+	for c in cases:
+		var room: Vector2 = c[0]
+		var z := ScreenFit.camera_zoom(c[1], room)
+		if absf(z - c[2]) > 0.001: return "%s room, view %s zoom %.3f (want %.3f)" % [room, c[1], z, c[2]]
+		var seen: Vector2 = c[1] / z
+		if seen.x > room.x + 0.5 or seen.y > room.y + 0.5: return "view %s still shows %s of a %s room" % [c[1], seen, room]
 	var rs := RoomSet.open()
 	for id in rs.ids():
-		var room: Vector2 = rs.layout(id).size_px()
-		var cases := [
-			[Vector2(360, 779), maxf(779.0 / room.y, 360.0 / room.x)],    # portrait phone
-			[Vector2(779, 360), maxf(779.0 / room.x, 360.0 / room.y)],    # landscape phone
-			[Vector2(640, 360), maxf(1.0, maxf(640.0 / room.x, 360.0 / room.y))],   # 16:9 base view
-		]
-		for c in cases:
-			var z := ScreenFit.camera_zoom(c[0], room)
-			if absf(z - c[1]) > 0.001: return "%s view %s zoom %.3f (want %.3f)" % [id, c[0], z, c[1]]
-			var seen: Vector2 = c[0] / z
-			if seen.x > room.x + 0.5 or seen.y > room.y + 0.5: return "%s view %s still shows %s of a %s room" % [id, c[0], seen, room]
-			if seen.x < room.x - 0.5 and seen.y < room.y - 0.5: return "%s view %s zoomed in past the room's edges" % [id, c[0]]
+		if rs.layout(id).size_px() != Vector2(512, 512): return "%s is %s, add its zoom cases" % [id, rs.layout(id).size_px()]
 	return ""
 
 func test_portrait_buttons_fit_and_leave_the_joystick_side_free():

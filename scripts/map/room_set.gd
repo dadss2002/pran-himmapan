@@ -17,7 +17,10 @@ var _layouts: Dictionary = {}
 static func open(path := PATH) -> RoomSet:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null: return null
-	var d: Dictionary = JSON.parse_string(f.get_as_text())
+	return from_dict(JSON.parse_string(f.get_as_text()))
+
+## A room set from rooms.json's dict; rooms without their own "size" (pre-M4b data) use the global one.
+static func from_dict(d: Dictionary) -> RoomSet:
 	var r := RoomSet.new()
 	r.start = String(d.start)
 	r.size = Vector2(d.size[0], d.size[1])

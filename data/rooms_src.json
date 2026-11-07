@@ -64,6 +64,58 @@
      "level": 3,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      128,
+      128,
+      72,
+      54
+     ],
+     "why": "well"
+    },
+    {
+     "op": "block",
+     "rect": [
+      322,
+      128,
+      72,
+      66
+     ],
+     "why": "fallen stone lantern"
+    },
+    {
+     "op": "block",
+     "rect": [
+      113,
+      300,
+      108,
+      66
+     ],
+     "why": "low ruin wall"
+    },
+    {
+     "op": "block",
+     "rect": [
+      24,
+      268,
+      90,
+      82
+     ],
+     "why": "rocks and stumps, west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      70,
+      205,
+      40,
+      45
+     ],
+     "why": "stone wall stub, west"
+    }
    ]
   },
   "c0r1": {
@@ -188,6 +240,46 @@
       52
      ],
      "why": "rock pile"
+    },
+    {
+     "op": "block",
+     "rect": [
+      312,
+      76,
+      16,
+      92
+     ],
+     "why": "temple platform rim, west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      328,
+      72,
+      130,
+      14
+     ],
+     "why": "temple platform rim, north"
+    },
+    {
+     "op": "block",
+     "rect": [
+      444,
+      86,
+      16,
+      100
+     ],
+     "why": "temple platform rim, east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      280,
+      78,
+      40,
+      24
+     ],
+     "why": "grass pocket by the platform"
     }
    ]
   },
@@ -615,6 +707,26 @@
       40
      ],
      "why": "rock"
+    },
+    {
+     "op": "block",
+     "rect": [
+      288,
+      166,
+      74,
+      64
+     ],
+     "why": "hollow log, west end"
+    },
+    {
+     "op": "block",
+     "rect": [
+      436,
+      244,
+      36,
+      48
+     ],
+     "why": "rocks east of the log"
     }
    ]
   },
@@ -660,6 +772,28 @@
      "kind": "viper",
      "level": 9,
      "count": 8
+    }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      342,
+      282,
+      60,
+      48
+     ],
+     "why": "dark stump"
+    },
+    {
+     "op": "block",
+     "rect": [
+      316,
+      328,
+      70,
+      60
+     ],
+     "why": "mossy boulder"
     }
    ]
   },
@@ -746,6 +880,36 @@
       150
      ],
      "why": "scorched centre of the arena (dark ground read as blocked)"
+    },
+    {
+     "op": "block",
+     "rect": [
+      356,
+      140,
+      92,
+      52
+     ],
+     "why": "fallen log top right"
+    },
+    {
+     "op": "block",
+     "rect": [
+      74,
+      326,
+      92,
+      60
+     ],
+     "why": "fallen log bottom left"
+    },
+    {
+     "op": "block",
+     "rect": [
+      255,
+      362,
+      145,
+      48
+     ],
+     "why": "fallen log and rocks at the bottom"
     }
    ]
   }

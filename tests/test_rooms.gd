@@ -33,6 +33,47 @@ func test_room_sizes_from_rooms_json():
 		if tex == null or Vector2(tex.get_size()) != l.size_px(): return "%s picture size differs from layout" % id
 	return ""
 
+## Pre-M4b data: a global 688x384 size and rooms without their own "size" still load at that size,
+## and a warp arrival lands on ground a hero-sized body fits on.
+func test_old_format_rooms_use_global_size():
+	var rows: Array = []
+	for y in 48:
+		var row := ""
+		for x in 86:
+			row += "#" if x == 0 or y == 0 or x == 85 or y == 47 or (x >= 60 and x <= 64 and y >= 10 and y <= 40) else "."
+		rows.append(row)
+	var room := {"image": "res://assets/map/painted/raw/c1r1.png", "overlay": null, "blocked": rows, "fx": [],
+		"monsters": [], "warps": [{"id": "east", "at": [676, 196], "to": "a", "to_warp": "west"},
+		{"id": "west", "at": [12, 196], "to": "a", "to_warp": "east"}]}
+	var rs := RoomSet.from_dict({"start": "a", "size": [688, 384], "cell": 8, "rooms": {"a": room}})
+	var l := rs.layout("a")
+	if l.size_px() != Vector2(688, 384): return "old room layout size %s (want 688x384)" % l.size_px()
+	for w in ["east", "west"]:
+		var p := rs.arrival("a", w)
+		var c := Vector2i((p / 8.0).floor())
+		if not l.roomy(c.x, c.y): return "arrival %s at %s is not open ground" % [w, p]
+		var d := p.distance_to(rs.warp_at("a", w))
+		if d <= RoomSet.REARM or d > 60.0: return "arrival %s %.0f px from its warp" % [w, d]
+		# toward the 688x384 room's middle, not a 512x512 one's
+		if absf(p.y - 196.0) > 12.0: return "arrival %s at %s drifts off the warp's row" % [w, p]
+	if not l.roomy(int(l.hero_spawn.x) / 8, int(l.hero_spawn.y) / 8): return "spawn %s not open ground" % l.hero_spawn
+	return ""
+
+## Every room's spawn and every warp arrival stand on open ground (a hero-sized body fits) that
+## reaches the room's warps.
+func test_spawns_and_arrivals_on_open_ground():
+	var rs := RoomSet.open()
+	for id in rs.ids():
+		var l := rs.layout(id)
+		var pts := {"spawn": rs.spawn(id)}
+		for w in rs.room(id).warps: pts["arrival " + String(w.id)] = rs.arrival(id, w.id)
+		for k in pts:
+			var p: Vector2 = pts[k]
+			if not l.roomy(int(p.x) / l.cell, int(p.y) / l.cell): return "%s %s at %s is not open ground" % [id, k, p]
+			for w in rs.room(id).warps:
+				if not l.reachable(p, rs.warp_at(id, w.id)): return "%s %s cannot reach warp %s" % [id, k, w.id]
+	return ""
+
 func test_links_are_pairs():
 	var rs := RoomSet.open()
 	var want := {}
