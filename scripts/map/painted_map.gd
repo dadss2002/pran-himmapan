@@ -29,6 +29,14 @@ func build(l: PaintedLayout) -> void:
 		overlay_sprites.append(s)
 	_build_blockers()
 
+## M3k saver: ambient effects (pond ripples) visible and animating, or hidden and stopped.
+func set_ambient(on: bool) -> void:
+	for n in fx_nodes:
+		if not is_instance_valid(n): continue
+		n.visible = on
+		if on and not n.is_playing(): n.play()
+		elif not on: n.stop()
+
 func _sprite(c: Dictionary) -> Sprite2D:
 	var s := Sprite2D.new()
 	s.texture = load(String(c.file))

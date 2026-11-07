@@ -27,6 +27,8 @@ var layout: PaintedLayout
 var forest: PaintedMap
 var hero: Hero
 var hud: Hud
+var saver := PerfSaver.new()                 # M3k: drops decoration while fps stays under 60
+var watch_fps := DisplayServer.get_name() != "headless"
 var packs: Array = []
 var drops: Array = []
 var loot_rng := RandomNumberGenerator.new()
@@ -45,8 +47,12 @@ func build() -> void:
 	if _built: return
 	_built = true
 	add_child(ScreenFit.new())          # portrait phones: 360 px wide UI; the camera covers the screen
+	# M3k physics interpolation: only the world (moved on the physics tick) is blended between
+	# ticks for 120 Hz screens; HUD, panels and damage text move in _process / tweens, so off.
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	world_vp = SubViewport.new()
 	world_vp.name = "WorldView"
+	world_vp.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
 	world_vp.size = Vector2i(640, 360)
 	world_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	world_vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
@@ -134,6 +140,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	stage.add_child(forest)
 	stage.move_child(forest, 0)
 	forest.build(layout)
+	forest.set_ambient(not saver.on)
 	var sz := layout.size_px()
 	cam.limit_left = 0
 	cam.limit_top = 0
@@ -143,6 +150,9 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	hero.spawn_point = rooms.spawn(id)
 	hero.position = rooms.arrival(id, via_warp) if via_warp != "" else hero.spawn_point   # World sits at the origin
 	hero.velocity = Vector2.ZERO
+	if hero.is_inside_tree():
+		hero.reset_physics_interpolation()   # M3k: a warp is a jump; the camera rides on the hero
+		cam.reset_physics_interpolation()
 	for w in rooms.room(id).warps:
 		var n := Warp.make(w)
 		n.armed = String(w.id) != via_warp
@@ -258,6 +268,7 @@ func _blocked(p: Vector2) -> bool:
 
 func _physics_process(delta: float) -> void:
 	tick_autosave(delta)
+	_follow_lock_ring()
 	if hero and hero.state != "dead":
 		for w in warps:
 			if is_instance_valid(w) and w.step(hero.global_position):
@@ -281,9 +292,18 @@ func _text(at: Vector2, t: String, c: Color) -> void:
 	d.size = Vector2(80, 16)
 	d.position = at - Vector2(20, 0)
 	overlay.add_child(d)
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if overlay and cam and cam.is_inside_tree():
 		overlay.transform = Transform2D(0.0, Vector2(_scale, _scale), 0.0, -_view_origin() * _scale)
+	if watch_fps and saver.step(delta, Engine.get_frames_per_second()): apply_saver()
+
+## Saver on: pond ripples hidden and stopped; dust and pickup puffs skipped (PerfSaver.decorative).
+func apply_saver() -> void:
+	if forest and is_instance_valid(forest): forest.set_ambient(not saver.on)
+	if hud: hud.saver_on = saver.on
+
+## M3k: moved to the physics tick so the ring is interpolated together with its target.
+func _follow_lock_ring() -> void:
 	if lock_ring == null or hero == null: return
 	var t := hero.current_target() if hero.state != "dead" else null
 	lock_ring.visible = t != null
@@ -297,6 +317,7 @@ func _number(at: Vector2, amount: int, crit: bool, hurt: bool) -> void:
 
 func _fx(fx_name: String, at: Vector2) -> void:
 	if not is_inside_tree(): return
+	if saver.on and PerfSaver.decorative(fx_name): return
 	var f := FxSprite.make(fx_name)
 	f.position = at
 	f.z_index = 40

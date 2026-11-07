@@ -466,7 +466,9 @@ func _on_died() -> void:
 	_refresh(true)
 
 func _respawn() -> void:
-	if is_inside_tree(): global_position = spawn_point
+	if is_inside_tree():
+		global_position = spawn_point
+		reset_physics_interpolation()   # M3k: jump, do not slide
 	else: position = spawn_point
 	health.reset_full()
 	mp = max_mp()

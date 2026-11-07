@@ -157,6 +157,7 @@ func test_piercing_uses_its_own_range():
 	var sk: Dictionary = Balance.data()["skills"]["piercing"]
 	var old = sk["range"]
 	sk["range"] = 300
+	Balance.clear_cache()
 	var h := _hero()
 	h.facing = 2
 	h.try_skill("piercing")
@@ -165,6 +166,7 @@ func test_piercing_uses_its_own_range():
 	if _shots.size() != 1: r = "%d arrows" % _shots.size()
 	elif absf(_shots[0].max_range - 300.0) > 0.01: r = "piercing range %.0f, want skills.piercing.range" % _shots[0].max_range
 	sk["range"] = old
+	Balance.clear_cache()
 	_done(h)
 	return r
 

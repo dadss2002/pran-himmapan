@@ -29,6 +29,7 @@ var fullscreen_button: Button
 var fps_button: Button
 var fps_open := true
 var _fps_t := 0.0
+var saver_on := false          # M3k: shown as "ประหยัด" in the FPS meter
 const DEAD_DIM := 0.6
 
 func _ready() -> void:
@@ -205,6 +206,8 @@ static func show_touch() -> bool:
 
 func bind(h: Hero) -> void:
 	hero = h
+	for sig in [h.gear_changed, h.gems_changed, h.leveled_up]:
+		sig.connect(func(_a = null): _nums.clear())         # new costs / cooldowns at once
 	bag_panel.hero = h
 	skill_panel.hero = h
 
@@ -238,22 +241,43 @@ func refresh() -> void:
 	else: exp_bar.value = 100.0 * hero.exp / float(Progression.exp_to_next(hero.level))
 	gold_label.text = str(hero.inventory.gold)
 	dim.color.a = DEAD_DIM if hero.state == "dead" else 0.0
-	var pierce_ok := hero.mp >= hero.skill_mp("piercing")
-	buttons.set_state("skill1", pierce_ok, _mp_note("piercing"))
+	var c := _skill_numbers()
+	buttons.set_state("skill1", hero.mp >= c.pierce_mp, c.pierce_note)
 	if hero.level < Skills.unlock_level("spread"):
 		buttons.set_state("skill2", false, "Lv%d" % Skills.unlock_level("spread"))
 	else:
-		var spread_ok := hero.mp >= hero.skill_mp("spread")
-		buttons.set_state("skill2", spread_ok, _mp_note("spread"))
+		buttons.set_state("skill2", hero.mp >= c.spread_mp, c.spread_note)
 	for k in ["hp", "mp"]:
 		var n := hero.inventory.count_of("potion_" + k)
 		buttons.set_state("potion_" + k, n > 0, str(n))
-		buttons.set_cooldown("potion_" + k, hero.potion_cooldown_left(), Balance.num("potion.cooldown"))
-	var st := hero.stats()
-	buttons.set_cooldown("skill1", hero.skill_cooldown_left("piercing"), hero.build("piercing").cooldown)
-	buttons.set_cooldown("skill2", hero.skill_cooldown_left("spread"), hero.build("spread").cooldown)
-	buttons.set_cooldown("shoot", hero.cooldown, st.shot_cd)
-	buttons.set_cooldown("dodge", hero.dodge_cooldown_left(), Balance.dodge(hero.level).cooldown)
+		buttons.set_cooldown("potion_" + k, hero.potion_cooldown_left(), c.potion_cd)
+	buttons.set_cooldown("skill1", hero.skill_cooldown_left("piercing"), c.pierce_cd)
+	buttons.set_cooldown("skill2", hero.skill_cooldown_left("spread"), c.spread_cd)
+	buttons.set_cooldown("shoot", hero.cooldown, c.shot_cd)
+	buttons.set_cooldown("dodge", hero.dodge_cooldown_left(), c.dodge_cd)
+
+## Skill costs and cooldown lengths only change with gear, gems or level, so they are worked out
+## again a few times a second instead of every frame (M3k: 60 fps on phones).
+var _nums := {}
+var _nums_t := 0.0
+const NUMS_EVERY := 0.25
+
+func _skill_numbers() -> Dictionary:
+	var now := Time.get_ticks_msec() / 1000.0
+	if not _nums.is_empty() and now - _nums_t < NUMS_EVERY and int(_nums.level) == hero.level: return _nums
+	_nums_t = now
+	var pierce := hero.build("piercing")
+	var spread := hero.build("spread")
+	_nums = {
+		"level": hero.level,
+		"pierce_mp": pierce.mp, "spread_mp": spread.mp,
+		"pierce_note": "MP %s" % Gear._trim(snappedf(pierce.mp, 0.1)),
+		"spread_note": "MP %s" % Gear._trim(snappedf(spread.mp, 0.1)),
+		"pierce_cd": pierce.cooldown, "spread_cd": spread.cooldown,
+		"shot_cd": hero.stats().shot_cd, "potion_cd": Balance.num("potion.cooldown"),
+		"dodge_cd": Balance.dodge(hero.level).cooldown,
+	}
+	return _nums
 
 ## "MP 11.2": the real cost after gems (dim button = not enough MP).
 func _mp_note(skill_id: String) -> String:
@@ -293,11 +317,15 @@ func _box(bg: Color, border: Color, radius: int) -> StyleBoxFlat:
 	s.content_margin_top = 4; s.content_margin_bottom = 4
 	return s
 
+func fps_text(fps: float) -> String:
+	var t := "FPS %d · %d ms" % [fps, int(round(1000.0 / maxf(1.0, fps)))]
+	return t + " · ประหยัด" if saver_on else t
+
 func _tick_fps(delta: float) -> void:
 	if fps_button == null: return
 	_fps_t -= delta
 	if _fps_t > 0.0: return
 	_fps_t = 0.5
 	var fps := Engine.get_frames_per_second()
-	fps_button.text = "FPS %d · %d ms" % [fps, int(round(1000.0 / maxf(1.0, fps)))] if fps_open else "FPS"
+	fps_button.text = fps_text(fps) if fps_open else "FPS"
 	fps_button.modulate.a = 1.0 if fps_open else 0.45
