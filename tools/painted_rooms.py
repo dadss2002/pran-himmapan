@@ -21,6 +21,7 @@ Usage: python3 tools/painted_rooms.py
 """
 import colorsys
 import json
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -65,13 +66,17 @@ def roomy_mask(walk: np.ndarray) -> np.ndarray:
     return out
 
 
-def walk_grid(rgb: np.ndarray, edits: list) -> np.ndarray:
-    walk_px, _ = classify(rgb)
+def walk_grid(rgb: np.ndarray, edits: list, walk_px=None) -> np.ndarray:
+    """Walk cells from the picture's colours, or from an exact mask (rooms composed from props)."""
+    exact = walk_px is not None
+    if not exact:
+        walk_px, _ = classify(rgb)
     h, w = rgb.shape[:2]
     ch, cw = h // CELL, w // CELL
     walk = walk_px[:ch * CELL, :cw * CELL].reshape(ch, CELL, cw, CELL).mean(axis=(1, 3)) >= 0.55
-    walk = ndimage.binary_closing(walk, structure=np.ones((3, 3), bool), border_value=1)
-    walk = ndimage.binary_opening(walk, structure=ndimage.generate_binary_structure(2, 1))
+    if not exact:
+        walk = ndimage.binary_closing(walk, structure=np.ones((3, 3), bool), border_value=1)
+        walk = ndimage.binary_opening(walk, structure=ndimage.generate_binary_structure(2, 1))
     lab, n = ndimage.label(~walk)
     for i, s in enumerate(ndimage.sum(np.ones_like(lab), lab, range(1, n + 1)), 1):
         if s < 10: walk[lab == i] = True
@@ -119,7 +124,11 @@ def main():
     debug = []
     for rid, rs in src["rooms"].items():
         rgb = np.asarray(Image.open(f"{ROOT}/assets/map/painted/raw/{rid}.png").convert("RGB"))
-        walk = walk_grid(rgb, rs.get("edits", []))
+        # rooms composed from props (tools/compose_room.py) bring exact walk / over-the-hero masks
+        walk_file = Path(f"{ROOT}/assets/map/painted/raw/{rid}_walk.png")
+        over_file = Path(f"{ROOT}/assets/map/painted/raw/{rid}_over.png")
+        walk_px = np.asarray(Image.open(walk_file).convert("L")) > 127 if walk_file.exists() else None
+        walk = walk_grid(rgb, rs.get("edits", []), walk_px)
         roomy = roomy_mask(walk)
         # warps and spawn only on the main open area (the spawn's, else the largest), never in a pocket
         lab, n = ndimage.label(roomy)
@@ -142,7 +151,7 @@ def main():
             m = dict(m)
             m["at"] = nearest_roomy(roomy, m["at"])   # a group's home on the main open ground
             monsters.append(m)
-        over = overlay(rgb, walk)
+        over = np.asarray(Image.open(over_file).convert("L")) > 127 if over_file.exists() else overlay(rgb, walk)
         ov_file = None
         if over.any():
             ov_file = f"res://assets/map/painted/rooms/overlay_{rid}.png"

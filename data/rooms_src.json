@@ -482,7 +482,7 @@
     2
    ],
    "name": "ลานป่าทึบตะวันออก",
-   "note": "art: w1 flipped and darkened (the generated marsh came out framed twice; budget cap reached)",
+   "note": "art: composed by Claude from PixelLab props (tools/compose_room.py, data/compose/e2.json), 0 gen",
    "monsters": [
     {
      "kind": "shroom",
