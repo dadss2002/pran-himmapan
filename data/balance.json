@@ -116,7 +116,7 @@
     "hit_knockback": 6,
     "hit_flash": 0.1,
     "death_fade": 0.6,
-    "respawn": 20,
+    "respawn": 9,
     "chase_slot": 14,
     "stop_factor": 0.8,
     "wander_pause": 1.5,
@@ -564,6 +564,7 @@
     ],
     "ore_id": "ore_himmapan"
   },
+  "horde": {"_doc": "M3g hack-and-slash (owner approved 2026-11-07): every monster x these; docs/superpowers/specs/2026-11-07-m3g-hackslash-monsters-design.md", "hp_mult": 0.5, "atk_mult": 0.8, "exp_mult": 0.5, "gold_mult": 0.5, "drop_mult": 0.5},
   "monsters": {
     "deer": {
       "temper": "flee",

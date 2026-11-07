@@ -9,8 +9,9 @@ func test_hero_lv1():
 func test_wolf_levels():
 	var w1 := Balance.wolf(1)
 	var w5 := Balance.wolf(5)
-	if w1 != {"hp": 40, "atk": 6, "def": 3, "exp": 13}: return "wolf lv1 %s" % w1
-	if w5 != {"hp": 112, "atk": 14, "def": 7, "exp": 33}: return "wolf lv5 %s" % w5
+	# spec formula x M3g horde (HP/EXP x0.5, ATK x0.8): lv1 40/6/3/13 -> 20/5/3/7, lv5 112/14/7/33 -> 56/11/7/17
+	if w1 != {"hp": 20, "atk": 5, "def": 3, "exp": 7}: return "wolf lv1 %s" % w1
+	if w5 != {"hp": 56, "atk": 11, "def": 7, "exp": 17}: return "wolf lv5 %s" % w5
 	return ""
 
 func test_dodge_switches_at_lv5():

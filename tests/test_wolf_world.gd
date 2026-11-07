@@ -61,6 +61,7 @@ func test_side_lunge_hits_in_tree():
 	w.global_position = Vector2(300, 300)     # 100 px to the side: lunge range
 	await _tick(p, h, 60)
 	var lost := 120 - h.health.hp
+	var hit: float = w.stats().atk * 1.5                     # x1.5 lunge (atk 5 after M3g x0.8)
 	world.queue_free()
 	await tree.process_frame
-	return "" if lost >= 8 and lost <= 9 else "side lunge did %d (want 8-9 from a x1.5 lunge)" % lost
+	return "" if lost >= int(hit) - 1 and lost <= int(ceil(hit)) else "side lunge did %d (want about %.1f from a x1.5 lunge)" % [lost, hit]

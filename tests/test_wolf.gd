@@ -39,7 +39,8 @@ func test_stats_from_level():
 	var p := _pack(3, 1)
 	var w: Wolf = p.wolves[0]
 	var r := ""
-	if w.health.max_hp != 76 or w.stats().atk != 10 or w.stats().def != 5: r = "lv3 stats %s hp %d" % [w.stats(), w.health.max_hp]
+	# lv3 76/10/5 x M3g horde -> 38/8/5
+	if w.health.max_hp != 38 or w.stats().atk != 8 or w.stats().def != 5: r = "lv3 stats %s hp %d" % [w.stats(), w.health.max_hp]
 	_done(p, null)
 	return r
 
@@ -100,7 +101,8 @@ func test_lunge_warns_then_dashes():
 	_run(p, h, 0.05 + 0.3 + DT)
 	var lost := 120 - h.health.hp
 	if r == "" and absf(w.position.x - 140.0) > 1.5: r = "lunge travelled %.1f, want 140" % w.position.x
-	if r == "" and (lost < 8 or lost > 9): r = "lunge did %d, expected 8-9 (x1.5)" % lost
+	var hit: float = w.stats().atk * 1.5                     # x1.5 lunge, minus a little for the hero's DEF and the roll
+	if r == "" and (lost < int(hit) - 1 or lost > int(ceil(hit))): r = "lunge did %d, expected about %.1f (x1.5)" % [lost, hit]
 	_done(p, h)
 	return r
 
@@ -161,30 +163,30 @@ func test_hit_knockback_and_windup_not_interrupted():
 	var p := _pack(1, 1)
 	var w := _solo(p, Vector2.ZERO)
 	var r := ""
-	w.receive_hit(18, 1.0, Vector2(-10, 0))
+	w.receive_hit(5, 1.0, Vector2(-10, 0))
 	if absf(w.position.x - 6.0) > 0.01: r = "idle wolf knocked %.2f, want 6" % w.position.x
 	var h := _hero(Vector2(26, 0))
 	_run(p, h, DT)
 	if r == "" and w.state != "bite": r = "expected bite windup, got %s" % w.state
 	var x := w.position.x
-	w.receive_hit(18, 1.0, Vector2(40, 0))
+	w.receive_hit(5, 1.0, Vector2(40, 0))
 	if r == "" and w.position.x != x: r = "windup wolf must not be knocked back"
 	_run(p, h, 0.36)
 	if r == "" and h.health.hp == 120: r = "bite should still land"
 	_done(p, h)
 	return r
 
-func test_death_and_respawn_20s():
+func test_death_and_respawn_9s():
 	var p := _pack(1, 1)
 	var w := _solo(p, Vector2(30, 0))
 	w.receive_hit(9999, 1.0, Vector2.ZERO)
 	var r := ""
 	if w.is_alive() or w.state != "dead": r = "wolf should be dead"
-	_run(p, null, 19.9)
+	_run(p, null, 8.9)
 	if r == "" and w.is_alive(): r = "respawned too early"
 	_run(p, null, 0.2)
-	if r == "" and not w.is_alive(): r = "not respawned after 20 s"
-	if r == "" and w.health.hp != 40: r = "respawn hp %d" % w.health.hp
+	if r == "" and not w.is_alive(): r = "not respawned after 9 s (M3g)"
+	if r == "" and w.health.hp != 20: r = "respawn hp %d" % w.health.hp
 	if r == "" and w.position.distance_to(p.home) > 40: r = "respawned away from home at %s" % w.position
 	_done(p, null)
 	return r

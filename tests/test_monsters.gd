@@ -53,13 +53,14 @@ func _count(world: Node2D, script: Script) -> int:
 	return c
 
 func test_stats_match_spec():
+	# spec M3d §2 formulas x M3g horde multipliers (HP/EXP x0.5, ATK x0.8, DEF same)
 	var want := {
-		["deer", 1]: {"hp": 30, "atk": 0, "def": 2, "exp": 10},
-		["boar", 3]: {"hp": 99, "atk": 11, "def": 6, "exp": 24},
-		["shroom", 2]: {"hp": 63, "atk": 8, "def": 6, "exp": 18},
-		["macaque", 3]: {"hp": 63, "atk": 10, "def": 5, "exp": 24},
-		["viper", 5]: {"hp": 84, "atk": 18, "def": 7, "exp": 35},
-		["kongkoi", 10]: {"hp": 295, "atk": 31, "def": 18, "exp": 84},
+		["deer", 1]: {"hp": 15, "atk": 0, "def": 2, "exp": 5},
+		["boar", 3]: {"hp": 50, "atk": 9, "def": 6, "exp": 12},
+		["shroom", 2]: {"hp": 32, "atk": 6, "def": 6, "exp": 9},
+		["macaque", 3]: {"hp": 32, "atk": 8, "def": 5, "exp": 12},
+		["viper", 5]: {"hp": 42, "atk": 14, "def": 7, "exp": 18},
+		["kongkoi", 10]: {"hp": 148, "atk": 25, "def": 18, "exp": 42},
 	}
 	for key in want:
 		var got := Monster.stats_for(key[0], key[1])
@@ -210,31 +211,60 @@ func test_deer_drops_double_gold():
 	if g != 2.0: return "deer gold x%s (want x2)" % g
 	return "" if t == "kongkoi" else "kongkoi loot table %s" % t
 
-## Spec §3: which monsters live in which room (kind: count, and the lowest level there).
+## Spec M3g §2: which monsters live in which room (kind: count, lowest level); 2 kinds, 15-25 each.
 func test_rooms_hold_the_spec_monsters():
 	var want := {
-		"c1r1": {"deer": 3}, "c1r0": {"wolf": 4}, "c0r1": {"boar": 3}, "c2r1": {"macaque": 3},
-		"c0r0": {"boar": 2, "deer": 2}, "c2r2": {"wolf": 3, "macaque": 1}, "c2r0": {"deer": 2, "macaque": 2},
-		"c0r2": {"shroom": 3, "viper": 1}, "c1r2": {"wolf": 4, "shroom": 2}, "c0r3": {"kongkoi": 2, "viper": 2},
-		"c1r3": {"viper": 3, "shroom": 2}, "c2r3": {"kongkoi": 3},
-		# M3f arenas (docs/superpowers/specs/2026-11-07-m3f-arena-rooms-design.md §2)
-		"w1": {"boar": 3, "deer": 3, "wolf": 3}, "e0": {"macaque": 3, "wolf": 4, "boar": 2},
-		"e2": {"shroom": 3, "viper": 2, "wolf": 4}, "w3": {"kongkoi": 4, "viper": 3, "macaque": 2},
+		"c1r1": {"deer": 8, "boar": 8}, "c1r0": {"wolf": 10, "deer": 6}, "c0r1": {"boar": 10, "deer": 6},
+		"w1": {"boar": 10, "wolf": 8}, "c0r0": {"boar": 10, "macaque": 6}, "c2r1": {"boar": 10, "macaque": 8},
+		"c2r2": {"wolf": 10, "macaque": 6}, "c2r0": {"deer": 8, "macaque": 8}, "c0r2": {"shroom": 10, "viper": 6},
+		"e0": {"wolf": 12, "macaque": 8}, "c1r2": {"wolf": 12, "shroom": 8}, "e2": {"shroom": 12, "wolf": 10},
+		"c0r3": {"viper": 10, "kongkoi": 6}, "c1r3": {"viper": 10, "shroom": 10},
+		"c2r3": {"kongkoi": 10, "viper": 8}, "w3": {"kongkoi": 12, "macaque": 8},
 	}
-	var lv := {"c1r1": 1, "c1r0": 1, "c0r1": 2, "c2r1": 3, "c0r0": 3, "c2r2": 3, "c2r0": 4, "c0r2": 4,
-		"c1r2": 5, "c0r3": 7, "c1r3": 8, "c2r3": 9, "w1": 2, "e0": 4, "e2": 6, "w3": 8}
+	var lv := {"c1r1": 1, "c1r0": 1, "c0r1": 2, "w1": 2, "c0r0": 3, "c2r1": 3, "c2r2": 3, "c2r0": 4,
+		"c0r2": 4, "e0": 4, "c1r2": 5, "e2": 6, "c0r3": 7, "c1r3": 8, "c2r3": 9, "w3": 8}
 	var rooms := RoomSet.open()
 	for id in want:
 		var got := {}
 		var low := 99
 		var high := 0
+		var total := 0
 		for m in rooms.room(id).get("monsters", []):
 			got[m.kind] = got.get(m.kind, 0) + int(m.count)
+			total += int(m.count)
 			low = mini(low, int(m.level))
 			high = maxi(high, int(m.level))
+			if int(m.count) > 6: return "%s has a group of %d (max 6)" % [id, m.count]
 		if got != want[id]: return "%s has %s (spec %s)" % [id, got, want[id]]
+		if total < 15 or total > 25: return "%s has %d monsters (15-25)" % [id, total]
 		if low != lv[id]: return "%s lowest level %d (spec %d)" % [id, low, lv[id]]
 		if (id == "c2r3" or id == "w3") and high != 10: return "%s has no Lv10 kongkoi" % id
+	return ""
+
+## M3g §1: respawn 9 s; gold and drop chances x0.5 per kill.
+func test_horde_respawn_and_loot():
+	if Balance.num("wolf.respawn") != 9.0: return "respawn %s s (spec 9)" % Balance.num("wolf.respawn")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var ore := 0
+	var n := 4000
+	var gold_max := 0
+	for i in n:
+		for it in Loot.roll("wolf", 1, rng):
+			if it.id == "ore_himmapan": ore += 1
+			if it.id == "gold": gold_max = maxi(gold_max, it.count)
+	var rate := float(ore) / n
+	var want := Balance.num("loot.wolf.ore") * 0.5
+	if absf(rate - want) > 0.03: return "ore rate %.3f (want ~%.3f)" % [rate, want]
+	var gmax := int(round((Balance.num("loot.wolf.gold_max") + 1) * 0.5))
+	return "" if gold_max <= gmax else "gold up to %d (max %d)" % [gold_max, gmax]
+
+## The hero's start point is kept clear like a warp arrival (start room is all passive anyway).
+func test_start_room_all_passive():
+	var rooms := RoomSet.open()
+	for m in rooms.room(rooms.start).get("monsters", []):
+		var t := "passive" if m.kind == "boar" else String(Balance._lookup("monsters.%s.temper" % m.kind)) if m.kind != "wolf" else "aggressive"
+		if t == "aggressive" or t == "ambush": return "start room has a %s (attacks first)" % m.kind
 	return ""
 
 ## Review fix: a passive monster that was hit fights alone; its calm group-mates stay calm.

@@ -15,7 +15,7 @@ func test_ground_wolf_packs_in_their_rooms():
 	if g.room_id != "c1r1": r = "starts in %s" % g.room_id
 	elif g.hero.spawn_point != g.layout.hero_spawn: r = "hero spawn %s" % g.hero.spawn_point
 	else:
-		for want in [["c1r0", 1, 4], ["c2r2", 3, 3], ["c1r2", 5, 4]]:
+		for want in [["c1r0", 1, 10], ["c2r2", 3, 10], ["c1r2", 5, 12]]:       # spec M3g §2
 			g.go_to(want[0], "", false)
 			var wolves := 0
 			var levels := []
@@ -23,7 +23,8 @@ func test_ground_wolf_packs_in_their_rooms():
 				if p.kind != "wolf": continue      # other forest monsters share some rooms (spec M3d §3)
 				levels.append(p.level)
 				wolves += p.wolves.size()
-			if levels != [want[1]] or wolves != want[2]:
+			var one_level := not levels.is_empty() and levels.all(func(l): return l == want[1])
+			if not one_level or wolves != want[2]:
 				r = "%s: pack levels %s, %d wolves" % [want[0], levels, wolves]
 				break
 	g.free()

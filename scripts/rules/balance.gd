@@ -47,12 +47,23 @@ static func hero(level: int) -> Dictionary:
 
 static func wolf(level: int) -> Dictionary:
 	var l := level - 1
-	return {
+	return horde_stats({
 		"hp": int(num("wolf.hp_base") + num("wolf.hp_per_level") * l),
 		"atk": int(num("wolf.atk_base") + num("wolf.atk_per_level") * l),
 		"def": int(num("wolf.def_base") + num("wolf.def_per_level") * level),
 		"exp": int(num("wolf.exp_base") + num("wolf.exp_per_level") * level),
-	}
+	})
+
+## M3g hack-and-slash multiplier for every monster (horde.<key>, 1 when absent).
+static func horde(key: String) -> float:
+	return num("horde." + key) if has("horde." + key) else 1.0
+
+## The spec formula's stats with the horde multipliers: HP and EXP x0.5, ATK x0.8, DEF unchanged.
+static func horde_stats(s: Dictionary) -> Dictionary:
+	s.hp = maxi(1, int(round(s.hp * horde("hp_mult"))))
+	s.atk = int(round(s.atk * horde("atk_mult")))
+	s.exp = maxi(1, int(round(s.exp * horde("exp_mult"))))
+	return s
 
 static func dodge(level: int) -> Dictionary:
 	var key := "dodge.lv5" if level >= int(num("dodge.upgrade_level")) else "dodge.lv1"

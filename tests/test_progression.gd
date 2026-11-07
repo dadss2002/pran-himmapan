@@ -41,11 +41,12 @@ func test_loot_rates_seeded():
 			elif String(d.id).begins_with("gem_"):
 				gem += 1
 				if not Balance.data()["gems"].has(String(d.id).trim_prefix("gem_")): return "unknown gem %s" % d.id
-		if gold < 4 or gold > 7: return "gold %d outside 4..7 at lv1" % gold
+		# M3g horde: gold (3..6 + lv) x0.5 rounded, drop chances x0.5
+		if gold < 2 or gold > 4: return "gold %d outside 2..4 at lv1" % gold
 	var ore_p := float(ore) / n
 	var gem_p := float(gem) / n
-	if ore_p < 0.23 or ore_p > 0.27: return "ore rate %.3f" % ore_p
-	if gem_p < 0.007 or gem_p > 0.013: return "gem rate %.4f" % gem_p
+	if ore_p < 0.11 or ore_p > 0.14: return "ore rate %.3f" % ore_p
+	if gem_p < 0.003 or gem_p > 0.007: return "gem rate %.4f" % gem_p
 	return ""
 
 func test_gear_drop_rate_seeded():
@@ -61,7 +62,7 @@ func test_gear_drop_rate_seeded():
 				by_base[it.id] = by_base.get(it.id, 0) + 1
 				if it.item.base != it.id or it.count != 1: return "bad gear entry %s" % it
 	var rate := 100.0 * gear / n
-	if absf(rate - 6.0) > 0.4: return "gear rate %.2f%%, want 6%%" % rate
+	if absf(rate - 3.0) > 0.3: return "gear rate %.2f%%, want 3%% (6%% x M3g drop 0.5)" % rate
 	var pool: Array = Balance.data()["gear_pool"]["wolf"]
 	for b in pool:
 		var share: float = float(by_base.get(b, 0)) / gear
