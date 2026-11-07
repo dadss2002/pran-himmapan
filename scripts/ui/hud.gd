@@ -24,6 +24,11 @@ var skills_button: Button
 var dim: ColorRect
 var top_right: HBoxContainer
 var fullscreen_button: Button
+## Frame-rate meter for phone testing (owner 2026-11-07): "FPS 60 · 16 ms"; tap to fold it down to
+## a faint "FPS" and tap again to bring it back.
+var fps_button: Button
+var fps_open := true
+var _fps_t := 0.0
 const DEAD_DIM := 0.6
 
 func _ready() -> void:
@@ -34,6 +39,8 @@ func _ready() -> void:
 
 ## Wider phones (aspect "expand"): keep the top-right block and EXP bar on the real edges.
 func layout(size: Vector2) -> void:
+	if fps_button:
+		fps_button.position = Vector2(6, 60 if not ScreenFit.is_portrait(size) else 104)
 	top_right.position.x = size.x - 6 - top_right.size.x
 	# portrait (360 wide): no room beside the status panel, so the block goes on a second row
 	top_right.position.y = 60.0 if ScreenFit.is_portrait(size) else 6.0
@@ -47,6 +54,19 @@ func build() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+
+	fps_button = Button.new()
+	fps_button.flat = true
+	fps_button.focus_mode = Control.FOCUS_NONE
+	fps_button.add_theme_font_size_override("font_size", UiKit.fs(8))
+	fps_button.add_theme_color_override("font_color", Color("#cfe8b0"))
+	fps_button.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	fps_button.add_theme_constant_override("outline_size", 3)
+	fps_button.position = Vector2(6, 60)
+	fps_button.pressed.connect(func():
+		fps_open = not fps_open
+		_fps_t = 0.0)
+	root.add_child(fps_button)
 
 	# --- status panel (top-left)
 	var panel := PanelContainer.new()
@@ -239,7 +259,8 @@ func refresh() -> void:
 func _mp_note(skill_id: String) -> String:
 	return "MP %s" % Gear._trim(snappedf(hero.skill_mp(skill_id), 0.1))
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_tick_fps(delta)
 	if hero == null: return
 	hero.external_input = joystick.vector if touch_ui.visible else Vector2.ZERO
 	refresh()
@@ -271,3 +292,12 @@ func _box(bg: Color, border: Color, radius: int) -> StyleBoxFlat:
 	s.content_margin_left = 5; s.content_margin_right = 7
 	s.content_margin_top = 4; s.content_margin_bottom = 4
 	return s
+
+func _tick_fps(delta: float) -> void:
+	if fps_button == null: return
+	_fps_t -= delta
+	if _fps_t > 0.0: return
+	_fps_t = 0.5
+	var fps := Engine.get_frames_per_second()
+	fps_button.text = "FPS %d · %d ms" % [fps, int(round(1000.0 / maxf(1.0, fps)))] if fps_open else "FPS"
+	fps_button.modulate.a = 1.0 if fps_open else 0.45

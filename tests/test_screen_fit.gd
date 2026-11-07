@@ -102,3 +102,47 @@ func test_portrait_hud_and_bag_fit():
 	w.size = old_size
 	await tree.process_frame
 	return r
+
+## M3j: the room is drawn at its own pixel size and enlarged to cover the screen; damage text stays
+## at full resolution on the overlay that follows the camera.
+func test_world_drawn_at_pixel_size():
+	var g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = "user://test_m3j_save.json"
+	if FileAccess.file_exists(g.save_path): DirAccess.remove_absolute(ProjectSettings.globalize_path(g.save_path))
+	tree.root.add_child(g)
+	await tree.process_frame
+	await tree.process_frame
+	var v: Vector2 = tree.root.get_visible_rect().size
+	var r := ""
+	var px: Vector2 = Vector2(g.world_vp.size)
+	var s: float = g._scale
+	if px.x > 688.0 + 1 or px.y > 384.0 + 1: r = "world view %s is bigger than a room" % px
+	elif g.view.size.x < v.x - 0.5 or g.view.size.y < v.y - 0.5: r = "world picture %s does not cover the %s screen" % [g.view.size, v]
+	elif absf(g.view.size.x / px.x - s) > 0.001: r = "picture scale %.3f != cover scale %.3f" % [g.view.size.x / px.x, s]
+	elif g.hero.get_viewport() != g.world_vp: r = "the hero is not drawn in the world view"
+	elif g.hud.get_viewport() == g.world_vp: r = "the HUD must stay at full resolution"
+	else:
+		g._number(g.hero.global_position, 5, false, false)
+		if g.overlay.get_child_count() == 0: r = "damage number not on the overlay"
+		else:
+			await tree.process_frame
+			var want: Vector2 = g.world_to_screen(g.hero.global_position)
+			var got: Vector2 = g.overlay.transform * g.hero.global_position
+			if got.distance_to(want) > 0.5: r = "overlay %s != world_to_screen %s" % [got, want]
+	g.queue_free()
+	await tree.process_frame
+	return r
+
+func test_fps_meter_folds():
+	var hud := Hud.new()
+	hud.build()
+	tree.root.add_child(hud)
+	await tree.process_frame
+	hud._tick_fps(1.0)
+	var open_text: String = hud.fps_button.text
+	hud.fps_button.pressed.emit()
+	hud._tick_fps(1.0)
+	var folded: String = hud.fps_button.text
+	hud.queue_free()
+	if not open_text.begins_with("FPS "): return "meter shows %s" % open_text
+	return "" if folded == "FPS" else "folded meter shows %s" % folded

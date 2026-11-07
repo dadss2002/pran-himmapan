@@ -7,6 +7,15 @@ signal room_changed(id: String)
 const HERO_SCENE := preload("res://scenes/hero.tscn")
 
 var world: Node2D
+## The room, its monsters and effects are drawn at the room's own pixel size in world_vp and shown
+## enlarged with a sharp-pixel shader (owner 2026-11-07: blurry and slow on iPhone). UI, damage numbers
+## and text stay at the screen's full resolution: overlay follows the camera.
+var world_vp: SubViewport
+var stage: Node2D
+var view: TextureRect
+var overlay: CanvasLayer
+var _scale := 1.0
+const SHARP := preload("res://shaders/sharp_pixels.gdshader")
 var rooms: RoomSet
 var room_id := ""
 var warps: Array = []
@@ -36,11 +45,38 @@ func build() -> void:
 	if _built: return
 	_built = true
 	add_child(ScreenFit.new())          # portrait phones: 360 px wide UI; the camera covers the screen
+	world_vp = SubViewport.new()
+	world_vp.name = "WorldView"
+	world_vp.size = Vector2i(640, 360)
+	world_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	world_vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	world_vp.snap_2d_transforms_to_pixel = true
+	world_vp.snap_2d_vertices_to_pixel = true
+	add_child(world_vp)
+	stage = Node2D.new()
+	stage.name = "Stage"
+	world_vp.add_child(stage)
+	var view_layer := CanvasLayer.new()
+	view_layer.layer = -1                 # under everything else on screen
+	add_child(view_layer)
+	view = TextureRect.new()
+	view.texture = world_vp.get_texture()
+	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	view.stretch_mode = TextureRect.STRETCH_SCALE
+	var m := ShaderMaterial.new()
+	m.shader = SHARP
+	view.material = m
+	view_layer.add_child(view)
+	overlay = CanvasLayer.new()
+	overlay.name = "WorldText"
+	overlay.layer = 1                     # damage numbers over the world, under the HUD
+	add_child(overlay)
 	world = Node2D.new()
 	world.name = "World"
 	world.y_sort_enabled = true
 	rooms = RoomSet.open()
-	add_child(world)
+	stage.add_child(world)
 	hero = HERO_SCENE.instantiate()
 	world.add_child(hero)
 	hero.setup_sprites()
@@ -95,8 +131,8 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	room_id = id
 	layout = rooms.layout(id)
 	forest = PaintedMap.new()
-	add_child(forest)
-	move_child(forest, 0)
+	stage.add_child(forest)
+	stage.move_child(forest, 0)
 	forest.build(layout)
 	var sz := layout.size_px()
 	cam.limit_left = 0
@@ -122,11 +158,25 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	save_now()
 	room_changed.emit(id)
 
-## Zoom in so the room covers the whole screen, portrait or landscape (ScreenFit).
+## The room covers the whole screen, portrait or landscape (ScreenFit): the world view is the room's
+## pixels that fit on screen, shown enlarged by the cover scale.
 func _fit_camera() -> void:
 	if cam == null or layout == null or not is_inside_tree(): return
-	var z := ScreenFit.camera_zoom(get_viewport().get_visible_rect().size, layout.size_px())
-	cam.zoom = Vector2(z, z)
+	var v := get_viewport().get_visible_rect().size
+	_scale = ScreenFit.camera_zoom(v, layout.size_px())
+	var px := Vector2i(ceili(v.x / _scale), ceili(v.y / _scale))
+	world_vp.size = px
+	view.position = Vector2.ZERO
+	view.size = Vector2(px) * _scale
+	(view.material as ShaderMaterial).set_shader_parameter("src_size", Vector2(px))
+	cam.zoom = Vector2.ONE
+
+## Screen position of a world point (for the overlay and tests).
+func world_to_screen(p: Vector2) -> Vector2:
+	return (p - _view_origin()) * _scale
+
+func _view_origin() -> Vector2:
+	return cam.get_screen_center_position() - Vector2(world_vp.size) / 2.0
 
 func _add_group(m: Dictionary, nav: AStarGrid2D) -> void:
 	var pack := WolfPack.new()
@@ -230,9 +280,10 @@ func _text(at: Vector2, t: String, c: Color) -> void:
 	d.add_theme_color_override("font_color", c)
 	d.size = Vector2(80, 16)
 	d.position = at - Vector2(20, 0)
-	d.z_index = 45
-	add_child(d)
+	overlay.add_child(d)
 func _process(_delta: float) -> void:
+	if overlay and cam and cam.is_inside_tree():
+		overlay.transform = Transform2D(0.0, Vector2(_scale, _scale), 0.0, -_view_origin() * _scale)
 	if lock_ring == null or hero == null: return
 	var t := hero.current_target() if hero.state != "dead" else null
 	lock_ring.visible = t != null
@@ -242,13 +293,12 @@ func _number(at: Vector2, amount: int, crit: bool, hurt: bool) -> void:
 	if not is_inside_tree(): return
 	var d := DamageNumber.make(amount, crit, hurt)
 	d.position = at
-	d.z_index = 45                      # above the leaf overlays
-	add_child(d)
+	overlay.add_child(d)
 
 func _fx(fx_name: String, at: Vector2) -> void:
 	if not is_inside_tree(): return
 	var f := FxSprite.make(fx_name)
 	f.position = at
 	f.z_index = 40
-	add_child(f)
+	stage.add_child(f)
 	f.play(fx_name)
