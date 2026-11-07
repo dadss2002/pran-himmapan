@@ -565,6 +565,7 @@
     "ore_id": "ore_himmapan"
   },
   "horde": {"_doc": "M3g hack-and-slash (owner approved 2026-11-07): every monster x these; docs/superpowers/specs/2026-11-07-m3g-hackslash-monsters-design.md", "hp_mult": 0.5, "atk_mult": 0.8, "exp_mult": 0.5, "gold_mult": 0.5, "drop_mult": 0.5},
+  "elite": {"_doc": "M3h elite monsters (owner chose 2026-11-07): rolled on every spawn; x these on top of horde; docs/superpowers/specs/2026-11-07-m3h-elite-monsters-design.md", "chance": 0.1, "hp_mult": 4, "atk_mult": 1.5, "exp_mult": 5, "gold_mult": 3, "drop_mult": 3, "rarity_up": 1},
   "monsters": {
     "deer": {
       "temper": "flee",

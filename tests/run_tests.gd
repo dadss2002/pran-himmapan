@@ -10,6 +10,7 @@ func _initialize() -> void:
 	_run_all()
 
 func _run_all() -> void:
+	Wolf.elites_enabled = false      # M3h: random elites off; elite tests turn them on themselves
 	var dir := DirAccess.open("res://tests")
 	var files := Array(dir.get_files())
 	files.sort()

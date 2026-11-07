@@ -41,6 +41,11 @@ static func rarity_rank(id: String) -> int:
 		if list[i].id == id: return i
 	return 0
 
+## The rarity `steps` tiers above r (capped at the top tier).
+static func rarity_up(r: String, steps: int) -> String:
+	var ids: Array = Balance.data()["rarity"].map(func(x): return String(x.id))
+	return ids[mini(ids.find(r) + steps, ids.size() - 1)]
+
 static func roll_rarity(rng: RandomNumberGenerator) -> String:
 	var x := rng.randf()
 	var acc := 0.0

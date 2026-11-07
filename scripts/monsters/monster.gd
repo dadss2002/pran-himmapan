@@ -47,7 +47,7 @@ static func stats_for(k: String, lv: int) -> Dictionary:
 	})
 
 func stats() -> Dictionary:
-	return stats_for(kind, level)
+	return with_elite(stats_for(kind, level))
 
 func manifest_path() -> String:
 	return "res://assets/monsters/%s/manifest.json" % kind

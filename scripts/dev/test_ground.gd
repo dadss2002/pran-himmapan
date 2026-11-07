@@ -186,7 +186,7 @@ func _on_wolf_died(w: Wolf) -> void:
 	if w is Monster:
 		table = w.loot_table()
 		gold_mult = w.gold_mult()
-	var items := Loot.roll(table, w.level, loot_rng)
+	var items := Loot.roll(table, w.level, loot_rng, w.elite)
 	for it in items:
 		if it.id == "gold": it.count = hero.bonus_gold(int(round(it.count * gold_mult)))   # deer ×2, gear "ทอง +%"
 	var spots := LootDrop.scatter(at, items.size(), loot_rng, _blocked)
