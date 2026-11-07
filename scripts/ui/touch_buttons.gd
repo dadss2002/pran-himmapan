@@ -19,13 +19,23 @@ func _ready() -> void:
 	layout(get_viewport_rect().size)
 	get_viewport().size_changed.connect(func(): layout(get_viewport_rect().size))
 
-## Keep every button at the same distance from the bottom-right corner on wider screens.
+## Portrait (360 px wide): the skill arc stays in the bottom-right corner; dodge and the potions move
+## up over it so the whole left half stays free for the joystick. Offsets from the bottom-right corner.
+const PORTRAIT_OFF := {
+	"dodge": Vector2(-145, -150),
+	"potion_hp": Vector2(-56, -182),
+	"potion_mp": Vector2(-95, -182),
+}
+
+## Every button keeps its distance from the bottom-right corner (wider screens, portrait).
 func layout(size: Vector2) -> void:
-	var shift := size - view_size
 	view_size = size
+	var portrait := size.y > size.x
 	var i := 0
 	for name in buttons:
-		buttons[name].center += shift
+		var off: Vector2 = buttons[name].off
+		if portrait and PORTRAIT_OFF.has(name): off = PORTRAIT_OFF[name]
+		buttons[name].center = size + off
 		get_child(i).position = buttons[name].center
 		i += 1
 	queue_redraw()
@@ -53,7 +63,7 @@ func build_default() -> void:
 	_add("potion_mp", "potion_mp", Vector2(355, 321), 17, "res://assets/items/potion_mp.png", true, "3")
 
 func _add(name: String, action: String, c: Vector2, r: float, icon: String, enabled: bool, note: String) -> void:
-	buttons[name] = {"action": action, "center": c, "radius": r, "enabled": enabled, "note": note}
+	buttons[name] = {"action": action, "center": c, "radius": r, "enabled": enabled, "note": note, "off": c - BASE}
 	var s := Sprite2D.new()
 	s.texture = load(icon)
 	s.position = c

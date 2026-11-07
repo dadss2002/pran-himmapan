@@ -29,10 +29,13 @@ var _autosave_t := 0.0
 
 func _ready() -> void:
 	build()
+	get_viewport().size_changed.connect(_fit_camera)
+	_fit_camera()
 
 func build() -> void:
 	if _built: return
 	_built = true
+	add_child(ScreenFit.new())          # portrait phones: 360 px wide UI; the camera covers the screen
 	world = Node2D.new()
 	world.name = "World"
 	world.y_sort_enabled = true
@@ -100,6 +103,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	cam.limit_top = 0
 	cam.limit_right = int(sz.x)
 	cam.limit_bottom = int(sz.y)
+	_fit_camera()
 	hero.spawn_point = rooms.spawn(id)
 	hero.position = rooms.arrival(id, via_warp) if via_warp != "" else hero.spawn_point   # World sits at the origin
 	hero.velocity = Vector2.ZERO
@@ -117,6 +121,12 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		for p in packs: p.calm = FADE        # nobody notices the hero while the screen is still dark
 	save_now()
 	room_changed.emit(id)
+
+## Zoom in so the room covers the whole screen, portrait or landscape (ScreenFit).
+func _fit_camera() -> void:
+	if cam == null or layout == null or not is_inside_tree(): return
+	var z := ScreenFit.camera_zoom(get_viewport().get_visible_rect().size, layout.size_px())
+	cam.zoom = Vector2(z, z)
 
 func _add_group(m: Dictionary, nav: AStarGrid2D) -> void:
 	var pack := WolfPack.new()
