@@ -75,7 +75,33 @@ def tone_seam(w, x, y0, y1, falloff=90, sigma=24):
 
 POST = {}   # J2 grass fill replaced by the J2b patch (owner 2026-11-07: the filled strip showed)
 
-TONE = {"J3": [(2752, 0, 384)]}   # seam columns whose colour split survived the inpaint
+def dp_seam(cost):
+    H, W = cost.shape; acc = cost.copy(); back = np.zeros((H, W), int)
+    for y in range(1, H):
+        for x in range(W):
+            lo, hi = max(0, x - 1), min(W, x + 2); k = int(np.argmin(acc[y - 1, lo:hi])) + lo
+            back[y, x] = k; acc[y, x] += acc[y - 1, k]
+    xs = [int(np.argmin(acc[-1]))]
+    for y in range(H - 1, 0, -1): xs.append(back[y, xs[-1]])
+    return xs[::-1]
+
+def quilt(w, xc, ya, yb, dx, dy, half=36, ov=16, top_fade=True):
+    """Free (image quilting, Efros-Freeman): cover a leftover seam column with a patch of the same
+    picture taken dx,dy away, cut along the minimum-error path in each overlap band."""
+    x0, x1 = xc - half, xc + half
+    T = w[ya:yb, x0:x1].copy(); S = w[ya + dy:yb + dy, x0 + dx:x1 + dx].copy()
+    cl = dp_seam(((S[:, :ov] - T[:, :ov]) ** 2).sum(2)); cr = dp_seam(((S[:, -ov:] - T[:, -ov:]) ** 2).sum(2))
+    H, Wd = T.shape[:2]; yy, xx = np.mgrid[0:H, 0:Wd]
+    m = (xx >= np.array(cl)[:, None]) & (xx <= (Wd - ov + np.array(cr))[:, None])
+    fy = np.ones(H)
+    if top_fade: fy[:10] = np.linspace(0, 1, 10)
+    fy[-10:] = np.minimum(fy[-10:], np.linspace(1, 0, 10))
+    a = cv2.GaussianBlur(m.astype(np.float32), (0, 0), 0.8) * fy[:, None]
+    w[ya:yb, x0:x1] = S * a[..., None] + T * (1 - a[..., None])
+
+TONE = {"J3": [(2752, 0, 384)]}
+# (x, y0, y1, dx, dy, fade the top) - offsets found by an SSD search over the overlap bands
+QUILT = {"J3": [(2752, 0, 150, -110, 0, False), (2752, 262, 384, -98, 8, True)]}   # seam columns whose colour split survived the inpaint
 
 def main(src, dst, root="assets/map/painted/world"):
     w = np.asarray(Image.open(src).convert("RGB")).astype(np.float32)
@@ -88,6 +114,8 @@ def main(src, dst, root="assets/map/painted/world"):
         if name in TONE:
             for (x, ya, yb) in TONE[name]:
                 tone_seam(w, x + P, ya + P, yb + P)
+        for (x, ya, yb, dx, dy, tf) in QUILT.get(name, []):
+            quilt(w, x + P, ya + P, yb + P, dx, dy, top_fade=tf)
         if name in POST:
             f = POST[name]
             sh = lambda b: tuple(v + P for v in b)
