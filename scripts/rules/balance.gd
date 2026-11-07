@@ -11,12 +11,23 @@ static func data() -> Dictionary:
 		_data = JSON.parse_string(f.get_as_text())
 	return _data
 
+## Looked-up values are cached by path: the tuning file never changes while the game runs, and
+## monsters ask for their numbers every frame (M3k: 60 fps on phones).
+static var _cache := {}
+
+## For tests that change data() in place: forget the cached values.
+static func clear_cache() -> void:
+	_cache.clear()
+
 static func _lookup(path: String):
+	if _cache.has(path): return _cache[path]
 	var cur = data()
 	for part in path.split("."):
 		if typeof(cur) != TYPE_DICTIONARY or not cur.has(part):
-			return null
+			cur = null
+			break
 		cur = cur[part]
+	_cache[path] = cur
 	return cur
 
 static func has(path: String) -> bool:

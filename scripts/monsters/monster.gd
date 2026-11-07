@@ -22,9 +22,16 @@ var _hop_dir := Vector2.RIGHT
 const HOP_TIME := 0.25
 const RING_SCENE := preload("res://scripts/monsters/ring_warning.gd")
 
+static var _cfg_cache := {}
+
+## This kind's number for key, else the wolf's (cached per kind and key: asked every frame).
 func cfg(key: String):
+	var ck := kind + "." + key
+	if _cfg_cache.has(ck): return _cfg_cache[ck]
 	var path := "monsters.%s.%s" % [kind, key]
-	return Balance._lookup(path) if Balance.has(path) else Balance._lookup("wolf." + key)
+	var v = Balance._lookup(path) if Balance.has(path) else Balance._lookup("wolf." + key)
+	_cfg_cache[ck] = v
+	return v
 
 func n(key: String) -> float:
 	return float(cfg(key))

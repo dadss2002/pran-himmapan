@@ -38,6 +38,7 @@ var _stuck_from := Vector2.ZERO
 var _hero: Hero = null
 var _telegraph: FxSprite = null
 var _setup_done := false
+var _flash_shown := -1.0
 var elite := false            # M3h: tougher, worth more, ★ + HP bar over the head
 var _tag: Node2D
 const ELITE_TAG := preload("res://scripts/monsters/elite_tag.gd")
@@ -433,8 +434,12 @@ func _hpos() -> Vector2:
 	if _hero == null or not is_instance_valid(_hero): return _pos()
 	return _hero.global_position if _hero.is_inside_tree() else _hero.position
 
+## Teleports only (revive, return home): M3k drops the physics-interpolation blend so the
+## monster does not slide across the map on a 120 Hz screen.
 func _set_pos(p: Vector2) -> void:
-	if is_inside_tree(): global_position = p
+	if is_inside_tree():
+		global_position = p
+		reset_physics_interpolation()
 	else: position = p
 
 func _move(v: Vector2, dt: float) -> void:
@@ -489,5 +494,7 @@ func _refresh(restart := false) -> void:
 		body.frame = 0
 	elif not body.is_playing():
 		body.play()
-	if body.material:
-		body.material.set_shader_parameter("flash_amount", 0.85 if _flash > 0.0 else 0.0)
+	var fl := 0.85 if _flash > 0.0 else 0.0
+	if body.material and fl != _flash_shown:          # only when it changes (M3k)
+		_flash_shown = fl
+		body.material.set_shader_parameter("flash_amount", fl)

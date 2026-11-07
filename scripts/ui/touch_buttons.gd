@@ -96,6 +96,11 @@ func pressed_names() -> Array:
 	return _held.values()
 
 func set_cooldown(name: String, remaining: float, total: float) -> void:
+	var old: Array = _cd.get(name, [-1.0, -1.0])
+	if old[0] == remaining and old[1] == total: return     # nothing to redraw (M3k)
+	if old[0] <= 0.0 and remaining <= 0.0 and old[1] == total:
+		_cd[name] = [remaining, total]
+		return
 	_cd[name] = [remaining, total]
 	queue_redraw()
 
