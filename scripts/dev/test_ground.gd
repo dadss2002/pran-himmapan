@@ -45,6 +45,13 @@ var waypoints: Waypoints
 var stone: WaypointStone
 var _stone_armed := true
 const WAYPOINT_ARRIVAL := "@waypoint"     # go_to(id, WAYPOINT_ARRIVAL): land next to the room's stone
+## Task 6 (M4c §3): the fog grids (FogGrid; shown on the minimap only, never over the world). The hero reveals
+## cells as he moves (step_fog, every physics frame, and on arriving in a room); saved with the game.
+var fog: FogGrid
+## Task 6 decision: the fog is kept per room id across sessions (spec §3 "saved per room"), although each session
+## is a new game with a new layout (addendum 2026-11-08): rooms keep their ids and pictures in every layout. false
+## = every new game starts with all fog (the save's fog is not loaded; the reset hook is FogGrid.clear_all()).
+const FOG_KEPT_ACROSS_GAMES := true
 var cam: Camera2D
 var fade: ColorRect
 const FADE_OUT := 0.25           # M4c §1 approved: screen goes dark, then the new room
@@ -140,6 +147,7 @@ func build() -> void:
 	hero.inventory.from_dict(state.inventory)
 	waypoints = Waypoints.from_rooms(rooms, state.get("waypoints"))   # Task 5: c1r1's stone is always unlocked
 	waypoints.traveller = travel_to_waypoint
+	fog = FogGrid.from_rooms(rooms, state.get("fog") if FOG_KEPT_ACROSS_GAMES else null)   # Task 6: old saves = all fog
 	hero.gear_changed.connect(func(): save_now())
 	hero.gems_changed.connect(func(): save_now())
 	hero.leveled_up.connect(func(_l): save_now())
@@ -267,6 +275,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		_fade_waited = 0
 		_fade_gate.set_process(true)
 		for p in packs: p.calm = CALM        # nobody notices the hero during the fade and just after
+	if fog: fog.reveal(id, hero.position)    # Task 6: the arrival is seen at once (and saved just below)
 	save_now()
 	room_changed.emit(id)
 
@@ -378,6 +387,13 @@ func step_waypoint() -> void:
 		hud.open_waypoints(waypoint_entries(), room_id)
 	elif not want and hud.waypoints_open(): hud.close_waypoints()
 
+## Task 6, every physics frame: the fog cells within FogGrid.RADIUS of the hero's feet are revealed (FogGrid skips
+## a frame where he has not moved). Not while warping (the old room is going). The new cells are saved with the
+## next save (room change, autosave, level up, pick-up, leaving / hiding the app).
+func step_fog() -> void:
+	if fog == null or hero == null or warping or room_id == "": return
+	fog.reveal(room_id, hero.global_position)
+
 ## The travel list's rows: the unlocked stones in list order with their rooms' Thai names.
 func waypoint_entries() -> Array:
 	var out: Array = []
@@ -474,7 +490,7 @@ func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 
 func save_now() -> bool:
 	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.skill_gems, "room": room_id, "seed": session_seed,
-		"waypoints": waypoints.to_save() if waypoints else []}, save_path)
+		"waypoints": waypoints.to_save() if waypoints else [], "fog": fog.to_save() if fog else {}}, save_path)
 
 func tick_autosave(delta: float) -> void:
 	_autosave_t += delta
@@ -534,6 +550,7 @@ func _physics_process(delta: float) -> void:
 				warp_through(w)          # at once: a bite later in this physics frame must not land
 				break
 	step_waypoint()
+	step_fog()
 	_bag_full_cd = maxf(0.0, _bag_full_cd - delta)
 	for d in drops.duplicate():
 		if not is_instance_valid(d) or d.expired:

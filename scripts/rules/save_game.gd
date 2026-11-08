@@ -10,7 +10,7 @@ static func new_state() -> Dictionary:
 	inv.add("potion_hp", int(Balance.num("potion.start_hp")))
 	inv.add("potion_mp", int(Balance.num("potion.start_mp")))
 	return {"version": VERSION, "level": 1, "exp": 0, "inventory": inv.to_dict(), "equipped": start_equipped(), "skills": {},
-		"waypoints": []}
+		"waypoints": [], "fog": {}}
 
 ## Starting kit: ธนูไม้ไผ่ + ชุดพรานฝึกหัด (balance.json "start_gear"), ring/necklace empty.
 static func start_equipped() -> Dictionary:
@@ -151,6 +151,10 @@ static func load_or_new(path := PATH) -> Dictionary:
 		for id in saved_wps:
 			if typeof(id) == TYPE_STRING and not wps.has(id): wps.append(id)
 	d["waypoints"] = wps
+	# Task 6: the fog grids ({room id: base64 of 32 bytes}; FogGrid.load_save checks each room and ignores bad
+	# ones). Older saves have none (all fog); a non-dict is dropped instead of failing the whole save.
+	var fog = d.get("fog", {})
+	d["fog"] = fog if typeof(fog) == TYPE_DICTIONARY else {}
 	d.version = VERSION
 	d.level = clampi(int(d.level), 1, Progression.cap())
 	d.exp = 0 if d.level >= Progression.cap() else clampi(int(d.exp), 0, Progression.exp_to_next(d.level) - 1)
