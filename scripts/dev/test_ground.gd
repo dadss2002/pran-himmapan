@@ -129,9 +129,14 @@ func build() -> void:
 ## Swap to room id. via_warp = the warp you come out of there ("" = the room's spawn). The old room's
 ## map, monsters, drops and warps go; the new room's are built fresh; the game saves.
 func go_to(id: String, via_warp := "", with_fade := true) -> void:
+	# Any fade still running belongs to the old room: stop it, so its callback cannot move us again.
+	if _fade_tween and _fade_tween.is_valid(): _fade_tween.kill()
+	_fade_tween = null
+	if fade: fade.color.a = 0.0
 	if warping:                          # the fade out ended (or anything else moved the hero on)
 		warping = false
 		hero.set_physics_process(_hero_was_on)
+		hero.end_warp()
 	for p in packs:
 		if is_instance_valid(p): p.free()
 	packs.clear()
@@ -166,6 +171,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	for w in rooms.room(id).warps:
 		var n := Warp.make(w, rooms.room(String(w.to)) if rooms.has(String(w.to)) else {})
 		n.armed = String(w.id) != via_warp
+		n.room_size = sz
 		world.add_child(n)
 		overlay.add_child(n.make_label())
 		n.place_label(sz)
@@ -181,7 +187,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	room_changed.emit(id)
 
 ## Touching a ring: the screen fades out (FADE_OUT), the room changes, then fades in (go_to). The hero
-## stands still and the old room's monsters ignore him while it is dark.
+## stands still and cannot be hurt; the old room's monsters and their shots stop while it is dark.
 func warp_through(w: Warp) -> void:
 	if warping: return
 	if not is_inside_tree():
@@ -190,8 +196,10 @@ func warp_through(w: Warp) -> void:
 	warping = true
 	_hero_was_on = hero.is_physics_processing()
 	hero.set_physics_process(false)
-	hero.velocity = Vector2.ZERO
-	for p in packs: p.calm = maxf(p.calm, FADE_OUT + 0.1)
+	hero.begin_warp()                    # no damage, poison or knockback while it is dark
+	for p in packs:                      # the old room stops: no bite, lunge or spit lands mid-fade
+		p.calm = maxf(p.calm, FADE_OUT + 0.1)
+		p.set_deferred("process_mode", Node.PROCESS_MODE_DISABLED)   # safe mid physics tick
 	var to_room := w.to_room
 	var to_warp := w.to_warp
 	_new_fade().tween_property(fade, "color:a", 1.0, FADE_OUT)
@@ -200,6 +208,7 @@ func warp_through(w: Warp) -> void:
 func _new_fade() -> Tween:
 	if _fade_tween and _fade_tween.is_valid(): _fade_tween.kill()
 	_fade_tween = create_tween()
+	_fade_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)   # a paused tree never leaves the screen half dark
 	return _fade_tween
 
 ## The room covers the whole screen, portrait or landscape (ScreenFit): the world view is the room's
@@ -306,7 +315,7 @@ func _physics_process(delta: float) -> void:
 	if hero and hero.state != "dead" and not warping:
 		for w in warps:
 			if is_instance_valid(w) and w.step(hero.global_position):
-				warp_through.call_deferred(w)
+				warp_through(w)          # at once: a bite later in this physics frame must not land
 				break
 	_bag_full_cd = maxf(0.0, _bag_full_cd - delta)
 	for d in drops.duplicate():
@@ -331,8 +340,21 @@ func _process(delta: float) -> void:
 		overlay.transform = Transform2D(0.0, Vector2(_scale, _scale), 0.0, -_view_origin() * _scale)
 	if hero:
 		for w in warps:
-			if is_instance_valid(w) and w.label: w.label.visible = w.show_label(hero.global_position) and not warping
+			if is_instance_valid(w) and w.label:
+				w.label.visible = w.show_label(hero.global_position) and not warping
+				if w.label.visible: place_label_on_screen(w)
 	if watch_fps and saver.step(delta, Engine.get_frames_per_second()): apply_saver()
+
+## M4c review: an exit label is placed by its screen rect, inside the HUD-safe area and clear of the
+## HUD panels, the FPS line and the touch buttons, in portrait and landscape (Warp.screen_spot).
+func place_label_on_screen(w: Warp) -> void:
+	if hud == null or cam == null or not cam.is_inside_tree(): return
+	var hero_s := Rect2(world_to_screen(hero.global_position + HERO_BOX.position), HERO_BOX.size * _scale)
+	var at := w.screen_spot(world_to_screen(w.position), _scale, hud.safe_rect(), hud.blocked_rects(), hero_s)
+	w.label.size = w.label.get_combined_minimum_size()
+	w.label.position = _view_origin() + at / _scale
+
+const HERO_BOX := Rect2(-12, -42, 24, 44)    # the hero's body round his feet (world px)
 
 ## Saver on: pond ripples hidden and stopped; dust and pickup puffs skipped (PerfSaver.decorative).
 func apply_saver() -> void:

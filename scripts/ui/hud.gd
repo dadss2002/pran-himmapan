@@ -23,6 +23,7 @@ var skill_panel: SkillPanel
 var skills_button: Button
 var dim: ColorRect
 var top_right: HBoxContainer
+var status_panel: PanelContainer
 var fullscreen_button: Button
 ## Frame-rate meter for phone testing (owner 2026-11-07): "FPS 60 · 16 ms"; tap to fold it down to
 ## a faint "FPS" and tap again to bring it back.
@@ -71,6 +72,7 @@ func build() -> void:
 
 	# --- status panel (top-left)
 	var panel := PanelContainer.new()
+	status_panel = panel
 	panel.position = Vector2(6, 6)
 	panel.add_theme_stylebox_override("panel", _box(PANEL, GOLD, 8))
 	root.add_child(panel)
@@ -201,6 +203,32 @@ func build() -> void:
 	skill_panel.build()
 	add_child(skill_panel)
 
+## M4c: where world text (exit labels) may go on screen: inside the edges and above the EXP bar.
+func safe_rect() -> Rect2:
+	var v := get_viewport().get_visible_rect().size
+	return Rect2(Vector2(4, 4), v - Vector2(8, 8 + 4))
+
+## M4c: screen rects (HUD px) that world text must stay clear of: the status panel, the FPS line, the
+## top-right block (gold, buttons, minimap), the EXP bar, and on touch screens every touch button with
+## its note under it and the joystick's resting ring.
+func blocked_rects() -> Array:
+	var out := []
+	for c in [status_panel, fps_button, exp_bar]:
+		if c and c.is_visible_in_tree(): out.append(c.get_global_rect())
+	if top_right and top_right.is_visible_in_tree():
+		for c in top_right.get_children():
+			if c is Control and c.visible: out.append(c.get_global_rect())
+	if touch_ui and touch_ui.visible:
+		for n in buttons.buttons:
+			var b: Dictionary = buttons.buttons[n]
+			var r: float = b.radius + 3.0
+			var rect := Rect2(b.center - Vector2(r, r), Vector2(r, r) * 2.0)
+			if b.note != "": rect = rect.merge(Rect2(b.center.x - 24.0, b.center.y + b.radius, 48.0, 16.0))
+			out.append(rect)
+		var jr := TouchJoystick.RADIUS
+		out.append(Rect2(joystick.idle_center() - Vector2(jr, jr), Vector2(jr, jr) * 2.0))
+	return out
+
 static func show_touch() -> bool:
 	return DisplayServer.is_touchscreen_available() or "--touch" in OS.get_cmdline_user_args()
 
@@ -213,7 +241,7 @@ func bind(h: Hero) -> void:
 
 ## Opens the skill · gem screen (touch input lets go first, like the bag).
 func open_skills() -> void:
-	if hero == null or skill_panel.is_open() or bag_panel.is_open(): return
+	if hero == null or hero.warping or skill_panel.is_open() or bag_panel.is_open(): return   # M4c: not mid-fade
 	joystick.release_all()
 	buttons.release_all()
 	hero.external_input = Vector2.ZERO
@@ -221,7 +249,7 @@ func open_skills() -> void:
 
 ## Opens the bag; held touch buttons and the joystick let go first so nothing stays pressed.
 func open_bag() -> void:
-	if hero == null or bag_panel.is_open() or skill_panel.is_open(): return
+	if hero == null or hero.warping or bag_panel.is_open() or skill_panel.is_open(): return
 	joystick.release_all()
 	buttons.release_all()
 	hero.external_input = Vector2.ZERO

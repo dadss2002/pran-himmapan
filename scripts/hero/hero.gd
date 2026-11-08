@@ -40,6 +40,9 @@ var _gold_carry := 0.0
 var _leech_carry := 0.0
 var _queued_skill := ""      # pressed during a basic shot; starts once that arrow is out
 var _potion_cd := 0.0
+## M4c: true from touching an exit ring until the new room appears (test_ground.warp_through). The hero
+## stands still in the dark and nothing can hurt, poison or push him (begin_warp / end_warp).
+var warping := false
 
 func _init() -> void:
 	inventory.from_dict(SaveGame.new_state().inventory)   # start kit (save loading replaces it)
@@ -335,7 +338,7 @@ func try_dodge(dir: Vector2) -> bool:
 
 ## Damage from a monster. Returns the damage dealt, 0 when ignored (dead, invulnerable, rolling).
 func receive_hit(atk: float, mult: float, from: Vector2) -> int:
-	if state == "dead" or health.is_invulnerable():
+	if warping or state == "dead" or health.is_invulnerable():
 		return 0
 	if state == "roll" and _t < _roll.iframe:
 		return 0
@@ -361,7 +364,7 @@ var poison_left := 0.0
 var _poison_t := 0.0
 
 func apply_poison(per_tick: int, duration: float) -> void:
-	if state == "dead" or per_tick <= 0: return
+	if warping or state == "dead" or per_tick <= 0: return
 	poison_tick = maxi(poison_tick, per_tick) if poison_left > 0.0 else per_tick
 	poison_left = duration
 	_poison_t = 0.0
@@ -376,6 +379,26 @@ func _tick_poison(delta: float) -> void:
 	if _poison_t >= 1.0:
 		_poison_t -= 1.0
 		health.take_hit(poison_tick, false)
+
+## Stepping on an exit ring: stand still (idle, not walking or rolling on the spot) until end_warp().
+func begin_warp() -> void:
+	warping = true
+	velocity = Vector2.ZERO
+	external_input = Vector2.ZERO
+	if state in ["walk", "roll", "hurt"]:
+		state = "idle"
+		_t = 0.0
+	if body: _refresh()
+
+## In the new room: no hurt pose, red flash or roll carried over from the old one.
+func end_warp() -> void:
+	warping = false
+	velocity = Vector2.ZERO
+	_flash = 0.0
+	if state in ["walk", "roll", "hurt"]:
+		state = "idle"
+		_t = 0.0
+	if body: _refresh()
 
 # ---------- simulation ----------
 

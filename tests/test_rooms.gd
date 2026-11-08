@@ -233,3 +233,26 @@ func test_warp_arrow_points_out():
 			w.free()
 			if d != want[String(wd.id)]: return "%s %s arrow points %s" % [id, wd.id, d]
 	return ""
+
+## Review 2026-11-08: north/south arrows (on the flat ring's short side) are bigger and brighter than
+## east/west ones, and every arrow stays inside its room (the screen edge never cuts it), all bob phases.
+func test_warp_arrows_visible_and_inside():
+	var rs := RoomSet.open()
+	for id in rs.ids():
+		for wd in rs.room(id).warps:
+			var w := Warp.make(wd, rs.room(String(wd.to)))
+			w.room_size = rs.layout(id).size_px()
+			var ns: bool = String(wd.id) in ["north", "south"]
+			var err := ""
+			for k in 16:
+				w._t = k * TAU / 4.0 / 16.0
+				var pts := w.arrow_points()
+				var box := Rect2(pts[0], Vector2.ZERO)
+				for q in pts: box = box.expand(q)
+				var g := Rect2(box.position + w.position, box.size)
+				if not Rect2(Vector2.ZERO, w.room_size).grow(-Warp.ARROW_MARGIN + 0.01).encloses(g): err = "%s %s arrow %s leaves the room" % [id, wd.id, g]
+				elif ns and minf(box.size.x, box.size.y) < 8.0: err = "%s %s arrow only %s" % [id, wd.id, box.size]
+			w.free()
+			if err != "": return err
+	if Warp.ARROW_NS_COLOR.v < Warp.ARROW_COLOR.v or Warp.ARROW_NS_COLOR.a < 1.0: return "north/south arrow not brighter"
+	return ""
