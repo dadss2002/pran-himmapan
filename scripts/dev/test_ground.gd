@@ -20,6 +20,9 @@ var rooms: RoomSet
 var room_id := ""
 var layout_seed := -1             # M4d: -1 = a new random room layout every session; tests set one
 var session_seed := 0             # the seed this session's layout was made from (saved for reference only)
+## M4d addendum 2: e0's monster set this session (index into its monster_sets; -1 = not chosen yet). Chosen
+## on the first entry each session (a new game is a new session); Task 4 re-chooses it on every re-roll.
+var arena_set := -1
 var warps: Array = []
 var cam: Camera2D
 var fade: ColorRect
@@ -153,6 +156,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 			w.free()
 	warps.clear()
 	if forest and is_instance_valid(forest): forest.free()
+	var from_id := room_id
 	room_id = id
 	layout = rooms.layout(id)
 	forest = PaintedMap.new()
@@ -182,10 +186,14 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		warps.append(n)
 	if not _navs.has(id): _navs[id] = layout.make_nav()
 	# M4d addendum: forest rooms spawn at the level of their distance from c1r1 in this session's layout;
-	# e0 (and a room off the map) keeps the levels in rooms.json.
+	# e0 spawns its chosen monster set (addendum 2); a room off the map keeps the levels in rooms.json.
 	var groups: Array = rooms.room(id).get("monsters", [])
-	var levels := RoomLevels.for_layout(rooms.active)
+	var levels := rooms.room_levels()
 	if levels.has(id): groups = RoomLevels.groups(groups, int(levels[id]))
+	var sets: Array = rooms.room(id).get("monster_sets", [])
+	if not sets.is_empty():
+		if arena_set < 0: choose_arena_set(from_id)
+		groups = sets[clampi(arena_set, 0, sets.size() - 1)]
 	for m in groups:
 		_add_group(m, _navs[id])
 	if with_fade and is_inside_tree():
@@ -194,6 +202,11 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		for p in packs: p.calm = CALM        # nobody notices the hero during the fade and just after
 	save_now()
 	room_changed.emit(id)
+
+## M4d addendum 2: pick e0's set for a hero coming from room from_id (RoomLevels.arena_set).
+func choose_arena_set(from_id: String) -> void:
+	var sets: Array = rooms.room(RoomLayout.BOSS).get("monster_sets", []) if rooms.has(RoomLayout.BOSS) else []
+	arena_set = RoomLevels.arena_set(sets, hero.level, int(rooms.room_levels().get(from_id, 0)))
 
 ## Touching a ring: the screen fades out (FADE_OUT), the room changes, then fades in (go_to). The hero
 ## stands still and cannot be hurt; the old room's monsters and their shots stop while it is dark.

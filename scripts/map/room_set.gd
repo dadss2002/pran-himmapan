@@ -18,6 +18,7 @@ var cell := 8
 var active: Dictionary = {}   # the RoomLayout in use ({pos, links, fallback}); empty for old fixed-warp data
 var _rooms: Dictionary = {}
 var _layouts: Dictionary = {}
+var _levels = null            # RoomLevels.for_layout(active), worked out once per layout (room_levels())
 
 static func open(path := PATH) -> RoomSet:
 	var f := FileAccess.open(path, FileAccess.READ)
@@ -47,6 +48,7 @@ func exit_table() -> Dictionary:
 ## Join the rooms as `l` says (RoomLayout dict): each link becomes a warp pair; other exits stay dead ends.
 func use_layout(l: Dictionary) -> void:
 	active = l
+	_levels = null
 	var ws := {}
 	for id in _rooms:
 		if _rooms[id].has("exits"): ws[id] = []
@@ -59,6 +61,11 @@ func use_layout(l: Dictionary) -> void:
 		var list: Array = ws[id]
 		list.sort_custom(func(a, b): return String(a.id) < String(b.id))
 		_rooms[id]["warps"] = list
+
+## {room id: monster level} for the active layout (RoomLevels.for_layout), cached until use_layout().
+func room_levels() -> Dictionary:
+	if _levels == null: _levels = RoomLevels.for_layout(active)
+	return _levels
 
 ## The room's grid place in the active layout (Vector2i(-1, -1) when it is not on the map).
 func grid_pos(id: String) -> Vector2i:

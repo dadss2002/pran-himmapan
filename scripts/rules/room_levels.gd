@@ -9,6 +9,8 @@ extends RefCounted
 ## the rooms next to the start are Lv2, the farthest forest room Lv10.
 ## Each room keeps its kinds and counts; every group uses L, except a group that was 1 level above the
 ## room's first group in the room data keeps that +1 (cap MAX_LV). e0 keeps its own level-by-hero sets.
+## e0's set (addendum 2, approved 2026-11-08): target = max(hero level, level of the room the hero came
+## from); the set whose average monster level is closest to the target, ties to the higher set (arena_set).
 
 const MIN_LV := 2       # ⚙ approved: the rooms next to the start
 const MAX_LV := 10      # ⚙ approved: the farthest forest room, and the cap for +1 groups
@@ -42,3 +44,28 @@ static func groups(monsters: Array, room_level: int) -> Array:
 		g["level"] = mini(room_level + plus, MAX_LV)
 		out.append(g)
 	return out
+
+## The average level of one monster set (each monster counts once: groups weighted by their count).
+static func set_level(monsters: Array) -> float:
+	var n := 0
+	var sum := 0
+	for m in monsters:
+		n += int(m.count)
+		sum += int(m.level) * int(m.count)
+	return float(sum) / n if n > 0 else 0.0
+
+## Index into `sets` (e0's monster_sets) for a hero of hero_level who came from a room of from_level
+## (0 = none): target = max(both); the set whose average level is closest; ties go to the higher set.
+static func arena_set(sets: Array, hero_level: int, from_level: int) -> int:
+	var target := float(maxi(hero_level, from_level))
+	var best := -1
+	var best_gap := INF
+	var best_lv := -INF
+	for i in sets.size():
+		var lv := set_level(sets[i])
+		var gap := absf(lv - target)
+		if gap < best_gap - 0.0001 or (absf(gap - best_gap) <= 0.0001 and lv > best_lv):
+			best = i
+			best_gap = gap
+			best_lv = lv
+	return best

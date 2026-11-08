@@ -143,7 +143,8 @@ func _ground(seed: int) -> Node2D:
 	g.build()
 	return g
 
-## A real session spawns every pack with its room's layout level (+1 kept); e0 keeps rooms.json's levels.
+## A real session spawns every pack with its room's layout level (+1 kept); e0 spawns its chosen set with the
+## set's own levels (M4d addendum 2).
 func test_session_spawns_layout_levels():
 	for s in [1, 3, 58]:
 		var g := _ground(s)
@@ -160,6 +161,8 @@ func test_session_spawns_layout_levels():
 		for id in ["c1r1", near, farthest, "e0"]:
 			g.go_to(id, "", false)
 			var src: Array = g.rooms.room(id).get("monsters", [])
+			# addendum 2: a new Lv1 hero coming from the farthest forest room (Lv10) -> target 10 -> w3 set
+			if id == "e0": src = g.rooms.room(id).monster_sets[3]
 			if g.packs.size() != src.size(): r = "seed %d %s: %d packs (want %d)" % [s, id, g.packs.size(), src.size()]
 			for i in mini(g.packs.size(), src.size()):
 				var want := int(src[i].level)
@@ -174,4 +177,29 @@ func test_session_spawns_layout_levels():
 		if r == "" and int(g.packs[0].level) == 0: r = "no packs"
 		g.free()
 		if r != "": return r
+	return ""
+
+## M4d addendum 2: e0's set. Average levels of the four sets (each monster counted once): w1 (boar 2 x10,
+## wolf 3 x8) 2.44; e0 (wolf 5 x12, macaque 4 x8) 4.6; e2 (shroom 6 x12, wolf 7 x10) 6.45; w3 (kongkoi 9 x10,
+## kongkoi 10 x2, macaque 8 x8) 8.7. Target = max(hero level, level of the room the hero came from).
+func test_arena_set_by_hero_and_previous_room():
+	var sets: Array = RoomSet.open().room("e0").get("monster_sets", [])
+	if sets.size() != 4: return "e0 has %d sets" % sets.size()
+	# [hero level, previous room level, want set index (0 w1, 1 e0, 2 e2, 3 w3)]
+	var cases := [[3, 10, 3], [12, 0, 3], [12, 2, 3], [1, 2, 0], [1, 0, 0], [1, 1, 0], [5, 2, 1], [2, 5, 1],
+		[7, 4, 2], [4, 7, 2], [8, 0, 3], [3, 3, 0], [4, 0, 1]]
+	for c in cases:
+		var got := RoomLevels.arena_set(sets, c[0], c[1])
+		if got != c[2]: return "hero Lv%d from a Lv%d room: set %d (want %d)" % [c[0], c[1], got, c[2]]
+	return ""
+
+## Ties go to the higher set (owner: "สูงกว่าเลเวลฮีโร่กับห้องก่อนหน้า"), whatever order the sets are in.
+func test_arena_set_tie_goes_higher():
+	var low := [{"kind": "boar", "level": 2, "count": 4}]
+	var high := [{"kind": "wolf", "level": 4, "count": 4}]
+	if RoomLevels.arena_set([low, high], 3, 0) != 1: return "tie at 3 between Lv2 and Lv4 sets chose the lower"
+	if RoomLevels.arena_set([high, low], 3, 0) != 0: return "tie (sets listed high first) chose the lower"
+	if RoomLevels.arena_set([low, high], 1, 3) != 1: return "tie from the previous room's level chose the lower"
+	var mixed := [{"kind": "boar", "level": 2, "count": 3}, {"kind": "wolf", "level": 6, "count": 1}]   # avg 3.0
+	if absf(RoomLevels.set_level(mixed) - 3.0) > 0.001: return "set level %.2f (want 3.0, weighted by count)" % RoomLevels.set_level(mixed)
 	return ""

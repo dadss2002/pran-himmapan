@@ -10,15 +10,17 @@ func test_ground_wolf_packs_in_their_rooms():
 	var g = load("res://scenes/test_ground.tscn").instantiate()
 	g.save_path = TMP_SAVE          # never touch the player's real save
 	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	g.layout_seed = 7
 	g.build()
 	var r := ""
 	if g.room_id != "c1r1": r = "starts in %s" % g.room_id
 	elif g.hero.spawn_point != g.layout.hero_spawn: r = "hero spawn %s" % g.hero.spawn_point
 	else:
 		# spec M3g §2 counts; M4d addendum: the level is the room's level in this session's layout (wolf is
-		# each room's first group, so it has no +1)
-		var lv := RoomLevels.for_layout(g.rooms.active)
-		for want in [["c1r0", int(lv.c1r0), 10], ["c2r2", int(lv.c2r2), 10], ["c1r2", int(lv.c1r2), 12]]:
+		# each room's first group, so it has no +1). Seed 7 worked out by hand from its links: c1r2 is next to
+		# c1r1 (d 1), c1r0 is d 2 (via c0r1), c2r2 is the farthest forest room (d 5 = D), so with
+		# L = round(1 + (d - 1) * 8 / 4) + 1: c1r2 Lv2, c1r0 Lv4, c2r2 Lv10.
+		for want in [["c1r0", 4, 10], ["c2r2", 10, 10], ["c1r2", 2, 12]]:
 			g.go_to(want[0], "", false)
 			var wolves := 0
 			var levels := []
@@ -32,6 +34,51 @@ func test_ground_wolf_packs_in_their_rooms():
 				break
 	g.free()
 	return r
+
+## M4d addendum 2: e0's set is chosen on the first entry of the session from max(hero level, level of the
+## room the hero came from) and kept when walking out and back; a new game chooses again.
+func test_arena_set_chosen_once_per_session():
+	var kinds := func(g) -> Dictionary:
+		var out := {}
+		for p in g.packs: out[String(p.kind)] = true
+		return out
+	var r := ""
+	for run in 2:
+		var g = load("res://scenes/test_ground.tscn").instantiate()
+		g.save_path = TMP_SAVE
+		if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+		g.layout_seed = 7                   # by hand: e0 hangs off c2r2 (Lv10, the farthest forest room)
+		g.build()
+		if run == 0:
+			g.hero.set_progress(3, 0)
+			g.go_to("c2r2", "", false)
+			g.go_to("e0", "west", false)     # target max(3, 10) = 10 -> the w3 set (kongkoi, macaque)
+			var first: Dictionary = kinds.call(g)
+			g.go_to("c2r2", "east", false)
+			g.hero.set_progress(1, 0)
+			g.go_to("e0", "west", false)     # chosen already this session: still the w3 set
+			var again: Dictionary = kinds.call(g)
+			if first.size() != 2 or not first.has("kongkoi") or not first.has("macaque"): r = "Lv3 hero from c2r2 got %s (want the w3 set)" % first.keys()
+			elif again != first: r = "set changed on the second entry: %s then %s" % [first.keys(), again.keys()]
+		else:
+			g.hero.set_progress(1, 0)        # new game: chosen again; from c1r1 (Lv1) -> target 1 -> the w1 set
+			g.go_to("e0", "west", false)
+			var got: Dictionary = kinds.call(g)
+			if r == "" and (got.size() != 2 or not got.has("boar") or not got.has("wolf")): r = "new game Lv1 hero got %s (want the w1 set: boar, wolf)" % got.keys()
+		g.free()
+	return r
+
+## Review nit: the room levels are worked out once per layout, not on every room change.
+func test_room_levels_cached_per_layout():
+	var rs := RoomSet.open()
+	rs.use_layout(RoomLayout.generate(7, rs.exit_table()))
+	var a := rs.room_levels()
+	var b := rs.room_levels()
+	if not is_same(a, b): return "room_levels() worked out again for the same layout"
+	rs.use_layout(RoomLayout.generate(42, rs.exit_table()))
+	var c := rs.room_levels()
+	if is_same(a, c): return "room_levels() kept the old layout's levels after use_layout()"
+	return "" if c == RoomLevels.for_layout(rs.active) else "cached levels differ from for_layout()"
 
 func test_damage_number_crit_style():
 	var crit := DamageNumber.make(25, true)

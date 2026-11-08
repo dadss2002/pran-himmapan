@@ -386,11 +386,23 @@ func test_group_calm_during_fade():
 	return "" if after != "idle" else "wolf never noticed the hero after the fade"
 
 ## Review fix: no group that attacks first has its home within its aggro range of a warp arrival.
+## M4d addendum 2: a room marked "near_arrival_ok" in data (x1, x2: hand-placed homes; monsters are calm 1 s
+## after arrival) only has to keep every group NEAR_ARRIVAL_MIN px from each arrival.
+const NEAR_ARRIVAL_MIN := 48.0
 func test_no_aggressive_home_by_an_arrival():
 	var rooms := RoomSet.open()
 	var bad := []
 	for id in rooms.ids():
-		for m in rooms.room(id).get("monsters", []):
+		var near_ok := bool(rooms.room(id).get("near_arrival_ok", false))
+		var lists: Array = [rooms.room(id).get("monsters", [])]
+		lists.append_array(rooms.room(id).get("monster_sets", []))
+		for m in lists.reduce(func(acc, l): return acc + l, []):
+			if near_ok:
+				var home0 := Vector2(m.at[0], m.at[1])
+				for w in rooms.exits(id):
+					var d0 := rooms.arrival(id, w.id).distance_to(home0)
+					if d0 < NEAR_ARRIVAL_MIN: bad.append("%s %s by %s arrival: %d px (min %d)" % [id, m.kind, w.id, d0, NEAR_ARRIVAL_MIN])
+				continue
 			var k := String(m.kind)
 			var t := "aggressive" if k == "wolf" else String(Balance._lookup("monsters.%s.temper" % k))
 			if t != "aggressive" and t != "ambush": continue
@@ -401,3 +413,57 @@ func test_no_aggressive_home_by_an_arrival():
 				var d := rooms.arrival(id, w.id).distance_to(home)
 				if d <= aggro: bad.append("%s %s by %s arrival: %d px (aggro %d)" % [id, k, w.id, d, aggro])
 	return "" if bad.is_empty() else ", ".join(bad)
+
+## M4d addendum 2: every monster spawn point (each group's spawn ring, PaintedLayout.ring) is on open ground
+## (a hero-sized body fits, and it can be walked to from the room's spawn) in every room, e0's sets included.
+func test_every_spawn_ring_on_open_ground():
+	var rooms := RoomSet.open()
+	var bad := []
+	for id in rooms.ids():
+		var l := rooms.layout(id)
+		var open := _open_from(l, l.hero_spawn)
+		var lists: Array = [rooms.room(id).get("monsters", [])]
+		lists.append_array(rooms.room(id).get("monster_sets", []))
+		for list in lists:
+			for m in list:
+				for q in PaintedLayout.ring(Vector2(m.at[0], m.at[1]), int(m.count)):
+					var p: Vector2 = q
+					var c := Vector2i(int(p.x) / l.cell, int(p.y) / l.cell)
+					if p.x < 0 or p.y < 0 or not open.has(c):
+						bad.append("%s %s x%d at %s: spawn point %s" % [id, m.kind, m.count, m.at, p.round()])
+	return "" if bad.is_empty() else ", ".join(bad)
+
+## Cells a hero-sized body can walk to from `from` (4-way over PaintedLayout.roomy cells).
+func _open_from(l: PaintedLayout, from: Vector2) -> Dictionary:
+	var start := Vector2i(int(from.x) / l.cell, int(from.y) / l.cell)
+	var seen := {}
+	if not l.roomy(start.x, start.y): return seen
+	seen[start] = true
+	var todo: Array[Vector2i] = [start]
+	while not todo.is_empty():
+		var c: Vector2i = todo.pop_back()
+		for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = c + o
+			if seen.has(n) or n.x < 0 or n.y < 0 or n.x >= l.cols or n.y >= l.rows or not l.roomy(n.x, n.y): continue
+			seen[n] = true
+			todo.append(n)
+	return seen
+
+## M4d addendum 2: x1's groups sit in the four corners of the meadow and x2's on the grass around the rise,
+## spread out (no two homes closer than ~90 px) and off the middle of the room (the crossing / the plateau).
+func test_x1_x2_groups_spread():
+	var rooms := RoomSet.open()
+	for id in ["x1", "x2"]:
+		var ms: Array = rooms.room(id).get("monsters", [])
+		if ms.size() != 4: return "%s has %d groups (want 4)" % [id, ms.size()]
+		var mid := rooms.layout(id).size_px() / 2.0
+		var quads := {}
+		for i in ms.size():
+			var a := Vector2(ms[i].at[0], ms[i].at[1])
+			if a.distance_to(mid) < 100.0: return "%s %s home %s is in the middle of the room" % [id, ms[i].kind, a]
+			quads[Vector2i(signi(int(a.x - mid.x)), signi(int(a.y - mid.y)))] = true
+			for j in range(i + 1, ms.size()):
+				var d := a.distance_to(Vector2(ms[j].at[0], ms[j].at[1]))
+				if d < 88.0: return "%s homes %s and %s only %d px apart" % [id, a, ms[j].at, d]
+		if id == "x1" and quads.size() != 4: return "x1 groups use %d corners of the meadow (want 4)" % quads.size()
+	return ""
