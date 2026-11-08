@@ -24,7 +24,19 @@ var skills_button: Button
 var dim: ColorRect
 var top_right: HBoxContainer
 var status_panel: PanelContainer
-var fullscreen_button: Button
+## M4d Task 3d: icon-only buttons in the top-right block (skills, bag, map, settings; IconButton) and the
+## small settings panel ("เต็มจอ", "แสดง FPS") under them.
+var map_button: Button
+var settings_button: Button
+var settings_panel: PanelContainer
+var fullscreen_button: Button            # in the settings panel
+var fps_toggle: CheckButton              # in the settings panel
+var minimap_box: PanelContainer
+var toast: Label
+var _toast_tween: Tween
+const TOAST_TIME := 1.5
+var settings_path := GameSettings.PATH   # tests point this at a scratch file before build()
+var settings := {}
 ## Frame-rate meter for phone testing (owner 2026-11-07): "FPS 60 · 16 ms"; tap to fold it down to
 ## a faint "FPS" and tap again to bring it back.
 var fps_button: Button
@@ -39,13 +51,35 @@ func _ready() -> void:
 	layout(get_viewport().get_visible_rect().size)
 	get_viewport().size_changed.connect(func(): layout(get_viewport().get_visible_rect().size))
 
+## Screen px per HUD px (the window shows the HUD's visible rect enlarged by this much).
+func screen_scale() -> float:
+	var v := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360)
+	var w := get_window() if is_inside_tree() else null
+	if w == null or v.x <= 0.0: return 1.0
+	return float(w.size.x) / v.x
+
+func icon_buttons() -> Array:
+	return [skills_button, bag_button, map_button, settings_button]
+
 ## Wider phones (aspect "expand"): keep the top-right block and EXP bar on the real edges.
 func layout(size: Vector2) -> void:
-	if fps_button:
-		fps_button.position = Vector2(6, 60 if not ScreenFit.is_portrait(size) else 104)
+	var sc := screen_scale()
+	for b in icon_buttons():
+		if b is IconButton: b.fit(sc)
+	top_right.size = top_right.get_combined_minimum_size()
 	top_right.position.x = size.x - 6 - top_right.size.x
 	# portrait (360 wide): no room beside the status panel, so the block goes on a second row
 	top_right.position.y = 60.0 if ScreenFit.is_portrait(size) else 6.0
+	if fps_button:
+		# landscape: under the status panel; portrait: under the top-right row
+		fps_button.position = Vector2(6, 60 if not ScreenFit.is_portrait(size) else top_right.position.y + top_right.size.y + 4)
+	if settings_panel:
+		settings_panel.size = settings_panel.get_combined_minimum_size()
+		settings_panel.position = Vector2(size.x - 6 - settings_panel.size.x, top_right.position.y + top_right.size.y + 4)
+	if toast and map_button:
+		toast.size = toast.get_combined_minimum_size()
+		var mr := Rect2(top_right.position + map_button.position, map_button.size)
+		toast.position = Vector2(clampf(mr.get_center().x - toast.size.x / 2.0, 4, size.x - 4 - toast.size.x), mr.end.y + 4)
 	exp_bar.position = Vector2(0, size.y - 4)
 	exp_bar.size.x = size.x
 	exp_bar.custom_minimum_size.x = size.x
@@ -138,34 +172,22 @@ func build() -> void:
 	gold_panel.add_child(gold)
 	gold_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	tr.add_child(gold_panel)
-	var fs := Button.new()                 # full screen on/off (hides the browser bars on phones)
-	fs.text = "เต็มจอ"
-	fs.focus_mode = Control.FOCUS_NONE
-	fs.add_theme_font_size_override("font_size", UiKit.fs(8))
-	fs.custom_minimum_size = Vector2(36, 30)
-	fs.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	fs.pressed.connect(ScreenFit.toggle_fullscreen)
-	fullscreen_button = fs
-	tr.add_child(fs)
-	var sk := Button.new()
-	sk.text = "สกิล"
-	sk.focus_mode = Control.FOCUS_NONE
-	sk.add_theme_font_size_override("font_size", UiKit.fs(8))
-	sk.custom_minimum_size = Vector2(36, 30)
-	sk.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	sk.pressed.connect(open_skills)
-	skills_button = sk
-	tr.add_child(sk)
-	var bag := Button.new()
-	bag.text = "กระเป๋า"
-	bag.focus_mode = Control.FOCUS_NONE
-	bag.pressed.connect(open_bag)
-	bag_button = bag
-	bag.add_theme_font_size_override("font_size", UiKit.fs(8))
-	bag.custom_minimum_size = Vector2(36, 30)
-	bag.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	tr.add_child(bag)
+	# M4d Task 3d: icon-only buttons (owner-chosen PixelLab icons, 48x48)
+	skills_button = IconButton.make("res://assets/ui/icons/skills.png", "SkillsButton")
+	skills_button.pressed.connect(open_skills)
+	tr.add_child(skills_button)
+	bag_button = IconButton.make("res://assets/ui/icons/bag.png", "BagButton")
+	bag_button.pressed.connect(open_bag)
+	tr.add_child(bag_button)
+	map_button = IconButton.make("res://assets/ui/icons/map.png", "MapButton")
+	map_button.pressed.connect(open_map)
+	tr.add_child(map_button)
+	settings_button = IconButton.make("res://assets/ui/icons/settings.png", "SettingsButton")
+	settings_button.pressed.connect(toggle_settings)
+	tr.add_child(settings_button)
 	var mini := PanelContainer.new()
+	mini.name = "MinimapBox"
+	minimap_box = mini
 	mini.custom_minimum_size = Vector2(72, 54)
 	mini.add_theme_stylebox_override("panel", _box(Color(0.055, 0.145, 0.11, 0.6), Color(0.93, 0.73, 0.33, 0.45), 8))
 	var ml := _label("แผนที่ย่อ", 8, Color("#cfc6b0"))
@@ -173,6 +195,43 @@ func build() -> void:
 	ml.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	mini.add_child(ml)
 	tr.add_child(mini)
+
+	# --- settings panel (hidden until the settings button is tapped)
+	settings = GameSettings.load_or_default(settings_path)
+	settings_panel = PanelContainer.new()
+	settings_panel.name = "SettingsPanel"
+	settings_panel.add_theme_stylebox_override("panel", _box(Color(0.055, 0.145, 0.11, 0.92), GOLD, 8))
+	settings_panel.visible = false
+	root.add_child(settings_panel)
+	var sv := VBoxContainer.new()
+	sv.add_theme_constant_override("separation", 4)
+	settings_panel.add_child(sv)
+	var fs := Button.new()                 # full screen on/off (hides the browser bars on phones)
+	fs.name = "FullscreenButton"
+	fs.text = "เต็มจอ"
+	fs.focus_mode = Control.FOCUS_NONE
+	fs.add_theme_font_size_override("font_size", UiKit.fs(9))
+	fs.custom_minimum_size = Vector2(110, IconButton.MIN_TOUCH)
+	fs.pressed.connect(ScreenFit.toggle_fullscreen)
+	fullscreen_button = fs
+	sv.add_child(fs)
+	fps_toggle = CheckButton.new()
+	fps_toggle.name = "FpsToggle"
+	fps_toggle.text = "แสดง FPS"
+	fps_toggle.focus_mode = Control.FOCUS_NONE
+	fps_toggle.add_theme_font_size_override("font_size", UiKit.fs(9))
+	fps_toggle.custom_minimum_size = Vector2(110, IconButton.MIN_TOUCH)
+	fps_toggle.button_pressed = bool(settings.show_fps)
+	fps_toggle.toggled.connect(func(on): set_show_fps(on))
+	sv.add_child(fps_toggle)
+	set_show_fps(bool(settings.show_fps), false)
+
+	# --- short notes under the top-right block ("เร็ว ๆ นี้" for the map until Task 8)
+	toast = _label("", 9, Color("#f3e9d2"))
+	toast.name = "Toast"
+	toast.visible = false
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(toast)
 
 	# --- EXP bar (filled from M2b)
 	exp_bar = _bar(GOLD, Color(0, 0, 0, 0.55), Vector2(640, 4))
@@ -213,7 +272,7 @@ func safe_rect() -> Rect2:
 ## its note under it and the joystick's resting ring.
 func blocked_rects() -> Array:
 	var out := []
-	for c in [status_panel, fps_button, exp_bar]:
+	for c in [status_panel, fps_button, exp_bar, settings_panel, toast]:
 		if c and c.is_visible_in_tree(): out.append(c.get_global_rect())
 	if top_right and top_right.is_visible_in_tree():
 		for c in top_right.get_children():
@@ -246,6 +305,36 @@ func open_skills() -> void:
 	buttons.release_all()
 	hero.external_input = Vector2.ZERO
 	skill_panel.open(hero)
+
+## The map button: the full map comes with Task 8; until then a short "เร็ว ๆ นี้" note.
+func open_map() -> void:
+	show_toast("เร็ว ๆ นี้")
+
+## A short note under the map button that fades after TOAST_TIME s.
+func show_toast(text: String) -> void:
+	if _toast_tween and _toast_tween.is_valid(): _toast_tween.kill()
+	toast.text = text
+	toast.modulate.a = 1.0
+	toast.visible = true
+	layout(get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360))
+	if not is_inside_tree(): return
+	_toast_tween = create_tween()
+	_toast_tween.tween_interval(TOAST_TIME)
+	_toast_tween.tween_property(toast, "modulate:a", 0.0, 0.3)
+	_toast_tween.tween_callback(func(): toast.visible = false)
+
+## The settings button opens / closes the small settings panel under the top-right block.
+func toggle_settings() -> void:
+	settings_panel.visible = not settings_panel.visible
+	if settings_panel.visible:
+		layout(get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360))
+
+## "แสดง FPS": shows or hides the frame-rate line; remembered in the settings file.
+func set_show_fps(on: bool, save := true) -> void:
+	settings["show_fps"] = on
+	if fps_button: fps_button.visible = on
+	if fps_toggle and fps_toggle.button_pressed != on: fps_toggle.set_pressed_no_signal(on)
+	if save: GameSettings.save(settings, settings_path)
 
 ## Opens the bag; held touch buttons and the joystick let go first so nothing stays pressed.
 func open_bag() -> void:
