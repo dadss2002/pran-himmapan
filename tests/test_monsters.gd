@@ -227,8 +227,12 @@ func test_rooms_hold_the_spec_monsters():
 	var sets_want := [[{"boar": 10, "wolf": 8}, 2], [{"wolf": 12, "macaque": 8}, 4],
 		[{"shroom": 12, "wolf": 10}, 6], [{"kongkoi": 12, "macaque": 8}, 8]]
 	var rooms := RoomSet.open()
-	if rooms.ids().size() != want.size(): return "%d rooms (spec %d)" % [rooms.ids().size(), want.size()]
+	# M4d added the crossroads x1, x2, x3; no monster numbers are approved for them yet, so they hold none.
+	for id in rooms.ids():
+		if not want.has(id) and not (id in ["x1", "x2", "x3"]): return "room %s not in the spec" % id
+		if not want.has(id) and not rooms.room(id).get("monsters", []).is_empty(): return "%s has monsters without an approved spec" % id
 	for id in want:
+		if not rooms.has(id): return "%s missing" % id
 		var e := _check_list(id, rooms.room(id).get("monsters", []), want[id], lv[id], id == "c2r3")
 		if e != "": return e
 	var sets: Array = rooms.room("e0").get("monster_sets", [])
@@ -387,7 +391,7 @@ func test_no_aggressive_home_by_an_arrival():
 			var path := "monsters.%s.aggro" % k
 			var aggro := Balance.num(path) if Balance.has(path) else Balance.num("wolf.aggro")
 			var home := Vector2(m.at[0], m.at[1])
-			for w in rooms.room(id).warps:
+			for w in rooms.exits(id):           # M4d: every painted exit (any may be a warp this session)
 				var d := rooms.arrival(id, w.id).distance_to(home)
 				if d <= aggro: bad.append("%s %s by %s arrival: %d px (aggro %d)" % [id, k, w.id, d, aggro])
 	return "" if bad.is_empty() else ", ".join(bad)

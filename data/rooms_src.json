@@ -1,59 +1,13 @@
 {
- "note": "Hand data for tools/painted_rooms.py. Room-local pixels (each room is its picture size, 512x512 since M4b). links: room:side pairs (side = north/south/east/west); a warp sits on the open ground nearest that edge's middle, or nearest hints[side]. edits: walk/block pixel rects. monsters: kind/level/count (M3g); groups of <=6 are placed by the tool unless 'at' is given. name: the room's Thai name (exit labels, M4c); arena: true for a boss arena (red exit label). monster_sets (e0): the arena sets in level order (w1, e0, e2, w3 of M3f); 'monsters' is the default set.",
+ "note": "Hand data for tools/painted_rooms.py. Room-local pixels (each room is its picture size, 512x512 since M4b). exits (M4d): the sides where the picture's path reaches the middle of the edge; the tool writes an exit point (warp spot) on the open ground nearest that edge's middle, or nearest hints[side]. Which exits are joined is decided every game session by RoomLayout (scripts/rules/room_layout.gd; its FALLBACK_LINKS are the fixed M4b links, used only when no random layout passes its checks); an exit left unjoined is a dead end with no warp. edits: walk/block pixel rects. monsters: kind/level/count (M3g); groups of <=6 are placed by the tool unless 'at' is given. name: the room's Thai name (exit labels, M4c); arena: true for a boss arena (red exit label). monster_sets (e0): the arena sets in level order (w1, e0, e2, w3 of M3f); 'monsters' is the default set. grid: the room's place on the debug sheet (c?r? rooms use their id).",
  "start": "c1r1",
- "links": [
-  [
-   "c0r0:south",
-   "c0r1:north"
-  ],
-  [
-   "c0r1:south",
-   "c0r2:north"
-  ],
-  [
-   "c0r2:south",
-   "c0r3:north"
-  ],
-  [
-   "c0r1:east",
-   "c1r1:west"
-  ],
-  [
-   "c1r0:south",
-   "c1r1:north"
-  ],
-  [
-   "c1r1:east",
-   "c2r1:west"
-  ],
-  [
-   "c2r0:south",
-   "c2r1:north"
-  ],
-  [
-   "c2r1:south",
-   "c2r2:north"
-  ],
-  [
-   "c0r2:east",
-   "c1r2:west"
-  ],
-  [
-   "c1r2:south",
-   "c1r3:north"
-  ],
-  [
-   "c1r3:east",
-   "c2r3:west"
-  ],
-  [
-   "e0:west",
-   "c2r0:east"
-  ]
- ],
  "rooms": {
   "c0r0": {
    "name": "ลานบ่อน้ำเก่า",
+   "exits": [
+    "east",
+    "south"
+   ],
    "monsters": [
     {
      "kind": "boar",
@@ -121,6 +75,12 @@
   },
   "c0r1": {
    "name": "ทางหินโบราณ",
+   "exits": [
+    "north",
+    "east",
+    "south",
+    "west"
+   ],
    "monsters": [
     {
      "kind": "boar",
@@ -178,6 +138,11 @@
   },
   "c0r2": {
    "name": "บึงในป่า",
+   "exits": [
+    "north",
+    "east",
+    "south"
+   ],
    "fx": [
     {
      "id": "water_ripple",
@@ -202,6 +167,10 @@
   },
   "c0r3": {
    "name": "ฐานวิหารร้าง",
+   "exits": [
+    "north",
+    "west"
+   ],
    "monsters": [
     {
      "kind": "viper",
@@ -289,6 +258,9 @@
   },
   "c1r0": {
    "name": "ลานเสาหิน",
+   "exits": [
+    "south"
+   ],
    "monsters": [
     {
      "kind": "wolf",
@@ -386,6 +358,11 @@
   },
   "c1r1": {
    "name": "ศาลหินเริ่มต้น",
+   "exits": [
+    "north",
+    "east",
+    "west"
+   ],
    "spawn": [
     260,
     373
@@ -517,6 +494,10 @@
   },
   "c1r2": {
    "name": "ลำธารวงเห็ด",
+   "exits": [
+    "south",
+    "west"
+   ],
    "monsters": [
     {
      "kind": "wolf",
@@ -574,6 +555,10 @@
   },
   "c1r3": {
    "name": "หนองน้ำ",
+   "exits": [
+    "north",
+    "east"
+   ],
    "fx": [
     {
      "id": "water_ripple",
@@ -598,6 +583,10 @@
   },
   "c2r0": {
    "name": "ปรางค์ร้าง",
+   "exits": [
+    "east",
+    "south"
+   ],
    "monsters": [
     {
      "kind": "deer",
@@ -685,6 +674,11 @@
   },
   "c2r1": {
    "name": "ทางแยกขอนไม้",
+   "exits": [
+    "north",
+    "south",
+    "west"
+   ],
    "monsters": [
     {
      "kind": "boar",
@@ -742,6 +736,10 @@
   },
   "c2r2": {
    "name": "ป่าไผ่",
+   "exits": [
+    "north",
+    "east"
+   ],
    "monsters": [
     {
      "kind": "wolf",
@@ -769,6 +767,9 @@
   },
   "c2r3": {
    "name": "ลานหญ้ากลางป่า",
+   "exits": [
+    "west"
+   ],
    "monsters": [
     {
      "kind": "kongkoi",
@@ -811,6 +812,9 @@
   },
   "e0": {
    "name": "ลานเนินตะวันออก",
+   "exits": [
+    "west"
+   ],
    "arena": true,
    "grid": [
     3,
@@ -923,6 +927,411 @@
       48
      ],
      "why": "fallen log and rocks at the bottom"
+    }
+   ]
+  },
+  "x1": {
+   "name": "ทุ่งต้นไม้ตาย",
+   "exits": [
+    "north",
+    "east",
+    "south",
+    "west"
+   ],
+   "grid": [
+    0,
+    4
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      96,
+      76,
+      84,
+      108
+     ],
+     "why": "dead tree"
+    },
+    {
+     "op": "block",
+     "rect": [
+      320,
+      326,
+      120,
+      92
+     ],
+     "why": "rock pile"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      232,
+      464,
+      56,
+      44
+     ],
+     "why": "south end of the dirt path (reddish dirt read as blocked)"
+    }
+   ]
+  },
+  "x2": {
+   "name": "เนินหินกลางป่า",
+   "exits": [
+    "north",
+    "east",
+    "south",
+    "west"
+   ],
+   "grid": [
+    1,
+    4
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      112,
+      180,
+      28,
+      110
+     ],
+     "why": "stone ring wall, west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      128,
+      150,
+      36,
+      32
+     ],
+     "why": "stone ring wall, north-west bend"
+    },
+    {
+     "op": "block",
+     "rect": [
+      112,
+      280,
+      118,
+      66
+     ],
+     "why": "stone ring wall and stump, south-west (the steps stay open)"
+    },
+    {
+     "op": "block",
+     "rect": [
+      290,
+      292,
+      118,
+      54
+     ],
+     "why": "stone ring wall and standing stone, south-east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      368,
+      160,
+      48,
+      135
+     ],
+     "why": "stone ring wall, east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      340,
+      140,
+      40,
+      30
+     ],
+     "why": "stone ring wall, north-east bend"
+    },
+    {
+     "op": "block",
+     "rect": [
+      140,
+      148,
+      70,
+      60
+     ],
+     "why": "boulders on the rise, north-west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      196,
+      122,
+      30,
+      60
+     ],
+     "why": "standing stone, north"
+    },
+    {
+     "op": "block",
+     "rect": [
+      276,
+      130,
+      100,
+      62
+     ],
+     "why": "boulders on the rise, north-east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      180,
+      244,
+      40,
+      58
+     ],
+     "why": "standing stone on the rise"
+    },
+    {
+     "op": "block",
+     "rect": [
+      292,
+      220,
+      30,
+      28
+     ],
+     "why": "round stone on the rise"
+    },
+    {
+     "op": "block",
+     "rect": [
+      148,
+      240,
+      28,
+      22
+     ],
+     "why": "rock on the rise"
+    },
+    {
+     "op": "block",
+     "rect": [
+      400,
+      302,
+      50,
+      44
+     ],
+     "why": "rocks and stump, east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      44,
+      346,
+      32,
+      28
+     ],
+     "why": "rock, south-west"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      136,
+      104,
+      48,
+      36
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      104,
+      120,
+      48,
+      40
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      84,
+      140,
+      48,
+      44
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      64,
+      168,
+      48,
+      44
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      52,
+      196,
+      48,
+      36
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      328,
+      96,
+      56,
+      40
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      368,
+      116,
+      48,
+      40
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      392,
+      144,
+      56,
+      48
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      400,
+      176,
+      56,
+      48
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      424,
+      208,
+      88,
+      56
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    }
+   ]
+  },
+  "x3": {
+   "name": "สะพานไม้ข้ามลำธาร",
+   "exits": [
+    "north",
+    "east",
+    "south",
+    "west"
+   ],
+   "grid": [
+    2,
+    4
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      128,
+      236,
+      96,
+      100
+     ],
+     "why": "stream and stone bank, west of the bridge"
+    },
+    {
+     "op": "block",
+     "rect": [
+      0,
+      262,
+      128,
+      100
+     ],
+     "why": "stream and stone bank, west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      116,
+      336,
+      48,
+      36
+     ],
+     "why": "rocks in the stream"
+    },
+    {
+     "op": "block",
+     "rect": [
+      288,
+      236,
+      64,
+      100
+     ],
+     "why": "stream and stone bank, east of the bridge"
+    },
+    {
+     "op": "block",
+     "rect": [
+      352,
+      252,
+      160,
+      118
+     ],
+     "why": "stream, rocks and reeds, east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      208,
+      140,
+      26,
+      24
+     ],
+     "why": "rock"
+    },
+    {
+     "op": "block",
+     "rect": [
+      362,
+      132,
+      26,
+      20
+     ],
+     "why": "rock"
+    },
+    {
+     "op": "block",
+     "rect": [
+      328,
+      436,
+      30,
+      28
+     ],
+     "why": "rock"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      224,
+      226,
+      64,
+      132
+     ],
+     "why": "the bridge (the only way over the stream)"
     }
    ]
   }

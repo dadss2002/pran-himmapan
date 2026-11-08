@@ -18,6 +18,8 @@ var _scale := 1.0
 const SHARP := preload("res://shaders/sharp_pixels.gdshader")
 var rooms: RoomSet
 var room_id := ""
+var layout_seed := -1             # M4d: -1 = a new random room layout every session; tests set one
+var session_seed := 0             # the seed this session's layout was made from (saved for reference only)
 var warps: Array = []
 var cam: Camera2D
 var fade: ColorRect
@@ -87,6 +89,8 @@ func build() -> void:
 	world.name = "World"
 	world.y_sort_enabled = true
 	rooms = RoomSet.open()
+	session_seed = layout_seed if layout_seed >= 0 else int(randi() & 0x7fffffff)
+	rooms.use_layout(RoomLayout.generate(session_seed, rooms.exit_table()))
 	stage.add_child(world)
 	hero = HERO_SCENE.instantiate()
 	world.add_child(hero)
@@ -123,8 +127,8 @@ func build() -> void:
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	fade_layer.add_child(fade)
-	var saved := String(state.get("room", ""))
-	go_to(saved if rooms.has(saved) else rooms.start, "", false)
+	# M4d: the map is new every session, so the saved room is not used: always start in c1r1.
+	go_to(rooms.start, "", false)
 
 ## Swap to room id. via_warp = the warp you come out of there ("" = the room's spawn). The old room's
 ## map, monsters, drops and warps go; the new room's are built fresh; the game saves.
@@ -258,7 +262,7 @@ func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_fx("hit_spark", w.hurt_point())
 
 func save_now() -> bool:
-	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.skill_gems, "room": room_id}, save_path)
+	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.skill_gems, "room": room_id, "seed": session_seed}, save_path)
 
 func tick_autosave(delta: float) -> void:
 	_autosave_t += delta

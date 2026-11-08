@@ -1,8 +1,11 @@
 extends RefCounted
-## Forest rooms data (RoomSet): links, warps, reachability, arrivals, and that the hero can really
-## walk every route without getting stuck.
+## Forest rooms data (RoomSet): exits, warps, reachability, arrivals, and that the hero can really
+## walk every route without getting stuck. M4d: rooms are joined by a random layout each session
+## (tests/test_room_layout.gd); RoomSet.open() alone uses the fixed M4b layout (LINKS below), and the
+## per-room checks here cover every painted exit, so any layout's warps are covered.
 
-const LINKS := [["c0r0:south", "c0r1:north"], ["c0r1:south", "c0r2:north"], ["c0r2:south", "c0r3:north"],
+const LINKS := [   # RoomLayout.FALLBACK_LINKS: the M4b map, active until a session layout is set
+["c0r0:south", "c0r1:north"], ["c0r1:south", "c0r2:north"], ["c0r2:south", "c0r3:north"],
 	["c0r1:east", "c1r1:west"], ["c1r0:south", "c1r1:north"], ["c1r1:east", "c2r1:west"],
 	["c2r0:south", "c2r1:north"], ["c2r1:south", "c2r2:north"], ["c0r2:east", "c1r2:west"],
 	["c1r2:south", "c1r3:north"], ["c1r3:east", "c2r3:west"],
@@ -17,10 +20,20 @@ func setup(t: SceneTree) -> void:
 func test_rooms_data_valid():
 	var rs := RoomSet.open()
 	if rs == null: return "data/rooms.json missing"
-	if rs.ids().size() != 13: return "%d rooms (12 map + arena e0)" % rs.ids().size()
+	if rs.ids().size() != 16: return "%d rooms (12 map + 3 crossroads x1-x3 + arena e0)" % rs.ids().size()
 	if rs.start != "c1r1": return "start %s" % rs.start
+	if not rs.active.get("fallback", false): return "RoomSet.open() is not on the fixed M4b layout"
 	var errs := rs.validate()
 	return "" if errs.is_empty() else "%d problems, first: %s" % [errs.size(), errs.slice(0, 4)]
+
+static func _at(e: Dictionary) -> Vector2:
+	return Vector2(e.at[0], e.at[1])
+
+## A warp dict for an exit (as a layout would make it) so Warp can be built for every painted exit.
+static func _as_warp(e: Dictionary) -> Dictionary:
+	var w := e.duplicate()
+	w.merge({"to": "", "to_warp": ""})
+	return w
 
 ## M4b: each room has its own size, read from its picture (all 512x512 now; old rooms were 688x384).
 func test_room_sizes_from_rooms_json():
@@ -59,19 +72,19 @@ func test_old_format_rooms_use_global_size():
 	if not l.roomy(int(l.hero_spawn.x) / 8, int(l.hero_spawn.y) / 8): return "spawn %s not open ground" % l.hero_spawn
 	return ""
 
-## Every room's spawn and every warp arrival stand on open ground (a hero-sized body fits) that
-## reaches the room's warps.
+## Every room's spawn and every exit's arrival stand on open ground (a hero-sized body fits) that
+## reaches every exit of the room (M4d: any exit may be a warp in some session).
 func test_spawns_and_arrivals_on_open_ground():
 	var rs := RoomSet.open()
 	for id in rs.ids():
 		var l := rs.layout(id)
 		var pts := {"spawn": rs.spawn(id)}
-		for w in rs.room(id).warps: pts["arrival " + String(w.id)] = rs.arrival(id, w.id)
+		for e in rs.exits(id): pts["arrival " + String(e.id)] = rs.arrival(id, e.id)
 		for k in pts:
 			var p: Vector2 = pts[k]
 			if not l.roomy(int(p.x) / l.cell, int(p.y) / l.cell): return "%s %s at %s is not open ground" % [id, k, p]
-			for w in rs.room(id).warps:
-				if not l.reachable(p, rs.warp_at(id, w.id)): return "%s %s cannot reach warp %s" % [id, k, w.id]
+			for e in rs.exits(id):
+				if not l.reachable(p, _at(e)): return "%s %s cannot reach exit %s" % [id, k, e.id]
 	return ""
 
 func test_links_are_pairs():
@@ -89,26 +102,31 @@ func test_links_are_pairs():
 		if not want.has(k): return "extra link %s" % k
 	return ""
 
+## Over the warps: the fixed layout reaches its 13 rooms; every session layout reaches all 16.
 func test_every_room_reachable_from_start():
 	var rs := RoomSet.open()
-	var seen := {rs.start: true}
-	var todo := [rs.start]
-	while not todo.is_empty():
-		var id: String = todo.pop_back()
-		for w in rs.room(id).warps:
-			if not seen.has(String(w.to)):
-				seen[String(w.to)] = true
-				todo.append(String(w.to))
-	return "" if seen.size() == 13 else "only %d rooms reachable: %s" % [seen.size(), seen.keys()]
+	for s in range(-1, 20):
+		if s >= 0: rs.use_layout(RoomLayout.generate(s, rs.exit_table()))
+		var want := 13 if s < 0 else 16
+		var seen := {rs.start: true}
+		var todo := [rs.start]
+		while not todo.is_empty():
+			var id: String = todo.pop_back()
+			for w in rs.room(id).warps:
+				if not seen.has(String(w.to)):
+					seen[String(w.to)] = true
+					todo.append(String(w.to))
+		if seen.size() != want: return "layout %d: only %d rooms reachable: %s" % [s, seen.size(), seen.keys()]
+	return ""
 
 func test_warps_connected_in_room():
 	var rs := RoomSet.open()
 	for id in rs.ids():
 		var l := rs.layout(id)
-		var ws: Array = rs.room(id).warps
+		var ws: Array = rs.exits(id)
 		for a in ws:
 			for b in ws:
-				if not l.reachable(rs.warp_at(id, a.id), rs.warp_at(id, b.id)):
+				if not l.reachable(_at(a), _at(b)):
 					return "%s: %s cannot reach %s" % [id, a.id, b.id]
 	return ""
 
@@ -116,9 +134,9 @@ func test_arrival_clear_of_warp():
 	var rs := RoomSet.open()
 	for id in rs.ids():
 		var l := rs.layout(id)
-		for w in rs.room(id).warps:
+		for w in rs.exits(id):
 			var p := rs.arrival(id, w.id)
-			var d := p.distance_to(rs.warp_at(id, w.id))
+			var d := p.distance_to(_at(w))
 			if l.blocked_at(p): return "%s %s arrival blocked" % [id, w.id]
 			if d <= RoomSet.REARM or d > 60.0: return "%s %s arrival %.0f px from the warp" % [id, w.id, d]
 	return ""
@@ -154,7 +172,7 @@ func test_hero_walks_every_route():
 		h.set_physics_process(false)
 		var nav := l.make_nav()
 		var points := [l.hero_spawn]
-		for w in rs.room(id).warps: points.append(rs.warp_at(id, w.id))
+		for e in rs.exits(id): points.append(_at(e))   # every painted exit (M4d)
 		for a in points:
 			for b in points:
 				if a == b: continue
@@ -185,7 +203,7 @@ func test_room_names_and_arena_flag():
 	var want := {"c1r1": "ศาลหินเริ่มต้น", "c0r1": "ทางหินโบราณ", "c0r0": "ลานบ่อน้ำเก่า", "c0r2": "บึงในป่า",
 		"c0r3": "ฐานวิหารร้าง", "c1r0": "ลานเสาหิน", "c1r2": "ลำธารวงเห็ด", "c1r3": "หนองน้ำ",
 		"c2r0": "ปรางค์ร้าง", "c2r1": "ทางแยกขอนไม้", "c2r2": "ป่าไผ่", "c2r3": "ลานหญ้ากลางป่า",
-		"e0": "ลานเนินตะวันออก"}
+		"e0": "ลานเนินตะวันออก", "x1": "ทุ่งต้นไม้ตาย", "x2": "เนินหินกลางป่า", "x3": "สะพานไม้ข้ามลำธาร"}
 	for id in rs.ids():
 		if String(rs.room(id).get("name", "")) != String(want.get(id, "?")): return "%s name '%s'" % [id, rs.room(id).get("name", "")]
 		var arena := bool(rs.room(id).get("arena", false))
@@ -227,8 +245,9 @@ func test_warp_arrow_points_out():
 	var rs := RoomSet.open()
 	var want := {"north": Vector2.UP, "south": Vector2.DOWN, "east": Vector2.RIGHT, "west": Vector2.LEFT}
 	for id in rs.ids():
-		for wd in rs.room(id).warps:
-			var w := Warp.make(wd, rs.room(String(wd.to)))
+		for e in rs.exits(id):
+			var wd := _as_warp(e)
+			var w := Warp.make(wd)
 			var d := w.out_dir()
 			w.free()
 			if d != want[String(wd.id)]: return "%s %s arrow points %s" % [id, wd.id, d]
@@ -239,8 +258,9 @@ func test_warp_arrow_points_out():
 func test_warp_arrows_visible_and_inside():
 	var rs := RoomSet.open()
 	for id in rs.ids():
-		for wd in rs.room(id).warps:
-			var w := Warp.make(wd, rs.room(String(wd.to)))
+		for e in rs.exits(id):
+			var wd := _as_warp(e)
+			var w := Warp.make(wd)
 			w.room_size = rs.layout(id).size_px()
 			var ns: bool = String(wd.id) in ["north", "south"]
 			var err := ""

@@ -2,6 +2,10 @@ class_name RoomSet
 extends RefCounted
 ## The forest rooms (data/rooms.json, written by tools/painted_rooms.py): one painted chunk each,
 ## joined by warps. Pure rules: room data, a PaintedLayout per room, where a warp lands you.
+## M4d: each room lists its painted "exits" (a point per side); which exits are joined comes from a
+## RoomLayout given to use_layout() (a new random one every session). room(id).warps holds only the
+## joined exits ({id, at, to, to_warp}); a dead-end exit has no warp. Until use_layout() is called the
+## fixed M4b layout (RoomLayout.fallback) is active. Old data with fixed "warps" and no "exits" still loads.
 
 const PATH := "res://data/rooms.json"
 const ARRIVAL := 40.0         # how far into the room from the paired warp you appear
@@ -11,6 +15,7 @@ const REARM := 22.0
 var start := ""
 var size := Vector2.ZERO      # fallback for rooms without their own "size" (M4b: each room has one)
 var cell := 8
+var active: Dictionary = {}   # the RoomLayout in use ({pos, links, fallback}); empty for old fixed-warp data
 var _rooms: Dictionary = {}
 var _layouts: Dictionary = {}
 
@@ -26,7 +31,47 @@ static func from_dict(d: Dictionary) -> RoomSet:
 	r.size = Vector2(d.size[0], d.size[1])
 	r.cell = int(d.cell)
 	r._rooms = d.rooms
+	if not r.exit_table().is_empty(): r.use_layout(RoomLayout.fallback(r.exit_table()))
 	return r
+
+## Rooms with painted exits, for RoomLayout.generate(): {id: {"exits": [side, ...], "arena": bool}}.
+func exit_table() -> Dictionary:
+	var out := {}
+	for id in _rooms:
+		if not _rooms[id].has("exits"): continue
+		var sides: Array = []
+		for e in _rooms[id].exits: sides.append(String(e.id))
+		out[String(id)] = {"exits": sides, "arena": bool(_rooms[id].get("arena", false))}
+	return out
+
+## Join the rooms as `l` says (RoomLayout dict): each link becomes a warp pair; other exits stay dead ends.
+func use_layout(l: Dictionary) -> void:
+	active = l
+	var ws := {}
+	for id in _rooms:
+		if _rooms[id].has("exits"): ws[id] = []
+	for k in l.get("links", []):
+		for half in [[k[0], k[1], k[2], k[3]], [k[2], k[3], k[0], k[1]]]:
+			var e := exit(String(half[0]), String(half[1]))
+			if e.is_empty() or not ws.has(half[0]): continue
+			ws[half[0]].append({"id": String(half[1]), "at": e.at, "to": String(half[2]), "to_warp": String(half[3])})
+	for id in ws:
+		var list: Array = ws[id]
+		list.sort_custom(func(a, b): return String(a.id) < String(b.id))
+		_rooms[id]["warps"] = list
+
+## The room's grid place in the active layout (Vector2i(-1, -1) when it is not on the map).
+func grid_pos(id: String) -> Vector2i:
+	return active.get("pos", {}).get(id, Vector2i(-1, -1))
+
+## Every painted exit of the room ({id: side, at}); old fixed-warp data: its warps.
+func exits(id: String) -> Array:
+	return _rooms[id].get("exits", _rooms[id].get("warps", []))
+
+func exit(id: String, side: String) -> Dictionary:
+	for e in exits(id):
+		if String(e.id) == side: return e
+	return {}
 
 func ids() -> PackedStringArray:
 	var out := PackedStringArray(_rooms.keys())
@@ -46,8 +91,8 @@ func layout(id: String) -> PaintedLayout:
 		d["cell"] = cell
 		if not d.has("spawn"): d["spawn"] = [0, 0]
 		var l := PaintedLayout.from_dict(d)
-		if not _rooms[id].has("spawn") and not room(id).warps.is_empty():
-			l.hero_spawn = _arrival_on(l, room(id).warps[0])
+		if not _rooms[id].has("spawn") and not exits(id).is_empty():
+			l.hero_spawn = _arrival_on(l, exits(id)[0])   # never depends on the session's layout
 		_layouts[id] = l
 	return _layouts[id]
 
@@ -55,7 +100,7 @@ func spawn(id: String) -> Vector2:
 	return layout(id).hero_spawn
 
 func warp(id: String, warp_id: String) -> Dictionary:
-	for w in room(id).warps:
+	for w in room(id).get("warps", []):
 		if String(w.id) == warp_id: return w
 	return {}
 
@@ -63,10 +108,10 @@ func warp_at(id: String, warp_id: String) -> Vector2:
 	var w := warp(id, warp_id)
 	return Vector2(w.at[0], w.at[1])
 
-## Where you stand after coming out of warp_id in room id: ARRIVAL px from it toward the room's
-## middle, moved to the nearest spot a hero-sized body fits.
+## Where you stand after coming out of warp_id (an exit side) in room id: ARRIVAL px from it toward the
+## room's middle, moved to the nearest spot a hero-sized body fits.
 func arrival(id: String, warp_id: String) -> Vector2:
-	return _arrival_on(layout(id), warp(id, warp_id))
+	return _arrival_on(layout(id), exit(id, warp_id))
 
 func _arrival_on(l: PaintedLayout, w: Dictionary) -> Vector2:
 	var at := Vector2(w.at[0], w.at[1])
@@ -87,10 +132,24 @@ func _arrival_on(l: PaintedLayout, w: Dictionary) -> Vector2:
 func validate() -> Array[String]:
 	var errs: Array[String] = []
 	if not has(start): errs.append("start room %s missing" % start)
+	var seen := {start: true}            # every room on the active layout can be walked to from the start
+	var todo := [start]
+	while has(start) and not todo.is_empty():
+		for w in room(todo.pop_back()).get("warps", []):
+			if has(String(w.to)) and not seen.has(String(w.to)):
+				seen[String(w.to)] = true
+				todo.append(String(w.to))
+	for id in active.get("pos", {}):
+		if not seen.has(id): errs.append("%s cannot be reached from %s" % [id, start])
 	for id in ids():
 		var l := layout(id)
 		for e in l.validate(): errs.append("%s: %s" % [id, e])
-		for w in room(id).warps:
+		for e in exits(id):              # any exit may be joined in some session
+			var p := Vector2(e.at[0], e.at[1])
+			if l.blocked_at(p): errs.append("%s exit %s on blocked ground" % [id, e.id])
+			elif not l.reachable(l.hero_spawn, p): errs.append("%s exit %s cannot be walked to" % [id, e.id])
+		for w in room(id).get("warps", []):
+			if exit(id, String(w.id)).is_empty(): errs.append("%s warp %s has no painted exit" % [id, w.id])
 			var at := Vector2(w.at[0], w.at[1])
 			if l.blocked_at(at): errs.append("%s warp %s on blocked ground" % [id, w.id])
 			if not has(String(w.to)) or warp(String(w.to), String(w.to_warp)).is_empty():

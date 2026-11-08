@@ -4,20 +4,21 @@
 Inputs
   assets/map/painted/raw/<id>.png          one PixelLab scene per room; the room's size is its picture's
                                             (512x512 since M4b, 688x384 before)
-  data/rooms_src.json                       hand data: start room, links (room/side pairs), spawns,
-                                            optional warp hints, walk edits, fx, monsters
+  data/rooms_src.json                       hand data: start room, exits (painted path sides) per room,
+                                            spawns, optional exit hints, walk edits, fx, monsters
 Outputs
   data/rooms.json                           what the game reads (see RoomSet)
   assets/map/painted/rooms/overlay_<id>.png leaves hanging over walkable ground, drawn above characters
-  docs/preview/m3c_rooms_debug.png          every room at half size on its grid place: blocked tinted red, warps blue,
-                                            spawn white, monster homes orange
+  docs/preview/m3c_rooms_debug.png          every room at half size on its grid place: blocked tinted red, exit
+                                            points blue, spawn white, monster homes orange
 
 Walkable is guessed from colour (small palette): yellow-greens = grass, light low-saturation greys and
 browns = stone/dirt; blue-greens, teal, purples (canopy, water, trunks, cliffs) block. The 8 px grid is
 then smoothed so edges are not jagged: closing (fills 1-cell blocked notches), opening (drops 1-cell walk
 spurs), then blocked islands under 10 cells become walkable and walkable islands under 8 cells block.
-Warps go on the walkable cell (with room for a hero-sized body) nearest to the middle of their side's edge,
-or to the src "hint" point.
+Every exit side (M4d) gets an exit point: the walkable cell (with room for a hero-sized body) nearest to the
+middle of that side's edge, or to the src "hint" point. Which exits are joined (and so get a warp) is decided
+each game session by RoomLayout (scripts/rules/room_layout.gd); rooms.json holds every exit point.
 
 Usage: python3 tools/painted_rooms.py
 """
@@ -184,12 +185,6 @@ def overlay(rgb: np.ndarray, walk: np.ndarray):
 def main():
     src = json.load(open(f"{ROOT}/data/rooms_src.json"))
     rooms = {}
-    links = {}   # (room, side) -> (room, side)
-    for a, b in src["links"]:
-        ra, sa = a.split(":")
-        rb, sb = b.split(":")
-        links[(ra, sa)] = (rb, sb)
-        links[(rb, sb)] = (ra, sa)
     debug = []
     for rid, rs in src["rooms"].items():
         rgb = np.asarray(Image.open(f"{ROOT}/assets/map/painted/raw/{rid}.png").convert("RGB"))
@@ -209,12 +204,12 @@ def main():
         if main == 0:
             main = int(np.bincount(lab.ravel())[1:].argmax()) + 1
         roomy = lab == main
-        warps = []
-        for (r, side), (to, to_side) in sorted(links.items()):
-            if r != rid: continue
+        exits = []   # M4d: a point for every painted exit; the session's layout decides which become warps
+        for side in sorted(rs.get("exits", [])):
             fx, fy = SIDES[side]
             hint = rs.get("hints", {}).get(side, [fx * size[0], fy * size[1]])
-            warps.append({"id": side, "at": nearest_roomy(roomy, hint), "to": to, "to_warp": to_side})
+            exits.append({"id": side, "at": nearest_roomy(roomy, hint)})
+        warps = exits
         spawn = nearest_roomy(roomy, rs["spawn"]) if "spawn" in rs else None
         arrivals = []
         for wp in warps:
@@ -235,7 +230,7 @@ def main():
                 f"{ROOT}/assets/map/painted/rooms/overlay_{rid}.png")
         room = {"image": f"res://assets/map/painted/raw/{rid}.png", "overlay": ov_file, "size": list(size),
                 "blocked": ["".join("." if v else "#" for v in row) for row in walk],
-                "warps": warps, "fx": rs.get("fx", []), "monsters": monsters}
+                "exits": exits, "fx": rs.get("fx", []), "monsters": monsters}
         if sets: room["monster_sets"] = sets
         if rs.get("name"): room["name"] = rs["name"]       # M4c: exit labels "→ <name>"
         if rs.get("arena"): room["arena"] = True
@@ -251,7 +246,7 @@ def main():
         for wp in warps:
             x, y = wp["at"]
             d.ellipse((x - 14, y - 9, x + 14, y + 9), outline=(80, 160, 255, 255), width=3)
-            d.text((x - 18, y - 24), f"{wp['id']}>{wp['to']}", fill=(255, 255, 255, 255))
+            d.text((x - 18, y - 24), f"{wp['id']}", fill=(255, 255, 255, 255))
         for m in monsters:
             x, y = m["at"]
             d.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(255, 150, 0, 255))
@@ -275,7 +270,7 @@ def main():
     for (gx, gy), im in debug:
         sheet.paste(im.resize((im.width // 2, im.height // 2), Image.NEAREST), ((gx - c0) * tw, (gy - r0) * th))
     sheet.save(f"{ROOT}/docs/preview/m3c_rooms_debug.png")
-    print("rooms %d, links %d" % (len(rooms), len(src["links"])))
+    print("rooms %d, exits %d" % (len(rooms), sum(len(r["exits"]) for r in rooms.values())))
 
 
 if __name__ == "__main__":

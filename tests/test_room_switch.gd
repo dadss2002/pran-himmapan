@@ -1,7 +1,10 @@
 extends RefCounted
 ## Rooms in the real test ground: warps, saving the room, packs and drops per room, colliders.
+## M4d: the session's layout is random; these tests fix its seed (SEED, a layout where c1r1's north, east
+## and west exits are all joined) and read where each warp leads from that layout, never from a fixed map.
 
 const TMP_SAVE := "user://test_rooms_save.json"
+const SEED := 1
 var tree: SceneTree
 
 func setup(t: SceneTree) -> void:
@@ -11,6 +14,7 @@ func _ground(in_tree := true, keep_save := false) -> Node2D:
 	if not keep_save and FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
 	var g = load("res://scenes/test_ground.tscn").instantiate()
 	g.save_path = TMP_SAVE
+	g.layout_seed = SEED
 	if in_tree: tree.root.add_child(g)
 	else: g.build()
 	return g
@@ -31,6 +35,19 @@ func _onto_warp(g: Node2D, warp_id: String) -> void:
 		await tree.physics_frame
 		if g.room_id != from and not g.warping: break
 
+## Where the start room's `side` exit leads in this session's layout ({} = dead end).
+func _dest(g: Node2D, side: String, from := "c1r1") -> Dictionary:
+	return g.rooms.warp(from, side)
+
+func test_seed_joins_every_start_exit():
+	var g := _ground(false)
+	var r := ""
+	for side in ["north", "east", "west"]:
+		if _dest(g, side).is_empty(): r = "seed %d leaves c1r1 %s a dead end; pick another SEED" % [SEED, side]
+	if r == "" and g.rooms.active.get("fallback", true): r = "seed %d fell back to the fixed layout" % SEED
+	await _done(g)
+	return r
+
 func test_starts_in_start_room():
 	var g := _ground(false)
 	var r := "" if g.room_id == "c1r1" and g.hero.position == g.rooms.spawn("c1r1") else "room %s at %s" % [g.room_id, g.hero.position]
@@ -40,19 +57,21 @@ func test_starts_in_start_room():
 func test_warp_moves_to_paired_room():
 	var g := _ground()
 	await tree.physics_frame
+	var w := _dest(g, "west")
 	await _onto_warp(g, "west")
 	var r := ""
-	if g.room_id != "c0r1": r = "in %s after the west warp" % g.room_id
-	elif g.hero.global_position != g.rooms.arrival("c0r1", "east"): r = "hero at %s, want %s" % [g.hero.global_position, g.rooms.arrival("c0r1", "east")]
+	if g.room_id != String(w.to): r = "in %s after the west warp (layout says %s)" % [g.room_id, w.to]
+	elif g.hero.global_position != g.rooms.arrival(w.to, w.to_warp): r = "hero at %s, want %s" % [g.hero.global_position, g.rooms.arrival(w.to, w.to_warp)]
 	await _done(g)
 	return r
 
 func test_no_bounce():
 	var g := _ground()
 	await tree.physics_frame
+	var to := String(_dest(g, "west").to)
 	await _onto_warp(g, "west")
 	for i in 60: await tree.physics_frame
-	var r := "" if g.room_id == "c0r1" else "bounced to %s" % g.room_id
+	var r := "" if g.room_id == to else "bounced to %s" % g.room_id
 	await _done(g)
 	return r
 
@@ -66,13 +85,20 @@ func test_bag_and_level_kept():
 	await _done(g)
 	return r
 
-func test_save_remembers_room():
+## M4d: the save still records the room, but the map is new every session, so the next session always
+## starts in c1r1 at its spawn (spec "What stays and what changes").
+func test_saved_room_not_used_next_session():
 	var g := _ground()
 	await tree.physics_frame
+	var to := String(_dest(g, "west").to)
 	await _onto_warp(g, "west")
 	await _done(g)
+	var st := SaveGame.load_or_new(TMP_SAVE)
 	var g2 := _ground(false, true)
-	var r := "" if g2.room_id == "c0r1" else "loaded into %s" % g2.room_id
+	var r := ""
+	if String(st.get("room", "")) != to: r = "save holds room %s, want %s" % [st.get("room", ""), to]
+	elif g2.room_id != "c1r1": r = "loaded into %s" % g2.room_id
+	elif g2.hero.position != g2.rooms.spawn("c1r1"): r = "hero at %s, not the c1r1 spawn" % g2.hero.position
 	await _done(g2)
 	return r
 
@@ -160,7 +186,7 @@ func test_no_warp_while_paused():
 	for i in 90:
 		await tree.physics_frame
 		if g.room_id != "c1r1" and not g.warping: break
-	if r == "" and g.room_id != "c0r1": r = "did not warp after closing the bag (in %s)" % g.room_id
+	if r == "" and g.room_id != String(_dest(g, "west").to): r = "did not warp after closing the bag (in %s)" % g.room_id
 	await _done(g)
 	return r
 
@@ -172,6 +198,7 @@ func test_roll_into_warp():
 	var h: Hero = g.hero
 	for p in g.packs: p.process_mode = Node.PROCESS_MODE_DISABLED
 	var wp: Vector2 = g.rooms.warp_at("c1r1", "east")
+	var to := String(_dest(g, "east").to)
 	h.global_position = wp + Vector2(-30, 0)
 	h.reset_physics_interpolation()
 	await tree.physics_frame
@@ -180,7 +207,7 @@ func test_roll_into_warp():
 	var frozen_at := Vector2.INF
 	for i in 120:
 		await tree.physics_frame
-		if g.room_id == "c2r1" and not g.warping: break
+		if g.room_id == to and not g.warping: break
 		if g.warping and g.room_id == "c1r1":
 			if frozen_at == Vector2.INF:
 				frozen_at = h.global_position
@@ -190,7 +217,7 @@ func test_roll_into_warp():
 				elif String(h.body.animation).begins_with("walk"): r = "walk animation plays while frozen (%s)" % h.body.animation
 			elif r == "" and h.global_position != frozen_at: r = "hero moved %s -> %s during the fade" % [frozen_at, h.global_position]
 	if r == "" and frozen_at == Vector2.INF: r = "no fade seen (warped at once?)"
-	elif r == "" and g.room_id != "c2r1": r = "rolled into the warp but stayed in %s" % g.room_id
+	elif r == "" and g.room_id != to: r = "rolled into the warp but stayed in %s" % g.room_id
 	elif r == "" and h.state == "roll": r = "still rolling after arrival"
 	elif r == "" and h.warping: r = "hero still marked warping after arrival"
 	elif r == "" and not h.is_physics_processing(): r = "hero physics not back on after arrival"
@@ -240,7 +267,7 @@ func test_no_hits_during_fade():
 			frames += 1
 		if g.room_id == "c1r0": r = "trial %d: never left c1r0" % trial
 		elif dmg[0] > 0: r = "trial %d: hero took %d damage during the fade" % [trial, dmg[0]]
-		elif h.global_position != g.rooms.arrival(g.room_id, "north"): r = "trial %d: hero at %s, not the arrival point (knocked back?)" % [trial, h.global_position]
+		elif h.global_position != g.rooms.arrival(g.room_id, String(g.rooms.warp("c1r0", "south").to_warp)): r = "trial %d: hero at %s, not the arrival point (knocked back?)" % [trial, h.global_position]
 		elif h.state == "hurt": r = "trial %d: hurt pose carried into the new room" % trial
 		elif h._flash > 0.0: r = "trial %d: red flash carried into the new room" % trial
 		await _done(g)
@@ -285,7 +312,7 @@ func test_panels_ignored_mid_fade():
 			await tree.physics_frame
 			if g.room_id != "c1r1" and not g.warping: break
 		await tree.create_timer(0.4).timeout
-		if g.room_id != "c0r1": r = "did not arrive (in %s)" % g.room_id
+		if g.room_id != String(_dest(g, "west").to): r = "did not arrive (in %s)" % g.room_id
 		elif g.fade.color.a > 0.01: r = "screen left dark (alpha %.2f)" % g.fade.color.a
 		else:
 			g.hud.open_bag()
@@ -308,7 +335,7 @@ func test_fade_runs_while_paused():
 	var r := "" if g.warping else "no fade started"
 	tree.paused = true
 	await tree.create_timer(0.8, true).timeout
-	if r == "" and g.room_id != "c0r1": r = "fade stopped while paused (in %s)" % g.room_id
+	if r == "" and g.room_id != String(_dest(g, "west").to): r = "fade stopped while paused (in %s)" % g.room_id
 	elif r == "" and g.fade.color.a > 0.01: r = "screen left dark while paused (alpha %.2f)" % g.fade.color.a
 	tree.paused = false
 	await _done(g)
@@ -352,16 +379,24 @@ func test_double_trigger_warps_once():
 		g.warp_through(w)
 	h.global_position = g.rooms.warp_at("c1r1", "east")
 	for i in 60: await tree.physics_frame
-	if r == "" and changes != ["c0r1"]: r = "room changes %s, want [c0r1]" % [changes]
+	var want := [String(_dest(g, "west").to)]
+	if r == "" and changes != want: r = "room changes %s, want %s" % [changes, want]
 	await _done(g)
 	return r
 
-## The way into the arena (e0) has the red label with the drawn skull.
+## The way into the arena (e0) has the red label with the drawn skull: in whichever room e0 hangs off
+## this session (M4d), and in no other exit.
 func test_arena_label_has_skull():
 	var g := _ground()
 	await tree.physics_frame
-	g.go_to("c2r0", "", false)
-	var r := "no east exit in c2r0"
+	var gate := ""
+	for k in g.rooms.active.links:
+		if k[2] == "e0": gate = k[0]
+	if gate == "":
+		await _done(g)
+		return "e0 not joined in the layout"
+	g.go_to(gate, "", false)
+	var r := "no east exit in %s" % gate
 	for w in g.warps:
 		if w.warp_id == "east":
 			if not w.label.has_node("Skull"): r = "arena label has no skull"
@@ -444,7 +479,7 @@ func test_warp_fades_out_then_in():
 		await tree.physics_frame
 		waited += 1
 	var dt := (Time.get_ticks_msec() - t0) / 1000.0
-	if r == "" and g.room_id != "c2r1": r = "never warped (in %s)" % g.room_id
+	if r == "" and g.room_id != String(_dest(g, "east").to): r = "never warped (in %s)" % g.room_id
 	elif r == "" and (dt < 0.2 or dt > 0.5): r = "room changed after %.2f s (want ~0.25)" % dt
 	elif r == "" and g.fade.color.a < 0.9: r = "screen not dark at the swap (alpha %.2f)" % g.fade.color.a
 	if r == "":
@@ -479,7 +514,7 @@ func test_exit_label_near_ring():
 		h.global_position = north + Vector2(0, 40)
 		for i in 3: await tree.process_frame
 		if not lab.visible: r = "label hidden 40 px away"
-		elif not lab.has_node("Text") or lab.get_node("Text").text != "→ ลานเสาหิน": r = "label text wrong"
+		elif not lab.has_node("Text") or lab.get_node("Text").text != "→ " + String(g.rooms.room(String(_dest(g, "north").to)).name): r = "label text wrong (%s)" % lab.get_node("Text").text
 	if r == "":
 		var w0 = g.warps[0]
 		g.go_to("c1r0", "south", false)
