@@ -21,6 +21,10 @@ extends RefCounted
 
 const PATH := "res://data/piles_bank.json"
 const SIZE := 64                  # ⚙ follow-up 3: placements per room and e0 set
+## Bump VERSION whenever MonsterPiles or RoomSet placement logic changes (anything a placement depends on that
+## the input hash below does not already cover: the order of tries, how a spot is drawn or scored, how arrivals
+## or open ground are worked out), then rebake (BAKE): the old bank no longer loads and every room places live
+## until it is rebaked, so a logic change can never leave the game picking placements made by the old rules.
 const VERSION := 1
 const BAKE := "godot --headless --script tools/bake_piles.gd"
 
@@ -41,9 +45,13 @@ static func reload() -> void:
 	_data = null
 	_said.clear()
 
-## The level-free, session-free room inputs a placement depends on (from rooms.json's room dict), as text.
-static func room_text(raw: Dictionary, cell: int) -> String:
-	return JSON.stringify({"size": raw.get("size"), "blocked": raw.get("blocked"), "exits": raw.get("exits", []),
+## The level-free, session-free room inputs a placement depends on, as text: from rooms.json's room dict the
+## blocked grid, spawn and near_arrival_ok; the picture size and exits as RoomSet resolves them (`size` =
+## RoomSet.room_size(id), the size RoomSet.layout(id) gets, the global one for a room without its own;
+## `exits` = RoomSet.exits(id), an old room's fixed warps when it has no exits), so the hash follows what the
+## placement actually used.
+static func room_text(raw: Dictionary, cell: int, size: Vector2, exits: Array) -> String:
+	return JSON.stringify({"size": [size.x, size.y], "blocked": raw.get("blocked"), "exits": exits,
 		"spawn": raw.get("spawn"), "near_arrival_ok": bool(raw.get("near_arrival_ok", false)), "cell": cell}, "", true)
 
 ## The input hash of one room (room_text) with one group list.

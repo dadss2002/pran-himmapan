@@ -128,7 +128,10 @@ func _check(rooms: RoomSet, id: String, groups: Array, piles: Array, seed: int) 
 		var g: Dictionary = groups[int(p.group)]
 		if p.kind != String(g.kind) or int(p.level) != int(g.level): return "%s pile %s Lv%d from group %s Lv%d" % [id, p.kind, p.level, g.kind, g.level]
 		if p.points.size() != int(p.count): return "%s pile of %d has %d points" % [id, p.count, p.points.size()]
-	if MonsterPiles.fell_back(piles): return ""   # counted by the 200-seed test
+		# a boss is never moved: it stands on its group's `at` (fallback included)
+		if p.boss and p.home != Vector2(g.at[0], g.at[1]): return "%s boss %s at %s, its group's at is %s" % [id, p.kind, p.home, g.at]
+	# fallbacks are counted by test_live_20_seeds_fallbacks (live) and refused by test_bank_entries_follow_the_rules
+	if MonsterPiles.fell_back(piles): return ""
 	# about half of each kind stands in piles (piled_for), the rest are singles; singles are piles of 1
 	var kind_n := {}
 	var kind_piled := {}
@@ -155,6 +158,8 @@ func _check(rooms: RoomSet, id: String, groups: Array, piles: Array, seed: int) 
 			for a in arrivals:
 				if (q as Vector2).distance_to(a) < floor: return "%s %s point %s is %.1f px from arrival %s (min %d)" % [id, p.kind, q, (q as Vector2).distance_to(a), a, floor]
 		if p.single and p.points != [p.home]: return "%s single %s: points %s, home %s" % [id, p.kind, p.points, p.home]
+		if p.boss and p.points != MonsterPiles.ring_points(p.home, int(p.count), MonsterPiles.pile_radius(String(p.kind), int(p.count)), 0.0):
+			return "%s boss %s: points %s are not its ring at home %s" % [id, p.kind, p.points, p.home]
 		var bw := MonsterPiles.body_width(String(p.kind))
 		for a in p.points.size():
 			for b in range(a + 1, p.points.size()):
@@ -162,8 +167,9 @@ func _check(rooms: RoomSet, id: String, groups: Array, piles: Array, seed: int) 
 				if d < 2.0 * bw - 0.001: return "%s %s pile: points %.1f px apart (min 2 x %.1f)" % [id, p.kind, d, bw]
 	return _spacing(id, piles)
 
-## Spacing between piles and singles: pile centres >= 80 px apart; a single >= 60 px from every other single
-## and from every pile's centre and every member spawn point (follow-up 2: "วัด 60 px จากทุกตัวในกอง").
+## Spacing between piles and singles: pile centres >= 80 px apart (bosses' homes included); a single >= 60 px
+## from every other single and from every pile's centre and every member spawn point (follow-up 2: "วัด 60 px
+## จากทุกตัวในกอง"; a boss's points included) and >= 80 px from a boss's home (MonsterPiles: a boss stands apart).
 func _spacing(id: String, piles: Array) -> String:
 	for i in piles.size():
 		var p: Dictionary = piles[i]
@@ -175,6 +181,7 @@ func _spacing(id: String, piles: Array) -> String:
 			elif p.single or q.single:
 				var one: Dictionary = p if p.single else q
 				var pile: Dictionary = q if p.single else p
+				if pile.boss and d2 < 80.0: return "%s single %s only %.1f px from boss %s home %s (min 80)" % [id, one.home, d2, pile.kind, pile.home]
 				for m in [pile.home] + pile.points:
 					var d3: float = one.home.distance_to(m)
 					if d3 < 60.0: return "%s single %s only %.1f px from %s %s %s (min 60 from every member)" % [id, one.home, d3, pile.kind, "pile centre" if m == pile.home else "pile member", m]
@@ -314,7 +321,50 @@ func test_boss_not_piled():
 		if MonsterPiles.fell_back(piles): continue
 		for p in piles:
 			if not p.boss and p.home.distance_to(Vector2(400, 300)) < 80.0: return "seed %d: a %s pile %.1f px from the boss" % [s, p.kind, p.home.distance_to(Vector2(400, 300))]
+		var e := _check(rooms, "e0", groups, piles, MonsterPiles.room_seed(s, "e0"))
+		if e != "": return "seed %d: %s" % [s, e]
 	return r
+
+## The boss rules of _check / _spacing on hand-made placements: a single 70 px from a boss's home (60 px from
+## every point, but under 80) is caught, 85 px passes; a pile centre 70 px from it is caught; a boss moved off
+## its group's `at` (or its ring turned) is caught in a real e0 placement.
+func test_boss_rules_checked():
+	var boss := {"kind": "kongkoi", "level": 10, "count": 1, "group": 0, "single": false, "boss": true,
+		"home": Vector2(200, 200), "points": [Vector2(200, 200)]}
+	var near := {"kind": "boar", "count": 1, "single": true, "boss": false, "home": Vector2(270, 200), "points": [Vector2(270, 200)]}
+	if _spacing("t", [boss, near]) == "": return "a single 70 px from a boss home passed"
+	if _spacing("t", [near, boss]) == "": return "a single 70 px from a boss home passed (single listed first)"
+	var far := {"kind": "boar", "count": 1, "single": true, "boss": false, "home": Vector2(285, 200), "points": [Vector2(285, 200)]}
+	if _spacing("t", [boss, far]) != "": return "a single 85 px from a boss home failed: %s" % _spacing("t", [boss, far])
+	var pile := {"kind": "boar", "count": 2, "single": false, "boss": false, "home": Vector2(270, 200),
+		"points": [Vector2(270, 180), Vector2(270, 220)]}
+	if _spacing("t", [boss, pile]) == "": return "a pile centre 70 px from a boss home passed"
+	var rooms := RoomSet.open()
+	var groups: Array = rooms.room("e0").monster_sets[1].duplicate(true)
+	groups.append({"kind": "kongkoi", "level": 10, "count": 1, "at": [400, 300], "boss": true})
+	for s in 20:
+		var piles := _piles(rooms, "e0", groups, s)
+		if MonsterPiles.fell_back(piles): continue
+		var seed := MonsterPiles.room_seed(s, "e0")
+		if _check(rooms, "e0", groups, piles, seed) != "": return "test setup: seed %d placement fails: %s" % [s, _check(rooms, "e0", groups, piles, seed)]
+		var moved := piles.duplicate(true)
+		for p in moved:
+			if p.boss:
+				p.home = Vector2(408, 300)
+				p.points = [Vector2(408, 300)]
+		var em := _check(rooms, "e0", groups, moved, seed)
+		if not em.contains("its group's at"): return "a boss moved 8 px off its at: %s" % (em if em != "" else "passed")
+		var big: Array = groups.duplicate(true)
+		big[big.size() - 1].count = 2
+		var two := piles.duplicate(true)
+		for p in two:
+			if p.boss:
+				p.count = 2
+				p.points = MonsterPiles.ring_points(p.home, 2, MonsterPiles.pile_radius("kongkoi", 2), 1.0)
+		var er := _check(rooms, "e0", big, two, seed)
+		if not er.contains("not its ring"): return "a boss ring turned off its home ring: %s" % (er if er != "" else "passed")
+		return ""
+	return "no e0 placement with a boss in 20 seeds"
 
 ## In-pile spacing is measured with each kind's body width (collision box at the 0.85 scale).
 func test_body_widths_from_collision():
@@ -466,6 +516,20 @@ func test_bank_hash_follows_the_inputs():
 		edits[k].call(d)
 		rs._rooms[id] = d
 		if rs.pile_hash(id, groups) == base: return "a %s change kept the hash" % k
+	# the size as RoomSet resolves it: a room without its own size uses the global one (same hash when equal)
+	var rs2 := RoomSet.open()
+	var d2: Dictionary = rs2._rooms[id].duplicate(true)
+	var own := Vector2(d2.size[0], d2.size[1])
+	d2.erase("size")
+	rs2._rooms[id] = d2
+	rs2.size = own
+	if rs2.pile_hash(id, groups) != base: return "a room on the global size of its own size changed the hash"
+	var rs3 := RoomSet.open()
+	var d3: Dictionary = rs3._rooms[id].duplicate(true)
+	d3.erase("size")
+	rs3._rooms[id] = d3
+	rs3.size = own + Vector2(8, 0)
+	if rs3.pile_hash(id, groups) == base: return "a room on a different global size kept the hash"
 	var g_edits := {
 		"count": func(g): g[0].count = int(g[0].count) + 1,
 		"kind": func(g): g[0].kind = "viper" if String(g[0].kind) != "viper" else "boar",

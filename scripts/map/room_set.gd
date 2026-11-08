@@ -93,6 +93,12 @@ func has(id: String) -> bool:
 func room(id: String) -> Dictionary:
 	return _rooms[id]
 
+## The room's picture size as its layout uses it: its own "size", or the global one (pre-M4b data). Read
+## without building the layout (the bank hash needs it on the fast path).
+func room_size(id: String) -> Vector2:
+	var s = _rooms[id].get("size")
+	return Vector2(s[0], s[1]) if s != null else size
+
 func layout(id: String) -> PaintedLayout:
 	if not _layouts.has(id):
 		var d: Dictionary = _rooms[id].duplicate()
@@ -164,7 +170,7 @@ func piles(id: String, groups: Array, seed: int) -> Array:
 
 ## The bank input hash of room id with these groups (PileBank.input_hash).
 func pile_hash(id: String, groups: Array) -> String:
-	if not _pile_texts.has(id): _pile_texts[id] = PileBank.room_text(_rooms[id], cell)
+	if not _pile_texts.has(id): _pile_texts[id] = PileBank.room_text(_rooms[id], cell, room_size(id), exits(id))
 	return PileBank.input_hash(_pile_texts[id], bool(_rooms[id].get("near_arrival_ok", false)), groups)
 
 ## Every problem with the rooms; empty means playable.

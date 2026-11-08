@@ -36,8 +36,9 @@ const FADE_IN := 0.25
 const CALM := 1.0                # the new room's monsters ignore the hero this long after arrival
 ## M4d follow-up 3 (owner): the fade-in always plays its full FADE_IN. A slow room build makes the next frame's
 ## delta long, and a tween stepped by it would clear the screen at once; so the fade-in tween waits (paused)
-## for the first frame after go_to shorter than FADE_GATE, or at most FADE_GATE_FRAMES frames (a device that is
-## slow every frame still sees the room).
+## for the first frame after go_to shorter than FADE_GATE. It stays paused through at most FADE_GATE_FRAMES
+## slower frames after go_to's own frame and starts on the next one whatever its delta (a device that is slow
+## every frame still sees the room: the fade-in starts on frame FADE_GATE_FRAMES + 1 after go_to's).
 const FADE_GATE := 0.05
 const FADE_GATE_FRAMES := 3
 var _fade_gate: FadeGate
@@ -279,8 +280,8 @@ func warp_through(w: Warp) -> void:
 	_fade_tween.tween_callback(func(): go_to(to_room, to_warp))
 
 ## Follow-up 3: each frame while the fade-in waits: start it on the first frame after go_to's own frame whose
-## delta is under FADE_GATE (tweens are stepped later in that same frame by that delta), or after
-## FADE_GATE_FRAMES slower frames.
+## delta is under FADE_GATE (tweens are stepped later in that same frame by that delta); after FADE_GATE_FRAMES
+## slower frames have been skipped (_fade_waited counts them) the next frame starts it whatever its delta.
 func _on_fade_gate(delta: float) -> void:
 	if _fade_tween == null or not _fade_tween.is_valid():
 		_fade_gate.set_process(false)
