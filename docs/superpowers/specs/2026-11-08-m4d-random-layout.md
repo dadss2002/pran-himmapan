@@ -1,6 +1,6 @@
 # M4d — Random Diablo-style room layout every time the game starts
 
-Status: **draft for the owner**. Owner 2026-11-08: "อยากได้ผังแบบ diablo" → "ผังห้องเชื่อมกันหลายทาง มีทางวน ไม่เป็นทางตันเยอะ, พื้นที่เดินกว้าง ทางเดินคดเคี้ยวเหมือน Diablo, สุ่มผังห้องใหม่ทุกครั้งเข้าเกม"; "อยากได้ห้องอีก 3 ห้อง" (all three 4-way crossroads); "ห้องเริ่ม c1r1 อยู่กลางเสมอ, ลาน e0 อยู่ไกลสุดเสมอ"; "อยากให้มีแมพบอสแค่ห้องเดียว ในแมพที่เหลือไว้สุ่ม".
+Status: **approved by the owner 2026-11-08** ("อนุมัติ"). Owner 2026-11-08: "อยากได้ผังแบบ diablo" → "ผังห้องเชื่อมกันหลายทาง มีทางวน ไม่เป็นทางตันเยอะ, พื้นที่เดินกว้าง ทางเดินคดเคี้ยวเหมือน Diablo, สุ่มผังห้องใหม่ทุกครั้งเข้าเกม"; "อยากได้ห้องอีก 3 ห้อง" (all three 4-way crossroads); "ห้องเริ่ม c1r1 อยู่กลางเสมอ, ลาน e0 อยู่ไกลสุดเสมอ"; "อยากให้มีแมพบอสแค่ห้องเดียว ในแมพที่เหลือไว้สุ่ม".
 
 ## Rooms and their painted exits
 Each picture has paths that reach the middle of some sides. Those sides are the room's **exits**; the layout may only join two rooms where both have an exit facing each other.
