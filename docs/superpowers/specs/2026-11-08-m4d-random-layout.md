@@ -61,3 +61,20 @@ Owner: "ตามระยะจากห้องเริ่มในผัง
 - e0 monster level = level of the room the hero came from + 1, max Lv11 (an arena-only level). The set (kinds and counts) is still chosen by addendum 2's rule ("มอนใน e0 เลเวล = ห้องก่อนหน้า +1 (สูงสุด Lv11) ใช้ชนิดตามชุดที่เลือก").
 - x1 may also place groups closer to the entrances (approved "อนุมัติ"), same ≥ 48 px floor as x2, measured for every spawn point, not only the home.
 - iPhone: "เต็มจอ" shows a tip "กดแชร์ → เพิ่มไปยังหน้าจอโฮม" instead of doing nothing.
+
+## Addendum 4 (2026-11-08, owner-approved: monster piles + smaller monsters)
+Owner: "แก้เรื่องมอนกระจุกแบบนี้ด้วย สุ่มกองแบบ 2-4 ตัว และลดขนาดมอนเตอร์ทั้งหมดให้หน่อยสัก 15%". Answers: "จำนวนเท่าเดิม แต่แตกเป็นกองเล็กหลายกอง"; "สุ่มใหม่ทุกครั้งที่รีเซ็ต บนพื้นที่เดินได้ กองห่างกันอย่างน้อย 80 px"; "ห่างกันอย่างน้อย 1 ตัว + ตอนไล่ตีดันกันเบา ๆ ไม่ให้ซ้อน"; "ภาพ + จุดชน/ระยะโจมตีตามสัดส่วน".
+
+**Piles**
+- Every room keeps its kinds, counts and levels (addenda 1–3). Each group is split into piles of one kind, ⚙ 2–4 monsters each, sizes chosen at random (a group of 1 stays 1; 5 → 2+3; 6 → 2+4, 3+3 or 2+2+2). Bosses are never piled.
+- Pile positions are random at every re-roll (new game, waypoint travel; Task 4) from a seed made of the session layout seed and the room id, so the same session shows the same piles. Walking out and back does not move them.
+- Each pile's whole spawn ring is on open (walkable) ground; ⚙ pile centres ≥ 80 px apart; every spawn point keeps the existing arrival rules (aggro + 12 from arrivals; x1/x2 ≥ 48 px, addenda 2–3). If no placement passes after a fixed number of tries, the room falls back to the built homes from rooms.json and the game keeps running.
+- e0: boss stays at its home; any non-boss group in the set follows the pile rule.
+
+**Spacing inside a pile**
+- ⚙ Spawn points in a pile are at least 2 × body width apart centre to centre (a gap of one monster between two monsters).
+- While chasing/fighting, monsters push each other apart gently when their centres are closer than ⚙ 1 body width: separation speed ⚙ ≤ 40 px/s, never through walls, never pushing the hero.
+
+**Size ×0.85 (all monsters, bosses included)**
+- ⚙ Sprite drawn at 0.85 scale, collision/hurt box at 0.85, and body-centred attack reach at 0.85 (melee bite/hit ranges, lunge hit radius, ring/cloud radii centred on the monster), with HP bar, elite tag and shadow following the smaller body.
+- Unchanged: aggro, leash, wander, movement speeds, lunge distance, projectile/throw range, damage and all stat numbers.
