@@ -9,7 +9,8 @@ static func new_state() -> Dictionary:
 	var inv := Inventory.new()
 	inv.add("potion_hp", int(Balance.num("potion.start_hp")))
 	inv.add("potion_mp", int(Balance.num("potion.start_mp")))
-	return {"version": VERSION, "level": 1, "exp": 0, "inventory": inv.to_dict(), "equipped": start_equipped(), "skills": {}}
+	return {"version": VERSION, "level": 1, "exp": 0, "inventory": inv.to_dict(), "equipped": start_equipped(), "skills": {},
+		"waypoints": []}
 
 ## Starting kit: ธนูไม้ไผ่ + ชุดพรานฝึกหัด (balance.json "start_gear"), ring/necklace empty.
 static func start_equipped() -> Dictionary:
@@ -142,6 +143,14 @@ static func load_or_new(path := PATH) -> Dictionary:
 		sk[String(id)] = []
 		for g in d.skills[id]: sk[String(id)].append(clean_gem(g) if g != null else null)
 	d.skills = sk
+	# Task 5: unlocked waypoint stones (room ids). Older saves have none (the start stone is always unlocked:
+	# Waypoints.load_save); anything but strings is dropped instead of failing the whole save.
+	var wps: Array = []
+	var saved_wps = d.get("waypoints", [])
+	if typeof(saved_wps) == TYPE_ARRAY:
+		for id in saved_wps:
+			if typeof(id) == TYPE_STRING and not wps.has(id): wps.append(id)
+	d["waypoints"] = wps
 	d.version = VERSION
 	d.level = clampi(int(d.level), 1, Progression.cap())
 	d.exp = 0 if d.level >= Progression.cap() else clampi(int(d.exp), 0, Progression.exp_to_next(d.level) - 1)

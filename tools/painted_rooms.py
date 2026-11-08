@@ -33,6 +33,11 @@ from scipy import ndimage
 
 ROOT = "."
 CELL = 8
+# M4c §2 waypoints (Task 5): the stone's footprint, from its base point [x, y] (bottom middle): [x-16, x+16) x
+# [y-16, y) is blocked; the hero lands on the open cell nearest [x, y+20] (RoomSet.WAYPOINT_* in the game)
+WAYPOINT_HALF_W = 16
+WAYPOINT_H = 16
+WAYPOINT_LAND = 20
 OVERHANG_UP = 48
 OVERHANG_SIDE = 12
 SIDES = {"north": (0.5, 0.0), "south": (0.5, 1.0), "west": (0.0, 0.5), "east": (1.0, 0.5)}
@@ -250,7 +255,12 @@ def main():
         walk_file = Path(f"{ROOT}/assets/map/painted/raw/{rid}_walk.png")
         over_file = Path(f"{ROOT}/assets/map/painted/raw/{rid}_over.png")
         walk_px = np.asarray(Image.open(walk_file).convert("L")) > 127 if walk_file.exists() else None
-        walk = walk_grid(rgb, rs.get("edits", []), walk_px)
+        edits = list(rs.get("edits", []))
+        stone = rs.get("waypoint")
+        if stone:   # the stone blocks its footprint (the hero walks around it)
+            edits.append({"op": "block", "rect": [stone[0] - WAYPOINT_HALF_W, stone[1] - WAYPOINT_H,
+                                                  2 * WAYPOINT_HALF_W, WAYPOINT_H]})
+        walk = walk_grid(rgb, edits, walk_px)
         roomy = roomy_mask(walk)
         # warps and spawn only on the main open area (the spawn's, else the largest), never in a pocket
         lab, n = ndimage.label(roomy)
@@ -276,11 +286,16 @@ def main():
             arrivals.append(nearest_roomy(roomy, [ax + dx / ln * ARRIVAL, ay + dy / ln * ARRIVAL]))
         if "spawn" in rs:
             arrivals.append(nearest_roomy(roomy, rs["spawn"]))   # the hero's start point counts too
+        if stone:   # so does the landing next to the waypoint stone (waypoint travel arrives there)
+            arrivals.append(nearest_roomy(roomy, [stone[0], stone[1] + WAYPOINT_LAND]))
         near_ok = bool(rs.get("near_arrival_ok"))
         monsters, homes = place_monsters(rs.get("monsters", []), roomy, arrivals, near_ok)
         # e0 (M4b): the arena sets in level order; each set is placed on its own like "monsters"
         sets = [place_monsters(ms, roomy, arrivals, near_ok)[0] for ms in rs.get("monster_sets", [])]
         over = np.asarray(Image.open(over_file).convert("L")) > 127 if over_file.exists() else overlay(rgb, walk)
+        if stone:   # the stone's blocked footprint is no leaf overhang (it would draw over the stone's base)
+            over = over.copy()
+            over[stone[1] - WAYPOINT_H:stone[1], stone[0] - WAYPOINT_HALF_W:stone[0] + WAYPOINT_HALF_W] = False
         ov_file = None
         if over.any():
             ov_file = f"res://assets/map/painted/rooms/overlay_{rid}.png"
@@ -291,6 +306,7 @@ def main():
                 "exits": exits, "fx": rs.get("fx", []), "monsters": monsters}
         if sets: room["monster_sets"] = sets
         if rs.get("name"): room["name"] = rs["name"]       # M4c: exit labels "→ <name>"
+        if stone: room["waypoint"] = list(stone)                    # M4c §2: the waypoint stone's base point
         if rs.get("arena"): room["arena"] = True
         # M4d addendum 2/3: groups may sit closer to the arrivals than their aggro (calm 1 s on arrival),
         # but no spawn point nearer than NEAR_ARRIVAL_MIN (place_monsters; tests/test_monsters.gd)
@@ -311,6 +327,10 @@ def main():
         for m in monsters:
             x, y = m["at"]
             d.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(255, 150, 0, 255))
+        if stone:
+            d.rectangle((stone[0] - WAYPOINT_HALF_W, stone[1] - WAYPOINT_H, stone[0] + WAYPOINT_HALF_W - 1,
+                         stone[1] - 1),
+                        outline=(120, 220, 255, 255), width=2)
         if spawn:
             d.ellipse((spawn[0] - 5, spawn[1] - 5, spawn[0] + 5, spawn[1] + 5), fill=(255, 255, 255, 255))
         d.text((6, 6), rid, fill=(255, 255, 255, 255))

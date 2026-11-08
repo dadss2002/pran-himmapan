@@ -1,7 +1,10 @@
 class_name WolfPack
 extends Node2D
 ## A pack of ghost wolves sharing aggro and a single lunge token; respawns its dead after
-## wolf.respawn seconds. The pack node sits at the world origin; wolves use world positions.
+## wolf.respawn seconds when `respawns` (a pack on its own). The pack node sits at the world origin; wolves use
+## world positions. M4c addendum (owner 2026-11-08, "ตายแล้วตายเลย จนกว่าจะใช้หินวาปหรือเข้าเกมใหม่"): the
+## room's packs (test_ground) have respawns = false: the dead stay dead until a waypoint re-roll or a new game,
+## which build the room afresh.
 ## M4d addendum 4: a room group's pack may hold several piles (MonsterPiles.place; a single is a pile of 1):
 ## `piles` gives each its home and spawn points; a monster's home is its pile's centre, it spawns and respawns
 ## on its own point, and seeing or being hit wakes only its pile (owner: "ปลุกแค่กองที่โดน/เห็น"). Each pile has
@@ -25,6 +28,7 @@ var calm := 0.0                 # seconds the group ignores the hero (the room f
 var _unreachable := {}  # pile -> where the hero was when no route reached him: that pile does not re-aggro there
 var _lungers := {}      # pile -> the one monster of that pile allowed to lunge now
 var _respawn := {}      # Wolf -> seconds left
+var respawns := true    # false: the dead never come back in this pack (room packs, M4c addendum)
 
 func _ready() -> void:
 	if wolves.is_empty():
@@ -80,7 +84,7 @@ func mark_unreachable(w: Wolf, at: Vector2) -> void:
 	_unreachable[w.pile] = at
 
 func _on_wolf_died(w: Wolf) -> void:
-	_respawn[w] = Balance.num("wolf.respawn")
+	if respawns: _respawn[w] = Balance.num("wolf.respawn")
 
 ## Task 4 (RoomReset): each monster's kept_state() in spawn order, a dead one with its respawn seconds left.
 func snapshot() -> Array:
@@ -101,7 +105,7 @@ func restore(kept: Array) -> void:
 	for i in wolves.size():
 		var w: Wolf = wolves[i]
 		w.restore_kept(kept[i])
-		if not w.is_alive(): _respawn[w] = float(kept[i].get("respawn", Balance.num("wolf.respawn")))
+		if not w.is_alive() and respawns: _respawn[w] = float(kept[i].get("respawn", Balance.num("wolf.respawn")))
 
 func tick(delta: float) -> void:
 	calm = maxf(0.0, calm - delta)

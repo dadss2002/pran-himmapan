@@ -50,9 +50,13 @@ static func reload() -> void:
 ## RoomSet.room_size(id), the size RoomSet.layout(id) gets, the global one for a room without its own;
 ## `exits` = RoomSet.exits(id), an old room's fixed warps when it has no exits), so the hash follows what the
 ## placement actually used.
+## Task 5: a room with a waypoint stone also has "waypoint" (its landing is an arrival); rooms without one hash
+## as before.
 static func room_text(raw: Dictionary, cell: int, size: Vector2, exits: Array) -> String:
-	return JSON.stringify({"size": [size.x, size.y], "blocked": raw.get("blocked"), "exits": exits,
-		"spawn": raw.get("spawn"), "near_arrival_ok": bool(raw.get("near_arrival_ok", false)), "cell": cell}, "", true)
+	var d := {"size": [size.x, size.y], "blocked": raw.get("blocked"), "exits": exits,
+		"spawn": raw.get("spawn"), "near_arrival_ok": bool(raw.get("near_arrival_ok", false)), "cell": cell}
+	if raw.get("waypoint") != null: d["waypoint"] = raw.get("waypoint")
+	return JSON.stringify(d, "", true)
 
 ## The input hash of one room (room_text) with one group list.
 static func input_hash(room_txt: String, near_ok: bool, groups: Array) -> String:

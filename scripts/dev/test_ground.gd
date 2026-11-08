@@ -37,6 +37,14 @@ var _room_roll := -1              # reset.roll when the current room was built (
 ## re-roll), with the hero's level and the room he came from at that entry.
 var arena_set := -1
 var warps: Array = []
+## Task 5 (M4c §2): the waypoint stones. `waypoints` holds which are unlocked (saved); `stone` is the current
+## room's stone node (null in a room without one). Touching a stone unlocks it; standing on an unlocked one opens
+## the HUD travel list while _stone_armed: arriving by waypoint (you land on the stone) or closing the list with
+## its button disarms it until the hero steps off the stone, so the list does not pop up again at once.
+var waypoints: Waypoints
+var stone: WaypointStone
+var _stone_armed := true
+const WAYPOINT_ARRIVAL := "@waypoint"     # go_to(id, WAYPOINT_ARRIVAL): land next to the room's stone
 var cam: Camera2D
 var fade: ColorRect
 const FADE_OUT := 0.25           # M4c §1 approved: screen goes dark, then the new room
@@ -130,6 +138,8 @@ func build() -> void:
 	hero.set_skill_gems(state.get("skills", {}))
 	hero.set_progress(int(state.level), int(state.exp))
 	hero.inventory.from_dict(state.inventory)
+	waypoints = Waypoints.from_rooms(rooms, state.get("waypoints"))   # Task 5: c1r1's stone is always unlocked
+	waypoints.traveller = travel_to_waypoint
 	hero.gear_changed.connect(func(): save_now())
 	hero.gems_changed.connect(func(): save_now())
 	hero.leveled_up.connect(func(_l): save_now())
@@ -150,6 +160,8 @@ func build() -> void:
 	add_child(hud)
 	if hud.hp_label == null: hud.build()
 	hud.bind(hero)
+	hud.waypoint_list.chosen.connect(func(id): waypoints.travel(id))
+	hud.waypoint_list.closed.connect(func(): _stone_armed = false)
 	var fade_layer := CanvasLayer.new()
 	fade_layer.layer = 50
 	add_child(fade_layer)
@@ -193,6 +205,9 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 			w.free()
 	warps.clear()
 	if forest and is_instance_valid(forest): forest.free()
+	if stone and is_instance_valid(stone): stone.free()
+	stone = null
+	if hud: hud.close_waypoints()
 	var from_id := room_id
 	room_id = id
 	layout = rooms.layout(id)
@@ -208,7 +223,9 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	cam.limit_bottom = int(sz.y)
 	_fit_camera()
 	hero.spawn_point = rooms.spawn(id)
-	hero.position = rooms.arrival(id, via_warp) if via_warp != "" else hero.spawn_point   # World sits at the origin
+	if via_warp == WAYPOINT_ARRIVAL: hero.position = rooms.waypoint_landing(id)   # Task 5: in front of the stone
+	else: hero.position = rooms.arrival(id, via_warp) if via_warp != "" else hero.spawn_point   # World sits at the origin
+	_stone_armed = via_warp != WAYPOINT_ARRIVAL
 	hero.velocity = Vector2.ZERO
 	if hero.is_inside_tree():
 		hero.reset_physics_interpolation()   # M3k: a warp is a jump; the camera rides on the hero
@@ -221,6 +238,10 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		overlay.add_child(n.make_label())
 		n.place_label(sz)
 		warps.append(n)
+	var wp := rooms.waypoint(id)
+	if wp != Vector2.INF:
+		stone = WaypointStone.make(id, wp, waypoints != null and waypoints.is_unlocked(id))
+		world.add_child(stone)
 	if not _navs.has(id): _navs[id] = layout.make_nav()
 	# Task 4: a room left since the last re-roll comes back as it was (its groups, piles and monsters);
 	# otherwise its groups (groups_for) stand on this roll's piles
@@ -259,10 +280,22 @@ func groups_for(id: String, from_id: String) -> Array:
 	if levels.has(id): groups = RoomLevels.groups(groups, int(levels[id]))
 	var sets: Array = rooms.room(id).get("monster_sets", [])
 	if not sets.is_empty():
-		if arena_set < 0: choose_arena_set(from_id)
+		var prev := arena_from(from_id) if id == RoomLayout.BOSS else from_id
+		if arena_set < 0: choose_arena_set(prev)
 		# addendum 3: the set's kinds and counts at the previous room's level + 1 (max Lv11)
-		groups = RoomLevels.arena_groups(sets[clampi(arena_set, 0, sets.size() - 1)], int(levels.get(from_id, 0)))
+		groups = RoomLevels.arena_groups(sets[clampi(arena_set, 0, sets.size() - 1)], int(levels.get(prev, 0)))
 	return groups
+
+## Review fix: the room e0's set and levels follow (addenda 2-3, "the room the hero came from"): from_id when it
+## is joined to e0 in this session's layout, else the room behind e0's exit (entering e0 from e0 itself, e.g. a
+## reload of the room, or from a room not next to it), never e0's own (it has no layout level).
+func arena_from(from_id: String) -> String:
+	if not rooms.has(RoomLayout.BOSS): return from_id
+	var behind := ""
+	for w in rooms.room(RoomLayout.BOSS).get("warps", []):
+		if String(w.to) == from_id: return from_id
+		if behind == "": behind = String(w.to)
+	return behind if behind != "" else from_id
 
 ## Task 4: the room being left is kept by RoomReset (its groups, piles and each monster's state), unless a
 ## re-roll came after it was built (then it spawns fresh from the new roll next time).
@@ -300,9 +333,22 @@ func choose_arena_set(from_id: String) -> void:
 ## stands still and cannot be hurt; the old room's monsters and their shots stop while it is dark.
 func warp_through(w: Warp) -> void:
 	if warping: return
+	_trip(w.to_room, w.to_warp)
+
+## Task 5: a tap on the travel list (Waypoints.travel): Task 4's re-roll (every room spawns fresh, the room being
+## left too), the warp gong, the same fade as an exit, and the hero lands next to room id's stone (go_to with
+## WAYPOINT_ARRIVAL) with the arrival calm. The room the hero stands in may be chosen too: that resets it.
+func travel_to_waypoint(id: String) -> void:
+	if warping or not rooms.has(id) or rooms.waypoint(id) == Vector2.INF: return
+	if hud: hud.close_waypoints()
+	reroll()
+	_trip(id, WAYPOINT_ARRIVAL)
+
+## The fade out to room to_room (coming out of to_warp there), shared by exits and waypoints.
+func _trip(to_room: String, to_warp: String) -> void:
 	Sfx.play("warp")
 	if not is_inside_tree():
-		go_to(w.to_room, w.to_warp)
+		go_to(to_room, to_warp)
 		return
 	warping = true
 	_hero_was_on = hero.is_physics_processing()
@@ -311,10 +357,46 @@ func warp_through(w: Warp) -> void:
 	for p in packs:                      # the old room stops: no bite, lunge or spit lands mid-fade
 		p.calm = maxf(p.calm, FADE_OUT + 0.1)
 		p.set_deferred("process_mode", Node.PROCESS_MODE_DISABLED)   # safe mid physics tick
-	var to_room := w.to_room
-	var to_warp := w.to_warp
 	_new_fade().tween_property(fade, "color:a", 1.0, FADE_OUT)
 	_fade_tween.tween_callback(func(): go_to(to_room, to_warp))
+
+## Task 5, every physics frame: feet within Waypoints.RADIUS of the stone unlock it the first time (toast
+## "ปลดล็อกจุดวาป" with its notify sound, saved at once); while they stay there, alive and not mid-fade, the travel
+## list is open (the unlocked stones) unless disarmed (_stone_armed); stepping off closes it and re-arms.
+func step_waypoint() -> void:
+	if stone == null or not is_instance_valid(stone) or hero == null: return
+	var on := hero.state != "dead" and not warping and Waypoints.touching(stone.position, hero.global_position)
+	if on and waypoints.unlock(room_id):
+		stone.set_unlocked(true)
+		if hud: hud.show_toast("ปลดล็อกจุดวาป")
+		save_now()
+	if not on: _stone_armed = true
+	if hud == null: return
+	var want: bool = on and _stone_armed and waypoints.is_unlocked(room_id)
+	if want and not hud.waypoints_open():
+		if cam and cam.is_inside_tree(): _set_waypoint_avoid()
+		hud.open_waypoints(waypoint_entries(), room_id)
+	elif not want and hud.waypoints_open(): hud.close_waypoints()
+
+## The travel list's rows: the unlocked stones in list order with their rooms' Thai names.
+func waypoint_entries() -> Array:
+	var out: Array = []
+	for id in waypoints.list():
+		if rooms.has(id): out.append({"id": id, "name": String(rooms.room(id).get("name", id))})
+	return out
+
+## The hero's body on screen (HUD px), for keeping labels and the travel list off him.
+func hero_screen_rect() -> Rect2:
+	return Rect2(world_to_screen(hero.global_position + HERO_BOX.position), HERO_BOX.size * _scale)
+
+## The drawn stone on screen (HUD px; empty without one): the travel list keeps clear of it when it can.
+func stone_screen_rect() -> Rect2:
+	if stone == null or not is_instance_valid(stone): return Rect2()
+	return Rect2(world_to_screen(stone.position + WaypointStone.ART_BOX.position), WaypointStone.ART_BOX.size * _scale)
+
+func _set_waypoint_avoid() -> void:
+	hud.waypoint_avoid = hero_screen_rect()
+	hud.waypoint_avoid_stone = stone_screen_rect()
 
 ## Follow-up 3: each frame while the fade-in waits: start it on the first frame after go_to's own frame whose
 ## delta is under FADE_GATE (tweens are stepped later in that same frame by that delta); after FADE_GATE_FRAMES
@@ -364,6 +446,7 @@ func _view_origin() -> Vector2:
 
 func _add_group(m: Dictionary, nav: AStarGrid2D) -> void:
 	var pack := WolfPack.new()
+	pack.respawns = false               # spec addendum (owner 2026-11-08): the dead stay dead until a re-roll / new game
 	pack.kind = String(m.get("kind", "wolf"))
 	pack.blocked = layout.blocked_at
 	pack.level = int(m.level)
@@ -390,7 +473,8 @@ func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_fx("hit_spark", w.hurt_point())
 
 func save_now() -> bool:
-	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.skill_gems, "room": room_id, "seed": session_seed}, save_path)
+	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.skill_gems, "room": room_id, "seed": session_seed,
+		"waypoints": waypoints.to_save() if waypoints else []}, save_path)
 
 func tick_autosave(delta: float) -> void:
 	_autosave_t += delta
@@ -449,6 +533,7 @@ func _physics_process(delta: float) -> void:
 			if is_instance_valid(w) and w.step(hero.global_position):
 				warp_through(w)          # at once: a bite later in this physics frame must not land
 				break
+	step_waypoint()
 	_bag_full_cd = maxf(0.0, _bag_full_cd - delta)
 	for d in drops.duplicate():
 		if not is_instance_valid(d) or d.expired:
@@ -470,6 +555,9 @@ func _text(at: Vector2, t: String, c: Color) -> void:
 func _process(delta: float) -> void:
 	if overlay and cam and cam.is_inside_tree():
 		overlay.transform = Transform2D(0.0, Vector2(_scale, _scale), 0.0, -_view_origin() * _scale)
+	if hero and hud and hud.waypoints_open() and cam and cam.is_inside_tree():
+		_set_waypoint_avoid()
+		hud.place_waypoints()
 	if hero:
 		for w in warps:
 			if is_instance_valid(w) and w.label:

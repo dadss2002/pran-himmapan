@@ -11,6 +11,12 @@ const PATH := "res://data/rooms.json"
 const ARRIVAL := 40.0         # how far into the room from the paired warp you appear
 const WARP_RADIUS := 14.0
 const REARM := 22.0
+## M4c §2 waypoints (Task 5): a room's "waypoint" is the stone's base point (bottom middle). Its footprint
+## [x - WAYPOINT_HALF_W, x + WAYPOINT_HALF_W) x [y - WAYPOINT_H, y) is blocked in the walk grid (tools/painted_rooms.py
+## uses the same numbers); waypoint travel lands on the open cell nearest WAYPOINT_LAND px below the base point.
+const WAYPOINT_HALF_W := 16
+const WAYPOINT_H := 16
+const WAYPOINT_LAND := 20.0
 
 var start := ""
 var size := Vector2.ZERO      # fallback for rooms without their own "size" (M4b: each room has one)
@@ -147,14 +153,50 @@ static func arrival_on(l: PaintedLayout, w: Dictionary) -> Vector2:
 				best = p
 	return best
 
+## Task 5: the rooms with a waypoint stone, sorted by id.
+func waypoint_ids() -> Array[String]:
+	var out: Array[String] = []
+	for id in ids():
+		if _rooms[id].get("waypoint") != null: out.append(id)
+	return out
+
+## Task 5: the room's waypoint stone base point (bottom middle of its footprint); Vector2.INF when it has none.
+func waypoint(id: String) -> Vector2:
+	var w = _rooms[id].get("waypoint") if _rooms.has(id) else null
+	return Vector2(float(w[0]), float(w[1])) if w != null else Vector2.INF
+
+## Task 5: the stone's blocked footprint (room px).
+func waypoint_rect(id: String) -> Rect2:
+	var w := waypoint(id)
+	return Rect2(w.x - WAYPOINT_HALF_W, w.y - WAYPOINT_H, 2 * WAYPOINT_HALF_W, WAYPOINT_H)
+
+## Task 5: where waypoint travel puts the hero in room id: the open cell (a hero-sized body fits) nearest
+## WAYPOINT_LAND px below the stone's base point, i.e. in front of the stone.
+func waypoint_landing(id: String) -> Vector2:
+	var l := layout(id)
+	var want := waypoint(id) + Vector2(0, WAYPOINT_LAND)
+	var best := want
+	var best_d := INF
+	for y in l.rows:
+		for x in l.cols:
+			if not l.roomy(x, y): continue
+			var p := Vector2(x + 0.5, y + 0.5) * l.cell
+			var dd := p.distance_squared_to(want)
+			if dd < best_d:
+				best_d = dd
+				best = p
+	return best
+
 ## M4d addendum 4: room data for MonsterPiles.place(): its layout, every painted exit's arrival plus the
-## room's own spawn (as tools/painted_rooms.py), and the main open ground; worked out once per room.
+## room's own spawn (as tools/painted_rooms.py) and (Task 5) the landing next to its waypoint stone, and the
+## main open ground; worked out once per room.
 func pile_room(id: String) -> Dictionary:
 	if not _pile_rooms.has(id):
 		var l := layout(id)
 		var arrivals: Array = []
 		for e in exits(id): arrivals.append(arrival(id, String(e.id)))
 		if _rooms[id].has("spawn"): arrivals.append(l.hero_spawn)
+		if _rooms[id].get("waypoint") != null: arrivals.append(waypoint_landing(id))
 		_pile_rooms[id] = MonsterPiles.prepare(_rooms[id], l, arrivals)
 		_pile_rooms[id]["id"] = id
 	return _pile_rooms[id]

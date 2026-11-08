@@ -61,6 +61,9 @@ func test_arena_set_chosen_once_per_session():
 			if first.size() != 2 or not first.has("kongkoi") or not first.has("macaque"): r = "Lv3 hero from c2r2 got %s (want the w3 set)" % first.keys()
 			elif again != first: r = "set changed on the second entry: %s then %s" % [first.keys(), again.keys()]
 		else:
+			# review fix: e0 counts the room it is joined to, so hang it on c1r1 for this check
+			g.rooms.use_layout({"pos": {"c1r1": Vector2i(1, 1), "e0": Vector2i(2, 1)},
+				"links": [["c1r1", "east", "e0", "west"]], "fallback": false})
 			g.hero.set_progress(1, 0)        # new game: chosen again; from c1r1 (Lv1) -> target 1 -> the w1 set
 			g.go_to("e0", "west", false)
 			var got: Dictionary = kinds.call(g)

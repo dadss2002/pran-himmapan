@@ -40,6 +40,11 @@ var volume_slider: HSlider
 var volume_label: Label                  # "80%" beside the slider, follows it live (owner 2026-11-08)
 var settings_grid: GridContainer
 var minimap_box: PanelContainer
+## Task 5: the waypoint travel list (WaypointList), opened by the test ground while the hero stands on an unlocked
+## stone; placed by place_waypoints() clear of the HUD, the touch controls and the hero (waypoint_avoid).
+var waypoint_list: WaypointList
+var waypoint_avoid := Rect2()            # the hero's screen rect (HUD px), set by the test ground every frame
+var waypoint_avoid_stone := Rect2()      # his stone's (kept clear when the screen allows; the hero comes first)
 var toast: Label
 var _toast_tween: Tween
 const TOAST_TIME := 1.5
@@ -117,6 +122,9 @@ func layout(size: Vector2) -> void:
 	exp_bar.position = Vector2(0, size.y - 4)
 	exp_bar.size.x = size.x
 	exp_bar.custom_minimum_size.x = size.x
+	if waypoint_list:                    # Task 5: last, so it sees the toast and the panels where they now are
+		waypoint_list.fit_columns(ScreenFit.is_portrait(size))
+		if waypoint_list.visible: place_waypoints(true)
 
 func build() -> void:
 	layer = 10
@@ -307,6 +315,11 @@ func build() -> void:
 	set_sound(bool(settings.sound), false)
 	set_volume(int(settings.volume), false)
 
+	# --- Task 5: the waypoint travel list (under the toast, which may appear while it is open)
+	waypoint_list = WaypointList.new()
+	waypoint_list.build()
+	root.add_child(waypoint_list)
+
 	# --- short notes under the top-right block ("เร็ว ๆ นี้" for the map until Task 8)
 	toast = _label("", 9, Color("#f3e9d2"))
 	toast.name = "Toast"
@@ -347,6 +360,8 @@ func build() -> void:
 	buttons.build_default()
 	touch_ui.add_child(buttons)
 	touch_ui.visible = show_touch()
+	joystick.ignore_at = func(p: Vector2) -> bool:
+		return waypoint_list.visible and waypoint_list.get_global_rect().grow(WaypointList.MARGIN).has_point(p)
 	bag_panel = BagPanel.new()
 	bag_panel.build()
 	add_child(bag_panel)
@@ -361,10 +376,11 @@ func safe_rect() -> Rect2:
 
 ## M4c: screen rects (HUD px) that world text must stay clear of: the status panel, the FPS line, the
 ## top-right block (gold, buttons, minimap), the EXP bar, and on touch screens every touch button with
-## its note under it and the joystick's resting ring.
-func blocked_rects() -> Array:
+## its note under it and the joystick's resting ring; Task 5: the open waypoint list too (except when
+## placing the list itself: with_list = false).
+func blocked_rects(with_list := true) -> Array:
 	var out := []
-	for c in [status_panel, fps_button, exp_bar, settings_panel, toast]:
+	for c in [status_panel, fps_button, exp_bar, settings_panel, toast, waypoint_list if with_list else null]:
 		if c and c.is_visible_in_tree(): out.append(c.get_global_rect())
 	if top_right and top_right.is_visible_in_tree():
 		for c in top_right.get_children():
@@ -393,11 +409,49 @@ func bind(h: Hero) -> void:
 ## Opens the skill · gem screen (touch input lets go first, like the bag).
 func open_skills() -> void:
 	if hero == null or hero.warping or skill_panel.is_open() or bag_panel.is_open(): return   # M4c: not mid-fade
+	close_waypoints()                    # Task 5: it opens again after if the hero still stands on the stone
 	joystick.release_all()
 	buttons.release_all()
 	hero.external_input = Vector2.ZERO
 	skill_panel.open(hero)
 	Sfx.play("ui_open")
+
+## Task 5: opens the waypoint travel list (entries [{id, name}], the unlocked stones; here = the hero's room) with
+## the menu-open sound. Not while the bag or the skill screen is open, nor mid-fade.
+func open_waypoints(entries: Array, here: String) -> void:
+	if bag_panel.is_open() or skill_panel.is_open() or (hero and hero.warping): return
+	waypoint_list.open(entries, here)
+	waypoint_list.fit_columns(ScreenFit.is_portrait(get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360)))
+	place_waypoints(true)
+	Sfx.play("ui_open")
+
+func close_waypoints() -> void:
+	if waypoint_list: waypoint_list.close()
+
+func waypoints_open() -> bool:
+	return waypoint_list != null and waypoint_list.is_open()
+
+## Task 5: puts the open list where it fits (WaypointList.spot): inside safe_rect(), clear of blocked_rects() and
+## of the hero (waypoint_avoid) and, where the screen allows, his stone (waypoint_avoid_stone), as near the
+## screen's middle as it can. It stays where it is while that spot still
+## fits (no jumping about while the hero shuffles on the stone) unless `again`.
+func place_waypoints(again := false) -> void:
+	if not waypoints_open(): return
+	var sz := waypoint_list.get_combined_minimum_size()
+	waypoint_list.size = sz
+	var blocked := blocked_rects(false)
+	if top_right and top_right.is_visible_in_tree(): blocked.append(top_right.get_global_rect())   # whole block, gaps too
+	var grown: Array = []
+	for r in blocked: grown.append((r as Rect2).grow(WaypointList.MARGIN))
+	var here := Rect2(waypoint_list.position, sz)
+	var hero_r := waypoint_avoid.grow(WaypointList.MARGIN) if waypoint_avoid.size != Vector2.ZERO else Rect2()
+	if not again and safe_rect().encloses(here) and WaypointList.fits(here, grown) \
+			and (hero_r.size == Vector2.ZERO or not here.intersects(hero_r)):
+		return
+	var v := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360)
+	var at := WaypointList.spot(sz, safe_rect(), blocked, [waypoint_avoid, waypoint_avoid_stone], v / 2.0)
+	if at == Vector2.INF: at = (v - sz) / 2.0       # cannot happen on the supported screens (tests); centred
+	waypoint_list.position = at
 
 ## The map button: the full map comes with Task 8; until then a short "เร็ว ๆ นี้" note.
 func open_map() -> void:
@@ -478,6 +532,7 @@ func _on_node_added(n: Node) -> void:
 ## Opens the bag; held touch buttons and the joystick let go first so nothing stays pressed.
 func open_bag() -> void:
 	if hero == null or hero.warping or bag_panel.is_open() or skill_panel.is_open(): return
+	close_waypoints()                    # Task 5: it opens again after if the hero still stands on the stone
 	joystick.release_all()
 	buttons.release_all()
 	hero.external_input = Vector2.ZERO

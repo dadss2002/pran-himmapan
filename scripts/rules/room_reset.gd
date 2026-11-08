@@ -2,7 +2,8 @@ class_name RoomReset
 extends RefCounted
 ## Task 4 (M4c §1, owner: "สุ่มใหม่เมื่อใช้ Waypoint หรือเข้าเกมใหม่เท่านั้น"): monsters re-roll only on waypoint
 ## travel or a new game. Walking between rooms keeps every room as the hero left it: dead monsters stay dead
-## (their respawn time paused while he is away), living ones stand where they were. Pure rules, no scene.
+## (M4c addendum: room monsters never respawn in place, so a cleared room stays empty until a re-roll or a new
+## game), living ones stand where they were. Pure rules, no scene.
 ##
 ## What a kept room holds (keep): the groups it was built from (kinds, counts, levels: e0's set and arena level
 ## stay as they were), its piles (MonsterPiles / PileBank shape), and per group one list of each monster's

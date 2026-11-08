@@ -144,7 +144,8 @@ func _ground(seed: int) -> Node2D:
 	return g
 
 ## A real session spawns every pack with its room's layout level (+1 kept); e0 spawns its chosen set
-## (M4d addendum 2) at the previous room's level + 1, max 11 (addendum 3): here from the farthest room, Lv11.
+## (M4d addendum 2) at the previous room's level + 1, max 11 (addendum 3). Review fix: e0 is put in here straight
+## from the farthest forest room, which need not be the room behind e0's exit; the room behind its exit counts.
 func test_session_spawns_layout_levels():
 	for s in [1, 3, 58]:
 		var g := _ground(s)
@@ -161,11 +162,12 @@ func test_session_spawns_layout_levels():
 		for id in ["c1r1", near, farthest, "e0"]:
 			g.go_to(id, "", false)
 			var src: Array = g.rooms.room(id).get("monsters", [])
-			# addendum 2: a new Lv1 hero coming from the farthest forest room (Lv10) -> target 10 -> w3 set
-			if id == "e0": src = g.rooms.room(id).monster_sets[3]
+			# addendum 2: a new Lv1 hero; the room behind e0's exit sets the target and the level (+1, max 11)
+			var behind_lv := int(g.rooms.room_levels()[String(g.rooms.room("e0").warps[0].to)])
+			if id == "e0": src = g.rooms.room(id).monster_sets[RoomLevels.arena_set(g.rooms.room(id).monster_sets, 1, behind_lv)]
 			if g.packs.size() != src.size(): r = "seed %d %s: %d packs (want %d)" % [s, id, g.packs.size(), src.size()]
 			for i in mini(g.packs.size(), src.size()):
-				var want := 11                   # addendum 3: from the farthest forest room (Lv10) + 1
+				var want := RoomLevels.arena_level(behind_lv)   # addendum 3: the room behind e0 + 1
 				if id != "e0":
 					var room_lv := _want(int(dist[id]), far)
 					want = mini(room_lv + (1 if int(src[i].level) == int(src[0].level) + 1 else 0), 10)
@@ -224,11 +226,12 @@ func test_arena_level_previous_room_plus_one():
 					return "from Lv%d: group %d changed kind/count/home" % [from_lv, i]
 	return ""
 
-## Addendum 3 in a real session: e0 from a Lv10 room spawns Lv11, from a Lv6 room Lv7; the set is still
-## chosen by addendum 2's rule (kinds unchanged).
+## Addendum 3 in a real session: e0 entered from the Lv10 room behind its exit (seed 7: c2r2) spawns Lv11; the
+## set is still chosen by addendum 2's rule (kinds unchanged). (A Lv6 room is not next to e0; entering from one is
+## test_e0_from_itself_or_a_far_room.)
 func test_session_arena_level_from_previous_room():
 	var r := ""
-	for c in [[10, 11], [6, 7]]:
+	for c in [[10, 11]]:
 		var g := _ground(7)
 		var levels: Dictionary = g.rooms.room_levels()
 		var from := ""
@@ -238,6 +241,10 @@ func test_session_arena_level_from_previous_room():
 			g.free()
 			return "seed 7 has no Lv%d room" % c[0]
 		g.hero.set_progress(1, 0)
+		from = String(g.rooms.room("e0").warps[0].to)
+		if int(levels[from]) != c[0]:
+			g.free()
+			return "test setup: the room behind e0 (%s) is Lv%d, not %d" % [from, levels[from], c[0]]
 		g.go_to(from, "", false)
 		g.go_to("e0", "west", false)
 		var sets: Array = g.rooms.room("e0").monster_sets
@@ -253,6 +260,39 @@ func test_session_arena_level_from_previous_room():
 		g.free()
 		if r != "": return r
 	return ""
+
+## Review fix: e0 entered from e0 itself (go_to while in it) or straight from a room that is not next to it (here
+## Lv6 and Lv1 rooms; walking in can only come from the room behind its exit) takes its set and levels from the
+## room behind its exit, never from e0 (which has no layout level: it used to drop to the sets' own levels) nor from
+## the far room.
+func test_e0_from_itself_or_a_far_room():
+	var g := _ground(7)
+	var levels: Dictionary = g.rooms.room_levels()
+	var sets: Array = g.rooms.room("e0").monster_sets
+	var behind := String(g.rooms.room("e0").warps[0].to)
+	var want_lv := RoomLevels.arena_level(int(levels[behind]))
+	var want_set := RoomLevels.arena_set(sets, 1, int(levels[behind]))
+	var r := ""
+	if g.arena_from("e0") != behind: r = "arena_from(e0) = %s (want %s)" % [g.arena_from("e0"), behind]
+	elif g.arena_from(behind) != behind: r = "arena_from(the room behind) = %s" % g.arena_from(behind)
+	g.hero.set_progress(1, 0)
+	var far6 := ""
+	for id in levels:
+		if int(levels[id]) == 6 and id != behind: far6 = id
+	if r == "" and far6 == "": r = "seed 7 has no Lv6 room"
+	for from in [far6, "c1r1", "e0"]:
+		if r != "": break
+		g.reroll(900)                          # e0's set is chosen again on the next entry
+		if from != "e0": g.go_to(from, "", false)
+		else: g.go_to("e0", "west", false)     # in e0 already: enter it again from itself
+		if from == "e0": g.reroll(901)
+		g.go_to("e0", "west", false)
+		if g.arena_set != want_set: r = "from %s: set %d (want %d, by the room behind e0)" % [from, g.arena_set, want_set]
+		for p in g.packs:
+			for w in p.wolves:
+				if r == "" and w.level != want_lv: r = "from %s: a %s is Lv%d (want %d from %s)" % [from, p.kind, w.level, want_lv, behind]
+	g.free()
+	return r
 
 ## Addendum 3 check: the monster, EXP and loot numbers accept Lv11 (linear formulas, no level tables).
 ## Ring/necklace drops take the source level clamped to option_ref_level (10): a Lv11 monster drops a Lv10

@@ -495,7 +495,7 @@ func test_bank_pick_is_the_entry_and_fast():
 	return r
 
 ## Follow-up 3: the input hash follows what a placement depends on: picture size, blocked grid, exits, spawn,
-## near_arrival_ok, the groups' kind / count / home / boss; not the groups' levels or the session's warps.
+## near_arrival_ok, the waypoint stone (Task 5), the groups' kind / count / home / boss; not the groups' levels or the session's warps.
 func test_bank_hash_follows_the_inputs():
 	var rooms := RoomSet.open()
 	var id := "c1r1"
@@ -509,7 +509,8 @@ func test_bank_hash_follows_the_inputs():
 		"exits": func(d): d.exits[0].at = [float(d.exits[0].at[0]) + 8.0, d.exits[0].at[1]],
 		"size": func(d): d.size = [520, 512],
 		"spawn": func(d): d.spawn = [float(d.spawn[0]) + 8.0, d.spawn[1]],
-		"near_arrival_ok": func(d): d.near_arrival_ok = true}
+		"near_arrival_ok": func(d): d.near_arrival_ok = true,
+		"waypoint": func(d): d.waypoint = [float(d.waypoint[0]) + 8.0, d.waypoint[1]]}   # Task 5: its landing is an arrival
 	for k in edits:
 		var rs := RoomSet.open()
 		var d: Dictionary = rs._rooms[id].duplicate(true)
@@ -712,8 +713,9 @@ func test_seen_or_hit_wakes_only_that_pile():
 func _groups(g: Node2D, id: String) -> Array:
 	return RoomLevels.groups(g.rooms.room(id).monsters, int(g.rooms.room_levels()[id]))
 
-## A killed monster comes back after wolf.respawn on its own spawn point (the point MonsterPiles gave it), on
-## the room's open ground, wherever it died.
+## M4c addendum (owner 2026-11-08): a killed room monster stays dead (no in-room respawn, long past the old
+## wolf.respawn). A revive (Wolf.revive, used by packs that do respawn) puts it on its own spawn point (the point
+## MonsterPiles gave it), on the room's open ground, wherever it died.
 func test_revived_monster_back_on_its_spawn_point():
 	var g := _ground()
 	var r := ""
@@ -733,7 +735,13 @@ func test_revived_monster_back_on_its_spawn_point():
 			w.health.take_hit(999999, false)
 			if w.is_alive(): r = "a %s did not die" % p.kind
 			n += 1
-	for p in g.packs: p.tick(Balance.num("wolf.respawn") + 0.1)
+	for p in g.packs: p.tick(Balance.num("wolf.respawn") * 4.0)
+	for p in g.packs:
+		if p.respawns: r = "a room %s pack respawns" % p.kind
+		for w in p.wolves:
+			if r == "" and w.is_alive(): r = "a %s came back in the room (the dead stay dead)" % p.kind
+	for p in g.packs:
+		for w in p.wolves: w.revive()
 	for p in g.packs:
 		for w in p.wolves:
 			if r != "": break

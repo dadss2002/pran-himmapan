@@ -1,7 +1,8 @@
 extends RefCounted
 ## Task 4 RoomReset (docs/superpowers/specs/2026-11-07-m4c-farm-links-fog-minimap.md §1; m4d addenda 2-4 and
 ## follow-up 3): monsters re-roll only on a new game or waypoint travel (test_ground.reroll()). Walking out of a
-## room and back keeps it: dead monsters stay dead (respawn time paused while away, no second EXP), living ones
+## room and back keeps it: dead monsters stay dead (M4c addendum: room monsters never respawn in place; only a
+## re-roll or a new game brings them back; no second EXP), living ones
 ## where they stood with their elite mark (HP full again, a busy one walks home). A re-roll takes a new pile seed,
 ## forgets every kept room, re-chooses e0's set (addendum 2) on its next entry, and every room's piles come from
 ## the baked bank with the new seed and pass the piles test's _check; e0 levels stay prev + 1, max Lv11.
@@ -44,6 +45,12 @@ func _spots(g: Node2D) -> Array:
 	for w in _all(g): out.append(w.position)
 	return out
 
+## A hand-made layout with e0 hung on c1r1's east exit: e0's "previous room" is then c1r1 (Lv1), so the set rule
+## can be seen choosing by the hero's level (in a generated layout e0 hangs off a far room, Lv10 or so).
+func _e0_next_to_c1r1(g: Node2D) -> void:
+	g.rooms.use_layout({"pos": {"c1r1": Vector2i(1, 1), "e0": Vector2i(2, 1)},
+		"links": [["c1r1", "east", "e0", "west"]], "fallback": false})
+
 ## A room next to `id` in the session layout (its first warp's room).
 func _next_to(g: Node2D, id: String) -> String:
 	return String(g.rooms.room(id).warps[0].to)
@@ -71,8 +78,8 @@ func test_room_reset_rules():
 	if s < 0 or s > 0x7fffffff: return "new_seed %d out of 31 bits" % s
 	return ""
 
-## Walking out and back: the killed stay dead (unseen, no EXP again, respawn time going on from where it
-## stopped), the living stand where they were (a chasing one walks home), elite marks kept, HP full; the piles
+## Walking out and back: the killed stay dead (unseen, no EXP again; M4c addendum: they stay dead however long
+## the hero waits, until a re-roll brings the room back fresh), the living stand where they were (a chasing one walks home), elite marks kept, HP full; the piles
 ## (homes, spawn points) unchanged.
 func test_out_and_back_keeps_dead_and_positions():
 	var g := _ground()
@@ -87,7 +94,7 @@ func test_out_and_back_keeps_dead_and_positions():
 	if r == "" and dead.size() < 2: r = "first pack of %s has %d monsters" % [id, pack.wolves.size()]
 	if r == "":
 		for w in dead: _kill(w)
-		pack.tick(3.0)                          # 3 s of the respawn time pass in the room
+		pack.tick(3.0)                          # 3 s pass in the room
 	var moved: Wolf = ws[ws.size() - 1]
 	var hurt: Wolf = ws[ws.size() - 2]
 	var elite: Wolf = ws[ws.size() - 3]
@@ -123,17 +130,20 @@ func test_out_and_back_keeps_dead_and_positions():
 		elif i == ws.size() - 1 and w.state != "return": r = "the chasing monster came back %s (want return)" % w.state
 		elif i != ws.size() - 1 and w.state != "idle": r = "monster %d came back %s" % [i, w.state]
 	if r == "" and back[ws.size() - 1].position != moved_to: r = "the moved monster is at %s (want %s)" % [back[ws.size() - 1].position, moved_to]
-	# the dead come back after the 6 s left of wolf.respawn (9), on their own spawn points
+	# M4c addendum (owner 2026-11-08): the dead stay dead in the room, long past the old 9 s respawn
 	var p2: WolfPack = g.packs[0]
 	if r == "":
-		p2.tick(Balance.num("wolf.respawn") - 3.0 - 0.1)
-		if p2.wolves[0].is_alive() or p2.wolves[1].is_alive(): r = "the killed revived before their respawn time ran out"
-	if r == "":
-		p2.tick(0.2)
+		p2.tick(Balance.num("wolf.respawn") * 4.0)
 		for i in 2:
-			var w: Wolf = p2.wolves[i]
-			if not w.is_alive(): r = "killed monster %d did not revive after its respawn time" % i
-			elif w.position != w.spawn_at: r = "revived monster %d at %s (spawn %s)" % [i, w.position, w.spawn_at]
+			if p2.wolves[i].is_alive(): r = "killed monster %d revived in the room (the dead stay dead until a re-roll)" % i
+	# ... until a re-roll (waypoint trip): the room comes back fresh, everyone alive
+	if r == "":
+		g.reroll(4242)
+		g.go_to(id, "", false)
+		var fresh := _all(g)
+		if fresh.size() != ws.size(): r = "after the re-roll %d monsters (want %d)" % [fresh.size(), ws.size()]
+		for w in fresh:
+			if r == "" and not w.is_alive(): r = "a monster still dead after the re-roll"
 	_free(g)
 	_clean()
 	return r
@@ -180,6 +190,7 @@ func test_reroll_new_piles_and_clears_state():
 ## re-roll. Here the hero comes from c1r1 (Lv1): at Lv1 set 0 (w1); at Lv10, after the re-roll, set 3 (w3).
 func test_reroll_rechooses_e0_set():
 	var g := _ground()
+	_e0_next_to_c1r1(g)
 	var sets: Array = g.rooms.room("e0").monster_sets
 	var from_lv := int(g.rooms.room_levels()["c1r1"])
 	g.hero.set_progress(1, 0)
@@ -240,8 +251,9 @@ func test_rerolled_piles_pass_check():
 	_clean()
 	return r
 
-## Addendum 3 after a re-roll: e0 monsters at the previous room's level + 1, max Lv11 (from a Lv10 room Lv11,
-## from a Lv6 room Lv7), the set still by addendum 2's rule.
+## Addendum 3 after a re-roll: e0 monsters at the previous room's level + 1, max Lv11 (from the Lv10 room behind
+## its exit Lv11), the set still by addendum 2's rule. Review fix: put into e0 straight from a Lv6 room that is not
+## next to it, the room behind e0's exit counts (Lv11 again, not Lv7).
 func test_e0_levels_after_reroll():
 	var g := _ground()
 	var levels: Dictionary = g.rooms.room_levels()
@@ -258,11 +270,16 @@ func test_e0_levels_after_reroll():
 		g.reroll(500 + c[0])
 		g.go_to(from, "", false)
 		g.go_to("e0", "west", false)
-		var want_set := RoomLevels.arena_set(sets, 1, c[0])
-		if g.arena_set != want_set: r = "from Lv%d: set %d (want %d)" % [c[0], g.arena_set, want_set]
+		var behind := String(g.rooms.room("e0").warps[0].to)
+		var prev_lv: int = c[0] if behind == from else int(levels[behind])
+		if r == "" and c[0] == 10 and behind != from: r = "test setup: seed 7's Lv10 room %s is not behind e0 (%s)" % [from, behind]
+		if r == "" and c[0] == 6 and behind == from: r = "test setup: the Lv6 room is next to e0"
+		var want_set := RoomLevels.arena_set(sets, 1, prev_lv)
+		var want_lv := RoomLevels.arena_level(prev_lv)
+		if r == "" and g.arena_set != want_set: r = "from Lv%d: set %d (want %d)" % [c[0], g.arena_set, want_set]
 		for p in g.packs:
 			for w in p.wolves:
-				if r == "" and w.level != c[1]: r = "from Lv%d %s: a %s is Lv%d (want %d)" % [c[0], from, p.kind, w.level, c[1]]
+				if r == "" and w.level != want_lv: r = "from Lv%d %s: a %s is Lv%d (want %d)" % [c[0], from, p.kind, w.level, want_lv]
 		if r != "": break
 	_free(g)
 	_clean()
