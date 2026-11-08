@@ -63,3 +63,7 @@ Builds on M4b (16 rooms, one 512×512 picture each, joined by warps).
 
 ## Not in this step
 New exits or new rooms; multi-floor caves; monster balance changes.
+
+## Addendum (owner 2026-11-08, after the Task 4 review)
+- Dead monsters stay dead until a waypoint trip or a new game ("ตายแล้วตายเลย จนกว่าจะใช้หินวาปหรือเข้าเกมใหม่ (แบบ Diablo)"): the in-room 9 s respawn is turned off for room monsters; cleared rooms stay empty.
+- Closing the tab/app and coming back = a new game with a new layout and fresh monsters; level, items and unlocked waypoints are kept ("โอเค เข้าใหม่ = เกมใหม่แบบ Diablo"). Per-room monster state is therefore not saved.
