@@ -24,9 +24,10 @@ Files in picked/ (made by tools/audio/sfx_set5.py from CC0 sources + our Thai sy
 - ui_notify.wav (92) — ranat struck twice (ours)
 Sources via github.com/EternityForest/Free-SFX and Kenney ports on GitHub. Leveled sounds: level-up/chest/coin/warp = Thai set above; critical = crit/crit_hit.wav.
 
-## Monster cries — owner: "มอนตาย 67-70 อยากให้เสียงมอนหลากหลาย", base 67–70 for hurt and death, per kind by animal + pitch by size
-Base: 67 rubberduck creature_misc_01, 68 Superpowers medieval-fantasy/monster-1, 69 rubberduck creature_misc_07, 70 rubberduck creature_die_01 (all CC0); shroom uses rubberduck creature_slime_01; viper hiss and kongkoi gong are ours.
-Per-kind candidates (page 95–108): monsters/<kind>_{hurt,die}.wav from tools/audio/monster_cries.py — waiting for the owner's review.
+## Monster cries — owner 2026-11-08: "ผ่านหมด" → "สุ่มใช้ทุกแบบของชนิดนั้น ทุกครั้งที่โดน/ตาย"
+All made in code (ours, no licence): tools/audio/animal_synth.py (wolf, boar, deer, kongkoi, shroom, viper: 3 hurt + 2 die each) and tools/audio/monkey_synth.py (macaque: 5 hurt + 3 die).
+Files: monsters/<kind>_{hurt,die}_<a..e>.wav. In game: each hit/death plays a random variant of that kind.
+(The earlier 67–70-based set, page 95–108, is replaced.)
 
 ## Still open
 - Bow shot: waiting for the owner to attach OpenGameArt "Medieval Sound Effects – Weapon Textures" (CC0).
