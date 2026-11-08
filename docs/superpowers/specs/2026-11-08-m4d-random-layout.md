@@ -79,3 +79,4 @@ Owner: "แก้เรื่องมอนกระจุกแบบนี้
 - ⚙ Sprite drawn at 0.85 scale, collision/hurt box at 0.85, and body-centred attack reach at 0.85 (melee bite/hit ranges, lunge hit radius, ring/cloud radii centred on the monster), with HP bar, elite tag and shadow following the smaller body.
 - Unchanged: aggro, leash, wander, movement speeds, lunge distance, projectile/throw range, damage and all stat numbers.
 - Addendum 3 follow-up (owner 2026-11-08): Lv11 e0 monsters drop rings/necklaces at Lv10 max ("คงของตกสูงสุด Lv10"); the iPhone tip toast stays ⚙ 4 s, other toasts keep 1.5 s ("ข้อความนี้ค้าง 4 วินาที").
+- iPad (owner 2026-11-08: "iPad กดแล้วเต็มจอจริง คำแนะนำเฉพาะ iPhone"): only iPhone/iPod web shows the tip; iPad uses real full screen; no tip when already opened from the home screen (standalone).
