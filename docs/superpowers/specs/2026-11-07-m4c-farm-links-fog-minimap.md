@@ -67,3 +67,4 @@ New exits or new rooms; multi-floor caves; monster balance changes.
 ## Addendum (owner 2026-11-08, after the Task 4 review)
 - Dead monsters stay dead until a waypoint trip or a new game ("ตายแล้วตายเลย จนกว่าจะใช้หินวาปหรือเข้าเกมใหม่ (แบบ Diablo)"): the in-room 9 s respawn is turned off for room monsters; cleared rooms stay empty.
 - Closing the tab/app and coming back = a new game with a new layout and fresh monsters; level, items and unlocked waypoints are kept ("โอเค เข้าใหม่ = เกมใหม่แบบ Diablo"). Per-room monster state is therefore not saved.
+- Fog (owner 2026-11-08): fog comes back with every new game, Diablo-style ("หมอกกลับมาใหม่ทุกเกมใหม่"); within a session it is kept per room; the full map shows only rooms visited in this game.
