@@ -56,3 +56,8 @@ Owner: "ตามระยะจากห้องเริ่มในผัง
 - x1: the two wolf groups (and the boars) go to the four corners of the meadow, off the central crossing ("กระจายไปมุมทุ่ง 4 มุม").
 - e0 set choice: target = max(hero level, level of the room the hero came from); e0 takes the set whose average level is closest to the target, ties to the higher set ("สูงกว่าเลเวลฮีโร่กับห้องก่อนหน้า เลือกชุดที่ใกล้ค่านั้น"). Re-chosen at each re-roll (waypoint / new game) and when the set has never been chosen this session.
 - Every monster spawn point (each group's spawn ring) must be on open ground in every room.
+
+## Addendum 3 (2026-11-08, owner-approved after the Task 3d review)
+- e0 monster level = level of the room the hero came from + 1, max Lv11 (an arena-only level). The set (kinds and counts) is still chosen by addendum 2's rule ("มอนใน e0 เลเวล = ห้องก่อนหน้า +1 (สูงสุด Lv11) ใช้ชนิดตามชุดที่เลือก").
+- x1 may also place groups closer to the entrances (approved "อนุมัติ"), same ≥ 48 px floor as x2, measured for every spawn point, not only the home.
+- iPhone: "เต็มจอ" shows a tip "กดแชร์ → เพิ่มไปยังหน้าจอโฮม" instead of doing nothing.
