@@ -6,6 +6,9 @@ extends RefCounted
 ## Follow-up ("มอนกองบ้างกระจายบ้าง"): per kind in a room piled_count(n) = n / 2 halves up, at least 2 when
 ## n >= 2, stand in piles; the rest are singles >= 60 px from every single and pile centre. In the game a
 ## pile (or a single) wakes alone, lunges on its own token and a revived monster comes back on its own spot.
+## Follow-up 2: singles >= 60 px from every member spawn point of every pile (not only its centre); a kind of
+## exactly 2 is one pile of 2 or two singles, 50/50 per placement seed; a split that fits no group is drawn
+## again before the per-group fallback; a lunge token held by a freed monster does not error.
 
 var tree: SceneTree
 
@@ -61,8 +64,9 @@ func test_piled_count_rounding():
 		if MonsterPiles.piled_count(n) != want[n]: return "piled_count(%d) = %d (want %d)" % [n, MonsterPiles.piled_count(n), want[n]]
 	return ""
 
-## Pile sizes per group: per kind piled_count of the kind's total, sizes 2-4, no group given more than it has,
-## a boss group one pile of its count; today's rooms (e0 sets included) for many seeds.
+## Pile sizes per group: per kind piled_for of the kind's total (piled_count; a kind of 2: the seed's 50/50
+## draw), sizes 2-4, no group given more than it has, a boss group one pile of its count; today's rooms (e0
+## sets included) for many seeds.
 func test_pile_sizes_per_kind():
 	var rooms := RoomSet.open()
 	var lists: Array = []
@@ -72,7 +76,7 @@ func test_pile_sizes_per_kind():
 		{"kind": "kongkoi", "level": 10, "count": 1, "at": [0, 0], "boss": true}])
 	for groups in lists:
 		for s in 30:
-			var sizes := MonsterPiles.pile_sizes(groups, _rng(s))
+			var sizes := MonsterPiles.pile_sizes(groups, _rng(s), s)
 			var piled := {}
 			var total := {}
 			for gi in groups.size():
@@ -88,7 +92,8 @@ func test_pile_sizes_per_kind():
 				piled[g.kind] = int(piled.get(g.kind, 0)) + sum
 				total[g.kind] = int(total.get(g.kind, 0)) + int(g.count)
 			for k in total:
-				if piled[k] != MonsterPiles.piled_count(total[k]): return "%s x%d: %d piled (want %d)" % [k, total[k], piled[k], MonsterPiles.piled_count(total[k])]
+				var want := MonsterPiles.piled_for(total[k], s, k)
+				if piled[k] != want: return "%s x%d seed %d: %d piled (want %d)" % [k, total[k], s, piled[k], want]
 	return ""
 
 func _piles(rooms: RoomSet, id: String, groups: Array, s: int) -> Array:
@@ -108,8 +113,8 @@ func test_same_seed_same_piles_other_seed_differs():
 	if MonsterPiles.room_seed(7, "c1r2") == MonsterPiles.room_seed(7, "c2r2"): return "room id not in the seed"
 	return ""
 
-## All checks for one room's placement; "" when fine.
-func _check(rooms: RoomSet, id: String, groups: Array, piles: Array) -> String:
+## All checks for one room's placement (made with placement seed `seed`); "" when fine.
+func _check(rooms: RoomSet, id: String, groups: Array, piles: Array, seed: int) -> String:
 	var room := rooms.pile_room(id)
 	var near_ok := bool(rooms.room(id).get("near_arrival_ok", false))
 	# kinds, counts and levels per group unchanged
@@ -122,7 +127,7 @@ func _check(rooms: RoomSet, id: String, groups: Array, piles: Array) -> String:
 		if p.kind != String(g.kind) or int(p.level) != int(g.level): return "%s pile %s Lv%d from group %s Lv%d" % [id, p.kind, p.level, g.kind, g.level]
 		if p.points.size() != int(p.count): return "%s pile of %d has %d points" % [id, p.count, p.points.size()]
 	if MonsterPiles.fell_back(piles): return ""   # counted by the 200-seed test
-	# about half of each kind stands in piles (piled_count), the rest are singles; singles are piles of 1
+	# about half of each kind stands in piles (piled_for), the rest are singles; singles are piles of 1
 	var kind_n := {}
 	var kind_piled := {}
 	for g in groups:
@@ -133,7 +138,7 @@ func _check(rooms: RoomSet, id: String, groups: Array, piles: Array) -> String:
 		if bool(p.single) != (int(p.count) == 1): return "%s %s pile of %d marked single=%s" % [id, p.kind, p.count, p.single]
 		if not p.single: kind_piled[String(p.kind)] = int(kind_piled.get(String(p.kind), 0)) + int(p.count)
 	for k in kind_n:
-		var want := MonsterPiles.piled_count(int(kind_n[k]))
+		var want := MonsterPiles.piled_for(int(kind_n[k]), seed, k)
 		if int(kind_piled.get(k, 0)) != want: return "%s %s x%d: %d in piles (want %d) and %d singles" % [id, k, kind_n[k], kind_piled.get(k, 0), want, int(kind_n[k]) - int(kind_piled.get(k, 0))]
 	var arrivals: Array = room.arrivals
 	for i in piles.size():
@@ -153,11 +158,25 @@ func _check(rooms: RoomSet, id: String, groups: Array, piles: Array) -> String:
 			for b in range(a + 1, p.points.size()):
 				var d: float = p.points[a].distance_to(p.points[b])
 				if d < 2.0 * bw - 0.001: return "%s %s pile: points %.1f px apart (min 2 x %.1f)" % [id, p.kind, d, bw]
+	return _spacing(id, piles)
+
+## Spacing between piles and singles: pile centres >= 80 px apart; a single >= 60 px from every other single
+## and from every pile's centre and every member spawn point (follow-up 2: "วัด 60 px จากทุกตัวในกอง").
+func _spacing(id: String, piles: Array) -> String:
+	for i in piles.size():
+		var p: Dictionary = piles[i]
 		for j in range(i + 1, piles.size()):
-			var d2: float = p.home.distance_to(piles[j].home)
-			if p.single or piles[j].single:
-				if d2 < 60.0: return "%s %s %s and %s %s only %.1f px apart (single min 60)" % [id, "single" if p.single else "pile", p.home, "single" if piles[j].single else "pile", piles[j].home, d2]
-			elif d2 < 80.0: return "%s pile centres %s and %s only %.1f px apart" % [id, p.home, piles[j].home, d2]
+			var q: Dictionary = piles[j]
+			var d2: float = p.home.distance_to(q.home)
+			if p.single and q.single:
+				if d2 < 60.0: return "%s singles %s and %s only %.1f px apart (min 60)" % [id, p.home, q.home, d2]
+			elif p.single or q.single:
+				var one: Dictionary = p if p.single else q
+				var pile: Dictionary = q if p.single else p
+				for m in [pile.home] + pile.points:
+					var d3: float = one.home.distance_to(m)
+					if d3 < 60.0: return "%s single %s only %.1f px from %s %s %s (min 60 from every member)" % [id, one.home, d3, pile.kind, "pile centre" if m == pile.home else "pile member", m]
+			elif d2 < 80.0: return "%s pile centres %s and %s only %.1f px apart" % [id, p.home, q.home, d2]
 	return ""
 
 func test_piles_follow_the_rules_every_room():
@@ -165,8 +184,116 @@ func test_piles_follow_the_rules_every_room():
 	for s in [1, 7, 42]:
 		for id in rooms.ids():
 			for groups in _lists(rooms, id):
-				var e := _check(rooms, id, groups, _piles(rooms, id, groups, s))
+				var e := _check(rooms, id, groups, _piles(rooms, id, groups, s), MonsterPiles.room_seed(s, id))
 				if e != "": return "seed %d: %s" % [s, e]
+	return ""
+
+## Follow-up 2 spacing check on a hand-made room: a single 70 px from a pile's centre but 44 px from one of
+## its members is caught (the old centre-only rule passed it); 60 px from every member passes.
+func test_spacing_check_measures_every_member():
+	var pile := {"kind": "boar", "count": 2, "single": false, "boss": false, "home": Vector2(200, 200),
+		"points": [Vector2(174, 200), Vector2(226, 200)]}
+	var near := {"kind": "boar", "count": 1, "single": true, "boss": false, "home": Vector2(270, 200), "points": [Vector2(270, 200)]}
+	if near.home.distance_to(pile.home) < 60.0: return "test setup: single not 60 px from the centre"
+	if _spacing("t", [pile, near]) == "": return "a single 44 px from a pile member passed"
+	if _spacing("t", [near, pile]) == "": return "a single 44 px from a pile member passed (single listed first)"
+	var far := {"kind": "boar", "count": 1, "single": true, "boss": false, "home": Vector2(286, 200), "points": [Vector2(286, 200)]}
+	if _spacing("t", [pile, far]) != "": return "a single 60 px from every member failed: %s" % _spacing("t", [pile, far])
+	return ""
+
+## Follow-up 2 in the real rooms: over 60 seeds, every room (e0's four sets each), no single is closer than
+## 60 px to any pile's centre or member spawn point (the centre-only rule broke this in many rooms).
+func test_singles_clear_every_pile_member():
+	var rooms := RoomSet.open()
+	var checked := 0
+	for s in 60:
+		for id in rooms.ids():
+			for groups in _lists(rooms, id):
+				var piles := _piles(rooms, id, groups, 1000 + s)
+				if MonsterPiles.fell_back(piles): continue
+				checked += 1
+				var e := _spacing(id, piles)
+				if e != "": return "seed %d: %s" % [1000 + s, e]
+	if checked < 60 * 19 - 5: return "only %d placements checked (most fell back)" % checked
+	return ""
+
+## Follow-up 2: a kind with exactly 2 monsters in a room is one pile of 2 or two singles, 50/50 by the placement
+## seed: the same seed the same answer, both answers across seeds, about half each; the counts stay right and
+## the other kinds keep piled_count. c1r1 with its deer cut to one group of 2.
+func test_kind_of_two_pile_or_singles():
+	var rooms := RoomSet.open()
+	var groups: Array = _lists(rooms, "c1r1")[0].duplicate(true)
+	var deer := -1
+	for gi in range(groups.size() - 1, -1, -1):
+		if String(groups[gi].kind) != "deer": continue
+		if deer >= 0: groups.remove_at(deer)
+		deer = gi
+	groups[deer].count = 2
+	var outcome := {"pile": 0, "singles": 0}
+	var falls := 0
+	for s in 200:
+		var seed := MonsterPiles.room_seed(s, "c1r1")
+		var want := MonsterPiles.pair_piled(seed, "deer")
+		if MonsterPiles.pair_piled(seed, "deer") != want: return "seed %d: two answers" % s
+		var piles := _piles(rooms, "c1r1", groups, s)
+		if MonsterPiles.fell_back(piles):
+			falls += 1
+			continue
+		var e := _check(rooms, "c1r1", groups, piles, seed)
+		if e != "": return "seed %d: %s" % [s, e]
+		var sizes := []
+		for p in piles:
+			if p.kind == "deer": sizes.append(int(p.count))
+		sizes.sort()
+		if want and sizes != [2]: return "seed %d: pile drawn, deer stand as %s" % [s, sizes]
+		if not want and sizes != [1, 1]: return "seed %d: singles drawn, deer stand as %s" % [s, sizes]
+		outcome["pile" if want else "singles"] += 1
+	if falls > 2: return "%d of 200 seeds fell back" % falls
+	if outcome.pile < 60 or outcome.singles < 60: return "not about 50/50 over 200 seeds: %s" % outcome
+	print("    kind of 2 (c1r1 deer, 200 seeds): %s, fallbacks %d" % [outcome, falls])
+	# a different room id gives a different draw for some seeds
+	var differ := false
+	for s in 40:
+		if MonsterPiles.pair_piled(MonsterPiles.room_seed(s, "c1r1"), "deer") != MonsterPiles.pair_piled(MonsterPiles.room_seed(s, "c2r0"), "deer"): differ = true
+	if not differ: return "the room id does not change the draw"
+	return ""
+
+## Reviewer gap: a first split that fits no group is drawn again before the per-group fallback. Four groups
+## of 2 (8, 4 to pile): split(4) is [4] about half the time (no group holds 4), [2, 2] fits; three groups of 3
+## and one of 2 (11, 6 to pile): [4, 2] or [2, 4] fit none. The half rule holds for every seed, and the
+## no-fit first draws really happen (the branch is exercised).
+func test_pile_sizes_redraw_before_fallback():
+	var cases := [[2, 2, 2, 2], [3, 3, 3, 2]]
+	for counts in cases:
+		var groups: Array = []
+		for c in counts: groups.append({"kind": "deer", "level": 3, "count": c, "at": [0, 0]})
+		var n := 0
+		for c in counts: n += c
+		var redrawn := 0
+		for s in 60:
+			var first := MonsterPiles.split(MonsterPiles.piled_count(n), _rng(s))
+			var fits := true
+			var left: Array = counts.duplicate()
+			for x in first:
+				var best := -1
+				for i in left.size():
+					if left[i] >= x and (best < 0 or left[i] > left[best]): best = i
+				if best < 0:
+					fits = false
+					break
+				left[best] -= x
+			if not fits: redrawn += 1
+			var sizes := MonsterPiles.pile_sizes(groups, _rng(s), s)
+			var piled := 0
+			for gi in groups.size():
+				var sum := 0
+				for x in sizes[gi]:
+					if x < 2 or x > 4: return "%s seed %d: a pile of %d" % [counts, s, x]
+					sum += x
+				if sum > counts[gi]: return "%s seed %d: group of %d given %s" % [counts, s, counts[gi], sizes[gi]]
+				piled += sum
+			if piled != MonsterPiles.piled_count(n): return "%s seed %d: %d piled (want %d, half rule); first draw %s" % [counts, s, piled, MonsterPiles.piled_count(n), first]
+		if redrawn == 0: return "%s: no seed drew a split that fits no group (branch not exercised)" % [counts]
 	return ""
 
 ## A boss group is never split and stays at its home; the other groups still pile round it (>= 80 px).
@@ -218,7 +345,7 @@ func test_200_seeds_fallbacks():
 					var key: String = id if lists.size() == 1 else "%s set %d" % [id, li]
 					falls[key] = int(falls.get(key, 0)) + 1
 				elif bad == "" and s % 20 == 0:
-					bad = _check(rooms, id, lists[li], piles)
+					bad = _check(rooms, id, lists[li], piles, MonsterPiles.room_seed(s, id))
 	print("    piles: 200 seeds, fallbacks %s (%d ms)" % [falls if not falls.is_empty() else "none", Time.get_ticks_msec() - t0])
 	if bad != "": return bad
 	return "" if falls.is_empty() else "rooms fell back to built homes: %s" % falls
@@ -386,6 +513,34 @@ func test_revived_monster_back_on_its_spawn_point():
 ## The lunge token and the "hero unreachable here" spot belong to a pile: two piles of one group may each
 ## lunge at the same time while a second monster of the same pile waits; one pile walled off from the hero
 ## does not stop another pile of the group from seeing him.
+## Reviewer bug: the pile's lunge token held by a monster that was freed since; the next monster of the pile
+## may lunge (no error on the freed instance).
+func test_lunge_after_previous_lunger_freed():
+	var g := _ground()
+	var r := ""
+	var p: WolfPack = null
+	var a: Wolf = null
+	var b: Wolf = null
+	for q in _c1r2(g):
+		for w in q.wolves:
+			if a == null and _members(q, w.pile).size() >= 2:
+				p = q
+				a = w
+				b = _members(q, w.pile)[1]
+	if a == null: r = "no pile of 2+ in c1r2"
+	if r == "":
+		if not p.request_lunge(a): r = "first lunge refused"
+		a.state = "lunge_warn"
+		if r == "" and p.request_lunge(b): r = "a second monster of the pile lunged while the first lunges"
+	if r == "":
+		p.wolves.erase(a)
+		a.free()
+		var ok = p.request_lunge(b)
+		if ok == null or not ok: r = "lunge refused after the previous lunger was freed (got %s)" % [ok]
+		elif p.request_lunge(b) != true: r = "the new lunger lost its token"
+	_free_ground(g)
+	return r
+
 func test_two_piles_of_one_group_each_lunge():
 	var g := _ground()
 	var r := ""

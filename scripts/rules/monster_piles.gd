@@ -10,13 +10,17 @@ extends RefCounted
 ## pile, no single), 3 -> 2 + 1 single, 4 -> 2 + 2, 5 -> 3 + 2, 6 -> 3 + 3, 10 -> 5 + 5, 12 -> 6 + 6. The piled
 ## part is split into piles of 2-4 (split) and each pile goes to the group of that kind with the most monsters
 ## left (a pile is one group's: the same pack, level and respawn); the rest of each group are singles.
+## Follow-up 2 (owner "สุ่ม: บางครั้งกอง 2 บางครั้งเดี่ยว 2 ตัว"): a kind with exactly 2 monsters in a room is
+## one pile of 2 or two singles, 50/50, drawn once per placement seed (pile seed + room id) and kind
+## (pair_piled / piled_for); other counts keep piled_count.
 ##
 ## Rules for a placement (all checked, else the room falls back to the built homes of rooms.json):
 ## - every spawn point, and the pile's centre (its home), on the room's main open ground: a hero-sized body fits
 ##   there and it can be walked to from the room's spawn (the same open ground tools/painted_rooms.py uses);
 ## - pile centres at least PILE_GAP px apart (bosses' homes included);
-## - every single at least SINGLE_GAP px from every other single and every pile centre, and PILE_GAP px from a
-##   boss's home (as the piles: a boss stands apart);
+## - every single at least SINGLE_GAP px from every other single and from every pile's centre and every
+##   member spawn point of every pile (follow-up 2: "วัด 60 px จากทุกตัวในกอง"; bosses' points included), and
+##   PILE_GAP px from a boss's home (as the piles: a boss stands apart);
 ##   each single takes the farthest from everyone already placed of SINGLE_CANDIDATES fitting random spots,
 ##   so singles spread out instead of bunching;
 ## - every spawn point and centre keeps the arrival rules: kinds that attack first (wolf, aggressive, ambush)
@@ -29,7 +33,7 @@ extends RefCounted
 const MIN_PILE := 2              # ⚙ addendum 4
 const MAX_PILE := 4              # ⚙ addendum 4
 const PILE_GAP := 80.0           # ⚙ addendum 4: pile centres at least this far apart
-const SINGLE_GAP := 60.0         # ⚙ addendum 4 follow-up: a single this far from every single and pile centre
+const SINGLE_GAP := 60.0         # ⚙ addendum 4 follow-ups: a single this far from every single, pile centre and pile member
 const NEAR_ARRIVAL_MIN := 48.0   # addenda 2-3 (x1, x2)
 const ARRIVAL_EXTRA := 12.0      # aggro + 12 (painted_rooms.py hard_off for kinds that attack first)
 const PASSIVE_ARRIVAL := 60.0    # painted_rooms.py hard_off for kinds that do not attack first
@@ -38,6 +42,14 @@ const SAMPLES := 400             # random open cells tried per pile in one place
 const RADIUS_SLACK := 0.5        # px added to the smallest ring radius (float safety)
 const PACK_CANDIDATES := 12      # packed tries: the closest-to-the-others of this many fitting spots
 const SINGLE_CANDIDATES := 16    # a single takes the farthest-from-the-others of this many fitting spots
+const PAIR_PILE_CHANCE := 0.5    # ⚙ follow-up 2: a kind of exactly 2 stands as one pile of 2 (else two singles)
+const SETTLE_TRIES := 4          # settle runs (each from a new random start) before falling back
+const SETTLE_MOVES := 20000      # nudges per settle run
+const SETTLE_STEP := 10.0        # px: a nudge's spread
+const SETTLE_TURN := 0.4         # rad: a pile's turn spread per nudge
+const SETTLE_JUMP := 0.1         # share of nudges that jump to a random spot of its ground instead
+const SETTLE_HEAT := 3.0         # px of added overlap a nudge may still be kept with at the start (cools to 0)
+const SPLIT_TRIES := 8           # random splits of a kind's piled part tried before the smallest-piles split
 
 ## Pile sizes for a group of `count`: each 2-4, summing to count; 1 stays [1] (0 gives []).
 ## Each next size is drawn evenly from the sizes that leave 0 or at least 2 behind.
@@ -62,6 +74,20 @@ static func split(count: int, rng: RandomNumberGenerator) -> Array[int]:
 static func piled_count(n: int) -> int:
 	if n < MIN_PILE: return 0
 	return maxi(MIN_PILE, ceili(n / 2.0))
+
+## Follow-up 2: whether a kind with exactly 2 monsters in a room stands as one pile of 2 (true) or as two
+## singles, PAIR_PILE_CHANCE, from the placement seed (room_seed: pile seed + room id) and the kind; the same
+## seed always gives the same answer, at every placement try.
+static func pair_piled(seed: int, kind: String) -> bool:
+	var r := RandomNumberGenerator.new()
+	r.seed = ("%d:%s:pair" % [seed, kind]).hash()
+	return r.randf() < PAIR_PILE_CHANCE
+
+## How many of a kind's n monsters stand in piles in a placement with this seed: piled_count(n), except a kind
+## of exactly 2, which is 2 (one pile) or 0 (two singles) by pair_piled.
+static func piled_for(n: int, seed: int, kind: String) -> int:
+	if n == MIN_PILE: return MIN_PILE if pair_piled(seed, kind) else 0
+	return piled_count(n)
 
 ## The placement seed for one room: the session's pile seed combined with the room id.
 static func room_seed(pile_seed: int, room_id: String) -> int:
@@ -149,7 +175,8 @@ static func is_open(room: Dictionary, p: Vector2) -> bool:
 ## (RoomSet.pile_room). When no placement passes after TRIES tries, every group keeps its built home
 ## (rooms.json "at", spawn ring PaintedLayout.ring) as one pile and fallback is true. Each try draws new pile
 ## sizes; the later half of the tries packs the piles closer together (still PILE_GAP apart) so rooms with
-## little room still fit.
+## little room still fit. When no try fits, up to SETTLE_TRIES settle runs (_settle) come before the fallback
+## (follow-up 2: c1r2 and e0's crowded sets need them since singles keep 60 px from every pile member).
 static func place(room: Dictionary, groups: Array, seed: int) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
@@ -159,11 +186,16 @@ static func place(room: Dictionary, groups: Array, seed: int) -> Array:
 		if cells.is_empty(): break
 		# a new random split every try: a room with little open ground far from its arrivals (c1r2's wolves)
 		# fits fewer, bigger piles; sizes always stay 2-4
-		var piles := _split_groups(groups, rng, near_ok)
+		var piles := _split_groups(groups, rng, near_ok, seed)
 		# the second half of the tries packs each pile next to the ones already placed (still >= PILE_GAP),
 		# so tight rooms fit; the first half spreads them purely at random
 		var packed := t >= TRIES / 2
 		if _place_all(room, piles, rng, cells, packed): return _clean(piles)
+	# no try fitted: settle (a new split each run) before the fallback
+	for t in SETTLE_TRIES:
+		if cells.is_empty(): break
+		var piles := _split_groups(groups, rng, near_ok, seed)
+		if _settle(room, piles, rng, cells): return _clean(piles)
 	# fallback: the built homes, one pile per group, the old spawn ring
 	var out: Array = []
 	for gi in groups.size():
@@ -175,11 +207,14 @@ static func place(room: Dictionary, groups: Array, seed: int) -> Array:
 			"points": [home] if boss and int(g.count) == 1 else PaintedLayout.ring(home, int(g.count))})
 	return out
 
-## Pile sizes per group: for each kind (its non-boss groups together) piled_count(n) monsters split into
-## piles of 2-4, each pile given to the group of that kind with the most monsters still unpiled (ties: the
+## Pile sizes per group: for each kind (its non-boss groups together) piled_for(n, seed, kind) monsters split
+## into piles of 2-4, each pile given to the group of that kind with the most monsters still unpiled (ties: the
 ## earlier group). Returns {group index: Array[int] pile sizes}; a boss group is one pile of its count. If a
-## pile fits no group (cannot happen with today's rooms), each group of the kind is split on its own instead.
-static func pile_sizes(groups: Array, rng: RandomNumberGenerator) -> Dictionary:
+## pile fits no group (cannot happen with today's rooms; e.g. four groups of 2 drawn [4]), the split is drawn
+## again, up to SPLIT_TRIES draws, then the smallest piles (2s and one 3 when odd) are tried; only when none of
+## these fits (no assignment exists, e.g. three groups of 2 with 3 to pile) is each group of the kind split on
+## its own instead. `seed` is the placement seed (pair_piled).
+static func pile_sizes(groups: Array, rng: RandomNumberGenerator, seed: int) -> Dictionary:
 	var out := {}
 	var by_kind := {}
 	for gi in groups.size():
@@ -193,31 +228,54 @@ static func pile_sizes(groups: Array, rng: RandomNumberGenerator) -> Dictionary:
 		by_kind[k].append(gi)
 	for k in by_kind:
 		var gis: Array = by_kind[k]
-		var left := {}
 		var n := 0
-		for gi in gis:
-			left[gi] = int(groups[gi].count)
-			n += int(groups[gi].count)
-		var ok := true
-		for s in split(piled_count(n), rng):
-			var best := -1
-			for gi in gis:
-				if int(left[gi]) >= s and (best < 0 or int(left[gi]) > int(left[best])): best = gi
-			if best < 0:
-				ok = false
-				break
-			out[best].append(s)
-			left[best] = int(left[best]) - s
-		if not ok:
+		for gi in gis: n += int(groups[gi].count)
+		var want := piled_for(n, seed, k)
+		var got = _assign(groups, gis, split(want, rng))
+		for t in range(1, SPLIT_TRIES):
+			if got != null: break
+			got = _assign(groups, gis, split(want, rng))
+		if got == null: got = _assign(groups, gis, _smallest_split(want))
+		if got == null:
 			for gi in gis:
 				out[gi] = split(piled_count(int(groups[gi].count)), rng)
+			continue
+		for gi in gis: out[gi].append_array(got[gi])
+	return out
+
+## Each pile size to the group (of gis) with the most monsters left (ties: the earlier group); null when a
+## pile fits no group.
+static func _assign(groups: Array, gis: Array, sizes: Array[int]) -> Variant:
+	var left := {}
+	var got := {}
+	for gi in gis:
+		left[gi] = int(groups[gi].count)
+		got[gi] = [] as Array[int]
+	for s in sizes:
+		var best := -1
+		for gi in gis:
+			if int(left[gi]) >= s and (best < 0 or int(left[gi]) > int(left[best])): best = gi
+		if best < 0: return null
+		got[best].append(s)
+		left[best] = int(left[best]) - s
+	return got
+
+## The split into the smallest piles: a 3 first when n is odd, then 2s (n < 2: as split()).
+static func _smallest_split(n: int) -> Array[int]:
+	var out: Array[int] = []
+	if n <= 0: return out
+	if n < MIN_PILE:
+		out.append(n)
+		return out
+	if n % 2 == 1: out.append(3)
+	for i in (n - (3 if n % 2 == 1 else 0)) / 2: out.append(2)
 	return out
 
 ## Piles and singles for every group (random sizes; a boss group stays whole), in group order: each group's
 ## piles, then its singles (piles of 1).
-static func _split_groups(groups: Array, rng: RandomNumberGenerator, near_ok: bool) -> Array:
+static func _split_groups(groups: Array, rng: RandomNumberGenerator, near_ok: bool, seed: int) -> Array:
 	var piles: Array = []
-	var sizes := pile_sizes(groups, rng)
+	var sizes := pile_sizes(groups, rng, seed)
 	for gi in groups.size():
 		var g: Dictionary = groups[gi]
 		var kind := String(g.get("kind", "wolf"))
@@ -235,7 +293,10 @@ static func _split_groups(groups: Array, rng: RandomNumberGenerator, near_ok: bo
 
 ## One placement try: bosses at home first, then the hardest piles (farthest from the arrivals, then the
 ## biggest), then the singles (hardest first), each the farthest from everyone already placed of
-## SINGLE_CANDIDATES fitting spots. false when a pile or single finds no spot in SAMPLES random open cells.
+## SINGLE_CANDIDATES fitting spots. A single keeps SINGLE_GAP from every pile centre and every pile member's
+## spawn point, and a pile's centre and members keep SINGLE_GAP from every single (a single of a kind kept
+## far from the arrivals may be placed before a pile). false when a pile or single finds no spot in SAMPLES
+## random open cells.
 static func _place_all(room: Dictionary, piles: Array, rng: RandomNumberGenerator, cells: PackedVector2Array, packed: bool) -> bool:
 	var order: Array = range(piles.size())
 	order.sort_custom(func(a, b):
@@ -249,12 +310,14 @@ static func _place_all(room: Dictionary, piles: Array, rng: RandomNumberGenerato
 	var centres: Array = []          # pile centres (bosses included) so far
 	var singles: Array = []          # singles so far
 	var bosses: Array = []           # boss homes: every pile and single keeps PILE_GAP from them
+	var members: Array = []          # every spawn point of the piles so far (bosses included)
 	for i in order:
 		var p: Dictionary = piles[i]
 		if p.boss:
 			p.points = ring_points(p.home, int(p.count), float(p.radius), 0.0)
 			centres.append(p.home)
 			bosses.append(p.home)
+			members.append_array(p.points)
 			continue
 		var best := []                   # [centre, points, score]
 		var found := 0
@@ -269,13 +332,16 @@ static func _place_all(room: Dictionary, piles: Array, rng: RandomNumberGenerato
 			var near_boss := INF
 			for q in bosses: near_boss = minf(near_boss, c.distance_to(q))
 			if near_boss < PILE_GAP: continue
+			var near_m := INF            # to the nearest pile member's spawn point
 			if p.single:
-				if near < SINGLE_GAP or near1 < SINGLE_GAP: continue
+				for q in members: near_m = minf(near_m, c.distance_to(q))
+				if near < SINGLE_GAP or near1 < SINGLE_GAP or near_m < SINGLE_GAP: continue
 			elif near < PILE_GAP or near1 < SINGLE_GAP: continue
 			var pts := ring_points(c, int(p.count), float(p.radius), rng.randf() * TAU)
+			if not p.single and _near_any(pts, singles, SINGLE_GAP): continue
 			if not _fits(room, c, pts, float(p.floor)): continue
 			found += 1
-			var score := minf(near, near1)   # to the nearest pile centre or single placed so far
+			var score := minf(minf(near, near1), near_m)   # to the nearest pile centre, member or single so far
 			if packed:
 				# packed tries: the closest spot to the others (still apart by the gaps), the first one on the
 				# far edge of its ground (farthest from the middle of the pool), so a tight room fits them all
@@ -293,8 +359,102 @@ static func _place_all(room: Dictionary, piles: Array, rng: RandomNumberGenerato
 		p.home = best[0]
 		p.points = best[1]
 		if p.single: singles.append(best[0])
-		else: centres.append(best[0])
+		else:
+			centres.append(best[0])
+			members.append_array(best[1])
 	return true
+
+## Settle (follow-up 2: c1r2's wolves need 6 singles 60 px from every pile member in the small ground far from
+## its arrivals, which the one-by-one tries rarely fit): every pile and single starts on a random fitting spot
+## of its own ground, then one at a time is nudged (moved SETTLE_STEP px at random, a pile also turned)
+## SETTLE_MOVES times. A nudge that leaves the open ground or the arrival floor is refused; one that does not
+## add to the room's total gap shortfall (_short) is kept, one that adds a little sometimes early on (cooling
+## to never). true once nothing is short: every rule of a placement holds. Bosses stay at home.
+static func _settle(room: Dictionary, piles: Array, rng: RandomNumberGenerator, cells: PackedVector2Array) -> bool:
+	var movers: Array = []
+	for i in piles.size():
+		var p: Dictionary = piles[i]
+		if p.boss:
+			p.points = ring_points(p.home, int(p.count), float(p.radius), 0.0)
+			continue
+		var pool := _pool(room, cells, float(p.floor))
+		if pool.is_empty(): return false
+		var ok := false
+		for k in SAMPLES:
+			var c: Vector2 = pool[rng.randi_range(0, pool.size() - 1)]
+			var a := rng.randf() * TAU
+			var pts := ring_points(c, int(p.count), float(p.radius), a)
+			if not _fits(room, c, pts, float(p.floor)): continue
+			p.home = c
+			p.points = pts
+			p.angle = a
+			ok = true
+			break
+		if not ok: return false
+		movers.append(i)
+	if movers.is_empty(): return true
+	var total := 0.0
+	for i in piles.size(): total += _short(piles, i)
+	total *= 0.5                        # every pair counted from both sides
+	for m in SETTLE_MOVES:
+		if total <= 0.0: break
+		var i: int = movers[rng.randi_range(0, movers.size() - 1)]
+		var p: Dictionary = piles[i]
+		var c: Vector2 = p.home + Vector2(rng.randfn(0.0, SETTLE_STEP), rng.randfn(0.0, SETTLE_STEP))
+		var a: float = p.angle + (0.0 if p.single else rng.randfn(0.0, SETTLE_TURN))
+		if rng.randf() < SETTLE_JUMP:
+			var pool := _pool(room, cells, float(p.floor))
+			c = pool[rng.randi_range(0, pool.size() - 1)]
+			a = rng.randf() * TAU
+		var pts := ring_points(c, int(p.count), float(p.radius), a)
+		if not _fits(room, c, pts, float(p.floor)): continue
+		var before := _short(piles, i)
+		var keep: Array = [p.home, p.points, p.angle]
+		p.home = c
+		p.points = pts
+		p.angle = a
+		var after := _short(piles, i)
+		var heat := SETTLE_HEAT * (1.0 - float(m) / SETTLE_MOVES)
+		if after <= before or (heat > 0.0 and rng.randf() < exp((before - after) / heat)):
+			total += after - before
+		else:
+			p.home = keep[0]
+			p.points = keep[1]
+			p.angle = keep[2]
+	# exact recount: nothing short means every gap holds (ground and arrivals were checked on every move)
+	for i in piles.size():
+		if _short(piles, i) > 0.0: return false
+	return true
+
+## How far pile i falls short of its gaps to every other pile and single, summed (0: all gaps held): pile
+## centres PILE_GAP apart; a single SINGLE_GAP from every single and every pile's centre and member; every
+## pile and single PILE_GAP from a boss's home.
+static func _short(piles: Array, i: int) -> float:
+	var p: Dictionary = piles[i]
+	var out := 0.0
+	for j in piles.size():
+		if j == i: continue
+		var q: Dictionary = piles[j]
+		if p.single and q.single:
+			out += maxf(0.0, SINGLE_GAP - p.home.distance_to(q.home))
+			continue
+		if p.boss or q.boss: out += maxf(0.0, PILE_GAP - p.home.distance_to(q.home))
+		if not p.single and not q.single:
+			if not (p.boss or q.boss): out += maxf(0.0, PILE_GAP - p.home.distance_to(q.home))
+			continue
+		var one: Dictionary = p if p.single else q
+		var pile: Dictionary = q if p.single else p
+		out += maxf(0.0, SINGLE_GAP - one.home.distance_to(pile.home))
+		for m in pile.points:
+			out += maxf(0.0, SINGLE_GAP - one.home.distance_to(m))
+	return out
+
+## Whether any of pts is closer than gap to any of others.
+static func _near_any(pts: Array, others: Array, gap: float) -> bool:
+	for a in pts:
+		for b in others:
+			if (a as Vector2).distance_to(b) < gap: return true
+	return false
 
 ## The open cells whose centre keeps `floor` px from every arrival (worked out once per room and floor):
 ## spots are drawn from these, so a kind kept far from the arrivals does not waste its samples.
@@ -333,6 +493,7 @@ static func _clean(piles: Array) -> Array:
 		var q: Dictionary = p.duplicate()
 		q.erase("floor")
 		q.erase("radius")
+		q.erase("angle")
 		out.append(q)
 	return out         # already in group order (piles are made group by group)
 

@@ -60,10 +60,11 @@ func alert(h: Hero, who: Wolf = null) -> void:
 	for w in wolves:
 		if who == null or who.pile < 0 or w.pile == who.pile: w.start_chase(h)
 
-## One lunge at a time per pile (two piles of one group may each lunge).
+## One lunge at a time per pile (two piles of one group may each lunge). The token's holder may have been freed
+## since: untyped until is_instance_valid (a typed Wolf var errors on a freed instance).
 func request_lunge(w: Wolf) -> bool:
-	var cur: Wolf = _lungers.get(w.pile)
-	if cur == null or not is_instance_valid(cur) or cur.state not in ["lunge_warn", "lunge"]:
+	var cur = _lungers.get(w.pile)
+	if not is_instance_valid(cur) or cur.state not in ["lunge_warn", "lunge"]:
 		_lungers[w.pile] = w
 	return _lungers[w.pile] == w
 
