@@ -123,23 +123,31 @@ def aggro_of(kind: str) -> float:
 
 def spread_home(roomy: np.ndarray, homes: list, arrivals: list, keep_off: float, hard_off: float) -> list:
     """The open cell farthest from every other group home (and the arrivals), keep_off from each
-    arrival if the room allows, else at least hard_off (the test's minimum), else as far as possible."""
+    arrival if the room allows, else at least hard_off (the test's minimum), else as far as possible.
+    Cells EDGE_CELLS from blocked ground come first; when none of them is hard_off from the arrivals
+    (M4d x2: open ground only on a narrow plateau), any open cell that is (keep_off, else hard_off) is used."""
     inner = ndimage.binary_erosion(roomy, np.ones((2 * EDGE_CELLS + 1, 2 * EDGE_CELLS + 1), bool))
     if not inner.any(): inner = roomy
-    ys, xs = np.nonzero(inner)
-    cx, cy = (xs + 0.5) * CELL, (ys + 0.5) * CELL
-    d_arr = np.full(len(xs), 1e9)
-    for a in arrivals:
-        d_arr = np.minimum(d_arr, np.hypot(cx - a[0], cy - a[1]))
-    d_home = np.full(len(xs), 1e9)
-    for h in homes:
-        d_home = np.minimum(d_home, np.hypot(cx - h[0], cy - h[1]))
-    score = np.minimum(d_home, d_arr * 0.75)
-    for off in (keep_off, hard_off):
-        ok = d_arr >= off
-        if ok.any():
-            score = np.where(ok, score, -1.0)
-            break
+
+    def cells(mask):
+        ys, xs = np.nonzero(mask)
+        cx, cy = (xs + 0.5) * CELL, (ys + 0.5) * CELL
+        d_arr = np.full(len(xs), 1e9)
+        for a in arrivals:
+            d_arr = np.minimum(d_arr, np.hypot(cx - a[0], cy - a[1]))
+        d_home = np.full(len(xs), 1e9)
+        for h in homes:
+            d_home = np.minimum(d_home, np.hypot(cx - h[0], cy - h[1]))
+        return cx, cy, d_arr, np.minimum(d_home, d_arr * 0.75)
+
+    for mask in (inner, roomy):
+        cx, cy, d_arr, score = cells(mask)
+        for off in (keep_off, hard_off):
+            ok = d_arr >= off
+            if ok.any():
+                i = int(np.argmax(np.where(ok, score, -1.0)))
+                return [int(cx[i]), int(cy[i])]
+    cx, cy, d_arr, score = cells(inner)
     i = int(np.argmax(score))
     return [int(cx[i]), int(cy[i])]
 

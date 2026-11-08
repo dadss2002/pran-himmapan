@@ -221,20 +221,26 @@ func test_rooms_hold_the_spec_monsters():
 		"e0": {"wolf": 12, "macaque": 8}, "c1r2": {"wolf": 12, "shroom": 8},
 		"c0r3": {"viper": 10, "kongkoi": 6}, "c1r3": {"viper": 10, "shroom": 10},
 		"c2r3": {"kongkoi": 10, "viper": 8},
+		# M4d addendum (2026-11-08): the crossroads; their level comes from the session layout only
+		"x1": {"wolf": 10, "boar": 8}, "x2": {"macaque": 10, "kongkoi": 8}, "x3": {"shroom": 10, "viper": 8},
 	}
 	var lv := {"c1r1": 1, "c1r0": 1, "c0r1": 2, "c0r0": 3, "c2r1": 3, "c2r2": 3, "c2r0": 4,
 		"c0r2": 4, "e0": 4, "c1r2": 5, "c0r3": 7, "c1r3": 8, "c2r3": 9}
 	var sets_want := [[{"boar": 10, "wolf": 8}, 2], [{"wolf": 12, "macaque": 8}, 4],
 		[{"shroom": 12, "wolf": 10}, 6], [{"kongkoi": 12, "macaque": 8}, 8]]
 	var rooms := RoomSet.open()
-	# M4d added the crossroads x1, x2, x3; no monster numbers are approved for them yet, so they hold none.
 	for id in rooms.ids():
-		if not want.has(id) and not (id in ["x1", "x2", "x3"]): return "room %s not in the spec" % id
-		if not want.has(id) and not rooms.room(id).get("monsters", []).is_empty(): return "%s has monsters without an approved spec" % id
+		if not want.has(id): return "room %s not in the spec" % id
 	for id in want:
 		if not rooms.has(id): return "%s missing" % id
-		var e := _check_list(id, rooms.room(id).get("monsters", []), want[id], lv[id], id == "c2r3")
+		var list: Array = rooms.room(id).get("monsters", [])
+		# x rooms: no +1 group (both kinds share one base level), so every group spawns at the layout level
+		var base := int(list[0].level) if id.begins_with("x") and not list.is_empty() else int(lv.get(id, 0))
+		var e := _check_list(id, list, want[id], base, id == "c2r3")
 		if e != "": return e
+		if id.begins_with("x"):
+			for m in list:
+				if int(m.level) != base: return "%s %s base Lv%d, first group Lv%d (want one level)" % [id, m.kind, m.level, base]
 	var sets: Array = rooms.room("e0").get("monster_sets", [])
 	if sets.size() != 4: return "e0 has %d monster sets (spec 4: w1, e0, e2, w3)" % sets.size()
 	for i in 4:

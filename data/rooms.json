@@ -1953,7 +1953,44 @@
 }
 ],
 "fx": [],
-"monsters": [],
+"monsters": [
+{
+"kind": "wolf",
+"level": 5,
+"count": 5,
+"at": [
+260,
+260
+]
+},
+{
+"kind": "wolf",
+"level": 5,
+"count": 5,
+"at": [
+236,
+284
+]
+},
+{
+"kind": "boar",
+"level": 5,
+"count": 4,
+"at": [
+332,
+180
+]
+},
+{
+"kind": "boar",
+"level": 5,
+"count": 4,
+"at": [
+156,
+348
+]
+}
+],
 "name": "ทุ่งต้นไม้ตาย"
 },
 "x2": {
@@ -2060,7 +2097,44 @@
 }
 ],
 "fx": [],
-"monsters": [],
+"monsters": [
+{
+"kind": "macaque",
+"level": 5,
+"count": 5,
+"at": [
+260,
+260
+]
+},
+{
+"kind": "macaque",
+"level": 5,
+"count": 5,
+"at": [
+244,
+276
+]
+},
+{
+"kind": "kongkoi",
+"level": 5,
+"count": 4,
+"at": [
+236,
+244
+]
+},
+{
+"kind": "kongkoi",
+"level": 5,
+"count": 4,
+"at": [
+276,
+284
+]
+}
+],
 "name": "เนินหินกลางป่า"
 },
 "x3": {
@@ -2167,7 +2241,44 @@
 }
 ],
 "fx": [],
-"monsters": [],
+"monsters": [
+{
+"kind": "shroom",
+"level": 5,
+"count": 5,
+"at": [
+308,
+204
+]
+},
+{
+"kind": "shroom",
+"level": 5,
+"count": 5,
+"at": [
+172,
+180
+]
+},
+{
+"kind": "viper",
+"level": 5,
+"count": 4,
+"at": [
+324,
+156
+]
+},
+{
+"kind": "viper",
+"level": 5,
+"count": 4,
+"at": [
+348,
+196
+]
+}
+],
 "name": "สะพานไม้ข้ามลำธาร"
 }
 }

@@ -15,7 +15,10 @@ func test_ground_wolf_packs_in_their_rooms():
 	if g.room_id != "c1r1": r = "starts in %s" % g.room_id
 	elif g.hero.spawn_point != g.layout.hero_spawn: r = "hero spawn %s" % g.hero.spawn_point
 	else:
-		for want in [["c1r0", 1, 10], ["c2r2", 3, 10], ["c1r2", 5, 12]]:       # spec M3g §2
+		# spec M3g §2 counts; M4d addendum: the level is the room's level in this session's layout (wolf is
+		# each room's first group, so it has no +1)
+		var lv := RoomLevels.for_layout(g.rooms.active)
+		for want in [["c1r0", int(lv.c1r0), 10], ["c2r2", int(lv.c2r2), 10], ["c1r2", int(lv.c1r2), 12]]:
 			g.go_to(want[0], "", false)
 			var wolves := 0
 			var levels := []

@@ -181,7 +181,12 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		n.place_label(sz)
 		warps.append(n)
 	if not _navs.has(id): _navs[id] = layout.make_nav()
-	for m in rooms.room(id).get("monsters", []):
+	# M4d addendum: forest rooms spawn at the level of their distance from c1r1 in this session's layout;
+	# e0 (and a room off the map) keeps the levels in rooms.json.
+	var groups: Array = rooms.room(id).get("monsters", [])
+	var levels := RoomLevels.for_layout(rooms.active)
+	if levels.has(id): groups = RoomLevels.groups(groups, int(levels[id]))
+	for m in groups:
 		_add_group(m, _navs[id])
 	if with_fade and is_inside_tree():
 		fade.color.a = 1.0
