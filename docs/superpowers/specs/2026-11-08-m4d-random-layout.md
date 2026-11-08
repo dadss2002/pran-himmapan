@@ -50,3 +50,9 @@ Owner: "ตามระยะจากห้องเริ่มในผัง
 - Each room keeps its monster kinds and counts; every group in the room uses L, except a group that was 1 level above the room's first group before (e.g. c2r2 macaque) keeps that +1 (cap 10).
 - ⚙ x1: wolf 10 + boar 8; x2: macaque 10 + kongkoi 8; x3: shroom 10 + viper 8.
 - e0 keeps its level-by-hero set choice (unchanged).
+
+## Addendum 2 (2026-11-08, owner-approved after the Task 3c review)
+- x2: spread its groups over the grass around the rise, allowed closer to the entrances than the usual aggro+12 rule (monsters are calm 1 s on arrival) ("กระจายไปลานหญ้ารอบเนิน ยอมให้ใกล้ทางเข้าขึ้น").
+- x1: the two wolf groups (and the boars) go to the four corners of the meadow, off the central crossing ("กระจายไปมุมทุ่ง 4 มุม").
+- e0 set choice: target = max(hero level, level of the room the hero came from); e0 takes the set whose average level is closest to the target, ties to the higher set ("สูงกว่าเลเวลฮีโร่กับห้องก่อนหน้า เลือกชุดที่ใกล้ค่านั้น"). Re-chosen at each re-roll (waypoint / new game) and when the set has never been chosen this session.
+- Every monster spawn point (each group's spawn ring) must be on open ground in every room.
