@@ -43,7 +43,7 @@ Each picture has paths that reach the middle of some sides. Those sides are the 
 ## Budget
 The 3 new 4-way rooms: 75 gen (logged). No other art.
 
-## Addendum 2026-11-08 — monster levels follow the layout (draft numbers, need approval)
+## Addendum 2026-11-08 — monster levels follow the layout (approved: "อนุมัติ")
 Owner: "ตามระยะจากห้องเริ่มในผังนั้น"; x1 "หมาป่า+หมูป่า", x2 "ลิง+กองกอย", x3 "เห็ด+งู"; keep the "no room farther than e0" check ("คงไว้").
 - d = rooms walked from c1r1 in the current layout (c1r1 d = 0); D = the largest d of any forest room.
 - ⚙ Room level L = 1 when d = 0, otherwise round(1 + (d − 1) × 8 / max(D − 1, 1)) + 1, clamped to 2…10. So the rooms next to the start are Lv2 and the farthest forest room is Lv10.
