@@ -511,3 +511,107 @@ func test_x1_x2_groups_spread():
 				if d < 88.0: return "%s homes %s and %s only %d px apart" % [id, a, ms[j].at, d]
 		if id == "x1" and quads.size() != 4: return "x1 groups use %d corners of the meadow (want 4)" % quads.size()
 	return ""
+
+## M4d addendum 4: every monster x0.85 (balance "monster_scale"): sprite, collision box, hurt point / arrow
+## radius, body-centred reach (bite / bite hit / lunge hit / ring / mist radius) and the elite tag; aggro,
+## leash, wander, speeds, lunge distance and throw range unchanged.
+func test_monsters_scaled_085():
+	if Balance.num("monster_scale") != 0.85: return "monster_scale %s (spec 0.85)" % Balance.num("monster_scale")
+	var world: Node2D = await _world()
+	var r := ""
+	for k in ["wolf"] + Array(Monster.KINDS):
+		var p := _pack(world, k, Vector2(300, 300), 3, 1)
+		await tree.physics_frame
+		var m: Wolf = p.wolves[0]
+		m.set_elite(true)
+		var raw := func(key: String) -> float:
+			var path := "monsters.%s.%s" % [k, key]
+			return Balance.num(path) if k != "wolf" and Balance.has(path) else Balance.num("wolf." + key)
+		var box: Vector2 = (m.shape.shape as RectangleShape2D).size
+		if not box.is_equal_approx(Vector2(22, 12) * 0.85): r = "%s collision box %s (want 0.85 x 22x12)" % [k, box]
+		elif not m.shape.position.is_equal_approx(Vector2(0, -5) * 0.85): r = "%s box offset %s" % [k, m.shape.position]
+		elif not m.body.scale.is_equal_approx(Vector2(0.85, 0.85)): r = "%s sprite scale %s" % [k, m.body.scale]
+		elif not (m.hurt_point() - m.global_position).is_equal_approx(Vector2(0, -14) * 0.85): r = "%s hurt point %s" % [k, m.hurt_point() - m.global_position]
+		elif absf(m.hurt_radius() - Balance.num("shot.arrow_hit_radius") * 0.85) > 0.001: r = "%s arrow hit radius %s" % [k, m.hurt_radius()]
+		elif absf(m.body_width() - 22.0 * 0.85) > 0.001: r = "%s body width %s" % [k, m.body_width()]
+		elif not m._tag.position.is_equal_approx(Vector2(0, -52) * 0.85): r = "%s elite tag at %s" % [k, m._tag.position]
+		if r == "":
+			for key in Wolf.BODY_KEYS:
+				var want: float = raw.call(key) * 0.85 if Balance.has("wolf." + key) or Balance.has("monsters.%s.%s" % [k, key]) else 0.0
+				if Balance.has("wolf." + key) or Balance.has("monsters.%s.%s" % [k, key]):
+					if absf(m.n(key) - want) > 0.001: r = "%s %s %.2f (want 0.85 x %.1f)" % [k, key, m.n(key), raw.call(key)]
+			for key in ["aggro", "leash", "wander_speed", "wander_radius", "run", "lunge_distance", "lunge_min", "lunge_max", "fruit_range", "fruit_speed", "keep_min", "keep_max", "flee_speed", "chase_slot"]:
+				if Balance.has("wolf." + key) or Balance.has("monsters.%s.%s" % [k, key]):
+					if absf(m.n(key) - raw.call(key)) > 0.001: r = "%s %s changed to %.2f (want %.1f)" % [k, key, m.n(key), raw.call(key)]
+		p.free()
+		if r != "": break
+	_done(world)
+	return r
+
+## Addendum 4: a wolf's bite now reaches 0.85 x bite_hit_range: a hero just past it is not bitten.
+func test_scaled_bite_reach_in_tree():
+	Combat.rng.seed = 3
+	var world: Node2D = await _world()
+	var reach := Balance.num("wolf.bite_hit_range") * 0.85
+	var h := _hero(world, Vector2(300, 300))
+	var p := _pack(world, "wolf", Vector2(300, 300), 1, 1)
+	await tree.physics_frame
+	var w: Wolf = p.wolves[0]
+	w.global_position = Vector2(300 - Balance.num("wolf.bite_range") * 0.85 + 1.0, 300)
+	w.start_chase(h)
+	var hp0 := h.health.hp
+	await _tick(p, h, 2)
+	var st := w.state
+	h.global_position = Vector2(w.global_position.x + reach + 2.0, 300)   # step just out of the smaller reach
+	await _tick(p, h, 30)
+	var lost := hp0 - h.health.hp
+	_done(world)
+	if st != "bite": return "wolf %s inside its 0.85 bite range" % st
+	return "" if lost == 0 else "bitten from %.1f px (reach %.1f)" % [reach + 2.0, reach]
+
+## Addendum 4: two monsters pushed onto one spot move apart within 1 s, no faster than monster_push.speed,
+## without crossing a wall and without moving the hero standing on them.
+func test_monsters_push_apart_not_through_walls():
+	if Balance.num("monster_push.speed") != 40.0: return "push speed %s (spec <= 40)" % Balance.num("monster_push.speed")
+	var world: Node2D = await _world()
+	var wall := StaticBody2D.new()
+	var cs := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(20, 200)
+	cs.shape = rect
+	wall.add_child(cs)
+	wall.position = Vector2(318, 300)          # left face at x = 308
+	world.add_child(wall)
+	var h := _hero(world, Vector2(300, 300))
+	var a := _pack(world, "boar", Vector2(300, 300), 1, 1)    # passive: they stay idle by the hero
+	var b := _pack(world, "boar", Vector2(300, 300), 1, 1)    # two packs: pushing works across packs too
+	await tree.physics_frame
+	var ma: Wolf = a.wolves[0]
+	var mb: Wolf = b.wolves[0]
+	ma.global_position = Vector2(296, 300)     # box edges 9.35 px from the centre: clear of the wall face
+	mb.global_position = Vector2(296.5, 300)
+	ma._wander_to = ma.global_position
+	mb._wander_to = mb.global_position
+	var fast := [0.0]
+	var crossed := [false]
+	var prev := [ma.global_position, mb.global_position]
+	var bw := ma.body_width()
+	var apart_at := [-1]
+	for f in 60:
+		await tree.physics_frame
+		h.step(DT, Vector2.ZERO)
+		a.step_all(DT, h)
+		b.step_all(DT, h)
+		ma._wander_to = ma.global_position          # keep them from wandering: only the push moves them
+		mb._wander_to = mb.global_position
+		fast[0] = maxf(fast[0], maxf(ma.global_position.distance_to(prev[0]), mb.global_position.distance_to(prev[1])) / DT)
+		prev = [ma.global_position, mb.global_position]
+		if mb.global_position.x + bw * 0.5 > 308.5 or ma.global_position.x + bw * 0.5 > 308.5: crossed[0] = true
+		if apart_at[0] < 0 and ma.global_position.distance_to(mb.global_position) >= bw - 0.5: apart_at[0] = f
+	var hero_at := h.global_position
+	var d := ma.global_position.distance_to(mb.global_position)
+	_done(world)
+	if apart_at[0] < 0: return "still %.1f px apart after 1 s (body width %.1f)" % [d, bw]
+	if fast[0] > 40.0 * 1.05: return "pushed at %.1f px/s (max 40)" % fast[0]
+	if crossed[0]: return "a monster went into the wall"
+	return "" if hero_at == Vector2(300, 300) else "the hero was moved to %s" % hero_at

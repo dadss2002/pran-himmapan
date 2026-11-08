@@ -6,11 +6,17 @@ extends CharacterBody2D
 signal died(wolf: Wolf)
 
 const MANIFEST := "res://assets/wolf/manifest.json"
-const HURT_POINT := Vector2(0, -14)
+const HURT_POINT := Vector2(0, -14)       # at full size; hurt_point() scales it (M4d addendum 4)
+const TAG_Y := -52.0                      # the elite tag over the head at full size
+## M4d addendum 4 (monsters x0.85): numbers measured from the monster's own body (melee reach, lunge hit,
+## ring / mist radius) are scaled with it; aggro, leash, wander, speeds, lunge distance and throw range not.
+const BODY_KEYS := ["bite_range", "bite_hit_range", "lunge_hit_radius", "ring_radius", "cloud_radius"]
 
 var level := 1
 var pack: WolfPack
 var home := Vector2.ZERO
+var spawn_at := Vector2.INF        # M4d addendum 4: its pile spawn point (respawns there); INF = old jitter
+var pile := -1                     # which pile of its pack it belongs to (-1 = the whole pack is one pile)
 var state := "idle"
 var facing := 0
 var hp: int:
@@ -55,6 +61,7 @@ func setup() -> void:
 	if shape == null: shape = $Feet
 	body.sprite_frames = SpriteSet.build(manifest_path())
 	body.centered = false
+	_apply_size()
 	_anchors = SpriteSet.anchors(manifest_path())
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/flash.gdshader")
@@ -65,6 +72,26 @@ func setup() -> void:
 	add_to_group("enemies")
 	_wander_to = home
 	_refresh(true)
+
+## M4d addendum 4: every monster (bosses too) is drawn and collides at Balance "monster_scale" (0.85).
+static func size_scale() -> float:
+	return Balance.num("monster_scale") if Balance.has("monster_scale") else 1.0
+
+## Sprite, collision box (its own copy of the scene's shape) and its offset at size_scale(); the anchor
+## offset is in sprite pixels, so the feet stay on the same point.
+func _apply_size() -> void:
+	var s := size_scale()
+	body.scale = Vector2(s, s)
+	if shape.shape is RectangleShape2D and not shape.has_meta("scaled"):
+		var r: RectangleShape2D = shape.shape.duplicate()
+		r.size *= s
+		shape.shape = r
+		shape.position *= s
+		shape.set_meta("scaled", true)
+
+## Width of the collision box (px) after the size scale: "1 body" for pile spacing and pushing apart.
+func body_width() -> float:
+	return (shape.shape as RectangleShape2D).size.x if shape and shape.shape is RectangleShape2D else 0.0
 
 var status := StatusEffects.new()
 const STATUS_FX_SCALE := 1.5
@@ -92,6 +119,7 @@ func set_elite(on: bool) -> void:
 		_tag = ELITE_TAG.new()
 		_tag.monster = self
 		add_child(_tag)
+		_tag.position = Vector2(0, TAG_Y * size_scale())   # over the smaller head (addendum 4)
 	if _tag: _tag.visible = on
 	if health and is_alive(): health.setup(stats().hp)
 
@@ -106,14 +134,14 @@ func _wants_aggro(dist: float) -> bool:
 	var calm := pack != null and pack.calm > 0.0
 	return dist <= n("aggro") and not walled_off and not calm
 
-## The idle wolf saw the hero: the whole pack joins in.
+## The idle wolf saw the hero: its pile joins in (the whole pack when it is one pile).
 func _start_aggro() -> void:
-	if pack: pack.alert(_hero)
+	if pack: pack.alert(_hero, self)
 	else: start_chase(_hero)
 
-## Hit while idle: the whole pack joins in.
+## Hit while idle: its pile joins in.
 func _on_provoked() -> void:
-	if pack and _hero: pack.alert(_hero)
+	if pack and _hero: pack.alert(_hero, self)
 
 ## States that need a live hero (otherwise go home).
 func _fight_states() -> Array:
@@ -130,7 +158,8 @@ func apply_status(kind: String, value := 0.0, leech := 0.0, source: Object = nul
 	elif kind == "slow": status.apply_slow()
 
 func n(key: String) -> float:
-	return Balance.num("wolf." + key)
+	var v := Balance.num("wolf." + key)
+	return v * size_scale() if key in BODY_KEYS else v
 
 # ---------- queries used by the hero / arrows ----------
 
@@ -138,7 +167,11 @@ func is_alive() -> bool:
 	return state != "dead"
 
 func hurt_point() -> Vector2:
-	return _pos() + HURT_POINT
+	return _pos() + HURT_POINT * size_scale()
+
+## How close an arrow must pass to hurt_point() to hit: shot.arrow_hit_radius on the smaller body (addendum 4).
+func hurt_radius() -> float:
+	return Balance.num("shot.arrow_hit_radius") * size_scale()
 
 func telegraph_visible() -> bool:
 	return _telegraph != null and _telegraph.visible
@@ -170,7 +203,9 @@ func revive() -> void:
 	roll_elite()
 	health.setup(stats().hp)
 	status.clear()
-	_set_pos(home + Vector2(randf_range(-16, 16), randf_range(-12, 12)))
+	# M4d addendum 4: a piled monster comes back on its own spawn point (open ground, apart from its pile)
+	if spawn_at != Vector2.INF: _set_pos(spawn_at)
+	else: _set_pos(home + Vector2(randf_range(-16, 16), randf_range(-12, 12)))
 	state = "idle"
 	_t = 0.0
 	_bite_cd = 0.0
@@ -190,7 +225,7 @@ func _update_status_fx() -> void:
 func _toggle_fx(fx: FxSprite, fx_name: String, on: bool) -> FxSprite:
 	if on and fx == null:
 		fx = FxSprite.make(fx_name, true)
-		fx.scale = Vector2.ONE * STATUS_FX_SCALE   # the effects were drawn small; match the 80 px wolf
+		fx.scale = Vector2.ONE * STATUS_FX_SCALE * size_scale()   # drawn small; match the (scaled) body
 		add_child(fx)
 		fx.play(fx_name)
 	elif not on and fx != null:

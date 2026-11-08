@@ -34,7 +34,8 @@ func cfg(key: String):
 	return v
 
 func n(key: String) -> float:
-	return float(cfg(key))
+	var v := float(cfg(key))
+	return v * size_scale() if key in BODY_KEYS else v
 
 func temper() -> String:
 	return String(cfg("temper"))

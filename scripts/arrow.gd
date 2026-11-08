@@ -48,7 +48,7 @@ func advance(delta: float) -> void:
 	position += dir * stepd
 	travelled += stepd
 	for t in targets:
-		if is_instance_valid(t) and t.is_alive() and not _hit.has(t) and _pos().distance_to(t.hurt_point()) <= radius:
+		if is_instance_valid(t) and t.is_alive() and not _hit.has(t) and _pos().distance_to(t.hurt_point()) <= (t.hurt_radius() if t.has_method("hurt_radius") else radius):
 			_hit[t] = true
 			var amount: int = t.receive_hit(atk, mult, _pos(), crit_chance, crit_mult)
 			_after_hit(t, amount)

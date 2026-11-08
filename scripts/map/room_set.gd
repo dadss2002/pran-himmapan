@@ -19,6 +19,7 @@ var active: Dictionary = {}   # the RoomLayout in use ({pos, links, fallback}); 
 var _rooms: Dictionary = {}
 var _layouts: Dictionary = {}
 var _levels = null            # RoomLevels.for_layout(active), worked out once per layout (room_levels())
+var _pile_rooms: Dictionary = {}   # id -> MonsterPiles.prepare() data (never depends on the session layout)
 
 static func open(path := PATH) -> RoomSet:
 	var f := FileAccess.open(path, FileAccess.READ)
@@ -121,6 +122,10 @@ func arrival(id: String, warp_id: String) -> Vector2:
 	return _arrival_on(layout(id), exit(id, warp_id))
 
 func _arrival_on(l: PaintedLayout, w: Dictionary) -> Vector2:
+	return arrival_on(l, w)
+
+## Where you stand coming out of exit w of room layout l (see arrival()).
+static func arrival_on(l: PaintedLayout, w: Dictionary) -> Vector2:
 	var at := Vector2(w.at[0], w.at[1])
 	var want := at + (l.size_px() / 2.0 - at).normalized() * ARRIVAL
 	var best := at
@@ -134,6 +139,18 @@ func _arrival_on(l: PaintedLayout, w: Dictionary) -> Vector2:
 				best_d = dd
 				best = p
 	return best
+
+## M4d addendum 4: room data for MonsterPiles.place(): its layout, every painted exit's arrival plus the
+## room's own spawn (as tools/painted_rooms.py), and the main open ground; worked out once per room.
+func pile_room(id: String) -> Dictionary:
+	if not _pile_rooms.has(id):
+		var l := layout(id)
+		var arrivals: Array = []
+		for e in exits(id): arrivals.append(arrival(id, String(e.id)))
+		if _rooms[id].has("spawn"): arrivals.append(l.hero_spawn)
+		_pile_rooms[id] = MonsterPiles.prepare(_rooms[id], l, arrivals)
+		_pile_rooms[id]["id"] = id
+	return _pile_rooms[id]
 
 ## Every problem with the rooms; empty means playable.
 func validate() -> Array[String]:

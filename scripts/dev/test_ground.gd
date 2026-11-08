@@ -20,6 +20,11 @@ var rooms: RoomSet
 var room_id := ""
 var layout_seed := -1             # M4d: -1 = a new random room layout every session; tests set one
 var session_seed := 0             # the seed this session's layout was made from (saved for reference only)
+## M4d addendum 4: the seed monster piles are placed from (MonsterPiles.room_seed with the room id): made from
+## the layout seed at the start of a session, so walking out and back shows the same piles; Task 4's re-roll
+## (waypoint travel / new game) sets a new one with reroll_piles().
+var pile_seed := 0
+var _piles := {}                  # "room|seed|groups hash" -> MonsterPiles.place() result (this session)
 ## M4d addendum 2: e0's monster set this session (index into its monster_sets; -1 = not chosen yet). Chosen
 ## on the first entry each session (a new game is a new session); Task 4 re-chooses it on every re-roll.
 var arena_set := -1
@@ -95,6 +100,7 @@ func build() -> void:
 	rooms = RoomSet.open()
 	session_seed = layout_seed if layout_seed >= 0 else int(randi() & 0x7fffffff)
 	rooms.use_layout(RoomLayout.generate(session_seed, rooms.exit_table()))
+	pile_seed = session_seed
 	stage.add_child(world)
 	hero = HERO_SCENE.instantiate()
 	world.add_child(hero)
@@ -198,7 +204,11 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		if arena_set < 0: choose_arena_set(from_id)
 		# addendum 3: the set's kinds and counts at the previous room's level + 1 (max Lv11)
 		groups = RoomLevels.arena_groups(sets[clampi(arena_set, 0, sets.size() - 1)], int(levels.get(from_id, 0)))
-	for m in groups:
+	# addendum 4: each group split into piles of 2-4 spread over the room (MonsterPiles); one pack per group
+	var piles := piles_for(id, groups)
+	for gi in groups.size():
+		var m: Dictionary = groups[gi].duplicate()
+		m["piles"] = piles.filter(func(p): return int(p.group) == gi)
 		_add_group(m, _navs[id])
 	if with_fade and is_inside_tree():
 		fade.color.a = 1.0
@@ -206,6 +216,18 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		for p in packs: p.calm = CALM        # nobody notices the hero during the fade and just after
 	save_now()
 	room_changed.emit(id)
+
+## The piles for room id's groups this session (MonsterPiles.place, seed from pile_seed and the room id).
+func piles_for(id: String, groups: Array) -> Array:
+	var key := "%s|%d|%d" % [id, pile_seed, hash(groups)]
+	if not _piles.has(key):
+		_piles[key] = MonsterPiles.place(rooms.pile_room(id), groups, MonsterPiles.room_seed(pile_seed, id))
+	return _piles[key]
+
+## Task 4 hook: new piles everywhere from a new seed (the next room entered uses them).
+func reroll_piles(new_seed: int) -> void:
+	pile_seed = new_seed
+	_piles.clear()
 
 ## M4d addendum 2: pick e0's set for a hero coming from room from_id (RoomLevels.arena_set).
 func choose_arena_set(from_id: String) -> void:
@@ -264,6 +286,7 @@ func _add_group(m: Dictionary, nav: AStarGrid2D) -> void:
 	pack.level = int(m.level)
 	pack.count = int(m.count)
 	pack.home = Vector2(m.at[0], m.at[1])
+	for p in m.get("piles", []): pack.piles.append({"home": p.home, "points": p.points})
 	pack.nav = nav
 	pack.y_sort_enabled = true
 	pack.hero = hero

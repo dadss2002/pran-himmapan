@@ -165,7 +165,8 @@ func test_hit_knockback_and_windup_not_interrupted():
 	var r := ""
 	w.receive_hit(5, 1.0, Vector2(-10, 0))
 	if absf(w.position.x - 6.0) > 0.01: r = "idle wolf knocked %.2f, want 6" % w.position.x
-	var h := _hero(Vector2(26, 0))
+	# just inside the bite range (M4d addendum 4: bite_range x monster_scale, 18.7 px; was 26 for 22 px)
+	var h := _hero(Vector2(6.0 + Balance.num("wolf.bite_range") * Wolf.size_scale() - 2.0, 0))
 	_run(p, h, DT)
 	if r == "" and w.state != "bite": r = "expected bite windup, got %s" % w.state
 	var x := w.position.x

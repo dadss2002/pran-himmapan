@@ -11,7 +11,7 @@ var _shown := -1.0
 func _ready() -> void:
 	z_as_relative = false
 	z_index = 44
-	position = Vector2(0, -52)
+	if position == Vector2.ZERO: position = Vector2(0, -52)   # Wolf.set_elite puts it over the (scaled) head
 
 func _process(_delta: float) -> void:
 	if monster == null or not is_instance_valid(monster): return

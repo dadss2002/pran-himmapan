@@ -1,5 +1,10 @@
 {
   "_doc": "All tuning numbers. Source: docs/spec-numbers.md + docs/superpowers/specs/2026-11-06-m2-design.md (approved 2026-11-06). Change numbers only with owner approval.",
+  "monster_scale": 0.85,
+  "monster_push": {
+    "_doc": "M4d addendum 4 (owner-approved 2026-11-08): monsters closer than 1 body width (collision box at monster_scale) push apart at most this fast, px/s",
+    "speed": 40
+  },
   "hero": {
     "hp_base": 100,
     "hp_per_level": 12,
@@ -120,7 +125,6 @@
     "chase_slot": 14,
     "stop_factor": 0.8,
     "wander_pause": 1.5,
-    "pack_spacing": 20,
     "pack_ring": 26,
     "stuck_time": 1.5,
     "stuck_distance": 8
