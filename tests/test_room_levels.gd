@@ -227,8 +227,8 @@ func test_arena_level_previous_room_plus_one():
 	return ""
 
 ## Addendum 3 in a real session: e0 entered from the Lv10 room behind its exit (seed 7: c2r2) spawns Lv11; the
-## set is still chosen by addendum 2's rule (kinds unchanged). (A Lv6 room is not next to e0; entering from one is
-## test_e0_from_itself_or_a_far_room.)
+## set is still chosen by addendum 2's rule (kinds unchanged). (In seed 7 a Lv6 room is not next to e0; entering from one is
+## test_e0_from_itself_or_a_far_room; e0 hung on a Lv6 room is test_session_arena_level_from_lv6_room.)
 func test_session_arena_level_from_previous_room():
 	var r := ""
 	for c in [[10, 11]]:
@@ -260,6 +260,40 @@ func test_session_arena_level_from_previous_room():
 		g.free()
 		if r != "": return r
 	return ""
+
+## Addendum 3 below the cap: e0 hung (use_layout) on the east exit of a Lv6 room spawns its chosen set at Lv7.
+## Hand-made chain c1r1 - x1 - x2 - x3 with e0 on x2's east exit: e0 is left out of D, so D = 3 and x2 (d = 2) is
+## Lv6; entering e0 from x2 gives Lv7 (the Lv10 -> Lv11 test above only sees the cap).
+func test_session_arena_level_from_lv6_room():
+	var g := _ground(7)
+	g.rooms.use_layout({"pos": {"c1r1": Vector2i(1, 1), "x1": Vector2i(2, 1), "x2": Vector2i(3, 1), "x3": Vector2i(3, 2),
+		"e0": Vector2i(4, 1)}, "links": [["c1r1", "east", "x1", "west"], ["x1", "east", "x2", "west"],
+		["x2", "south", "x3", "north"], ["x2", "east", "e0", "west"]], "fallback": false})
+	g.reroll(77)                                   # nothing kept from seed 7's layout; e0's set chosen on entry
+	g.hero.set_progress(1, 0)
+	var levels: Dictionary = g.rooms.room_levels()
+	var r := ""
+	if int(levels.get("x2", 0)) != 6: r = "test setup: x2 is Lv%s, not 6 (levels %s)" % [levels.get("x2"), levels]
+	elif String(g.rooms.room("e0").warps[0].to) != "x2": r = "test setup: e0 is joined to %s" % g.rooms.room("e0").warps[0].to
+	if r == "":
+		g.go_to("x2", "", false)
+		g.go_to("e0", "west", false)
+		var sets: Array = g.rooms.room("e0").monster_sets
+		var want_set := RoomLevels.arena_set(sets, 1, 6)
+		if RoomLevels.arena_level(6) != 7: r = "arena_level(6) = %d" % RoomLevels.arena_level(6)
+		elif g.arena_set != want_set: r = "from Lv6: set %d (want %d)" % [g.arena_set, want_set]
+		elif g.packs.size() != sets[want_set].size(): r = "from Lv6: %d packs" % g.packs.size()
+		else:
+			var n := 0
+			for i in g.packs.size():
+				var p: WolfPack = g.packs[i]
+				if p.kind != String(sets[want_set][i].kind): r = "from Lv6: pack %d is %s" % [i, p.kind]
+				for w in p.wolves:
+					n += 1
+					if r == "" and w.level != 7: r = "from Lv6 x2: a %s is Lv%d (want 7)" % [p.kind, w.level]
+			if r == "" and n == 0: r = "from Lv6: no monsters in e0"
+	g.free()
+	return r
 
 ## Review fix: e0 entered from e0 itself (go_to while in it) or straight from a room that is not next to it (here
 ## Lv6 and Lv1 rooms; walking in can only come from the room behind its exit) takes its set and levels from the

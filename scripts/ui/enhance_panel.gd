@@ -54,6 +54,14 @@ func close() -> void:
 func is_open() -> bool:
 	return visible
 
+## Taps from any finger (TouchTaps): a thumb still resting where the joystick was must not stop another finger
+## pressing this screen's buttons; while open, other fingers' touches stop here.
+var _taps := TouchTaps.new()
+
+func _input(e: InputEvent) -> void:
+	if _taps.feed(e, _root, TouchTaps.EVERYWHERE, visible):
+		get_viewport().set_input_as_handled()
+
 func _unhandled_input(e: InputEvent) -> void:
 	if visible and (e.is_action_pressed("ui_cancel") or e.is_action_pressed("bag") or e.is_action_pressed("skills")):
 		close()

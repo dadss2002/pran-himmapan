@@ -1,7 +1,8 @@
 extends SceneTree
 ## Task 5 waypoints: the stone in its room (c2r0 "ปรางค์ร้าง", the hero beside it, sideways phone), and the travel
 ## list open on the c1r1 stone with all four stones unlocked (c1r1 marked "ที่นี่") on a phone held upright
-## (780x1688) and sideways (1688x780), touch controls on:
+## (780x1688) and sideways (1688x780; also a small phone sideways, 1334x750 = a 640 x 360 view, where the list
+## takes one column to keep clear of the hero), touch controls on:
 ## xvfb-run -a -s "-screen 0 1800x1800x24" godot --path . --rendering-driver opengl3 --script tests/screenshots_m4b_waypoints.gd
 
 const OUT := "res://docs/preview/m4b/"
@@ -60,7 +61,7 @@ func _run() -> void:
 	# the list on the c1r1 stone, upright and sideways
 	g.go_to("c1r1", "", false)
 	_quiet()
-	for o in [[Vector2i(780, 1688), "portrait"], [Vector2i(1688, 780), "landscape"]]:
+	for o in [[Vector2i(780, 1688), "portrait"], [Vector2i(1688, 780), "landscape"], [Vector2i(1334, 750), "landscape_small"]]:
 		await _orient(o[0])
 		g.hud.close_waypoints()
 		g.hero.global_position = g.rooms.waypoint_landing("c1r1") + Vector2(0, 40)
@@ -69,7 +70,8 @@ func _run() -> void:
 		for i in 6: await physics_frame
 		g.hud.toast.visible = false
 		g.hud.layout(root.get_visible_rect().size)
-		print("list open: ", g.hud.waypoints_open(), " at ", g.hud.waypoint_list.get_global_rect())
+		print("list open: ", g.hud.waypoints_open(), " at ", g.hud.waypoint_list.get_global_rect(), " columns ",
+			g.hud.waypoint_list.grid.columns, " hero ", g.hero_screen_rect())
 		await _snap("waypoint_list_%s.png" % o[1])
 	_clean()
 	quit(0)

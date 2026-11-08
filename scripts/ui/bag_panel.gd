@@ -79,6 +79,14 @@ func close() -> void:
 func is_open() -> bool:
 	return visible
 
+## Taps from any finger (TouchTaps): a thumb still resting where the joystick was must not stop another finger
+## pressing this screen's buttons; while open, other fingers' touches stop here.
+var _taps := TouchTaps.new()
+
+func _input(e: InputEvent) -> void:
+	if _taps.feed(e, _root, TouchTaps.EVERYWHERE, visible and not (enhance_panel != null and enhance_panel.is_open())):
+		get_viewport().set_input_as_handled()
+
 ## I/B open and close the bag; Esc closes. Opening goes through the HUD so touch input lets go.
 func _unhandled_input(e: InputEvent) -> void:
 	if not visible:

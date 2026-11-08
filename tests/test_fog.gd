@@ -1,7 +1,8 @@
 extends RefCounted
 ## Task 6 fog (docs/superpowers/specs/2026-11-07-m4c-farm-links-fog-minimap.md §3): 16 x 16 cells of 32 px per
-## 512 x 512 room, a cell revealed when the hero comes within 96 px of it, revealed cells kept and saved per room
-## (32 bytes). Boundary rule (FogGrid): distance from the feet to the nearest point of the cell's closed square
+## 512 x 512 room, a cell revealed when the hero comes within 96 px of it, revealed cells kept per room
+## (32 bytes) for the rest of the game; every new game starts with all fog and the save holds no fog (owner
+## 2026-11-08). Boundary rule (FogGrid): distance from the feet to the nearest point of the cell's closed square
 ## <= 96 reveals it (exactly 96 does). Fog is shown on the minimap only: nothing here draws over the world.
 
 const SAVE := "user://test_fog_save.json"
@@ -255,39 +256,44 @@ func test_save_data_and_invalid_data_ignored():
 	if loose.known_ids() != ["zz9"]: return "a grid without a room set should take any id"
 	return ""
 
-## SaveGame: the "fog" key is saved and loaded; an old save (no "fog") loads with all fog and the rest intact; a
-## save whose "fog" is not a dict keeps the rest of the save (not moved to .bad.json) with all fog.
-func test_save_game_fog_key():
+## SaveGame (owner 2026-11-08: fog comes back with every new game, loading = a new game, so the fog is not
+## saved): a new state has no "fog" key; a Task 6 save holding "fog" (a real grid or junk) still loads with the
+## rest intact (not moved to .bad.json) and the "fog" key dropped; saving it again writes no "fog".
+func test_save_game_has_no_fog_key():
 	_clean()
 	var rooms := RoomSet.open()
 	var f := FogGrid.from_rooms(rooms)
 	f.reveal("c0r2", Vector2(100, 100))
 	var st := SaveGame.new_state()
-	if st.get("fog") != {}: return "new state fog %s" % [st.get("fog")]
+	if st.has("fog"): return "new state has fog %s" % [st.get("fog")]
 	st.level = 5
-	st.fog = f.to_save()
+	st.waypoints = ["c1r1", "c0r2"]
 	SaveGame.save(st, SAVE)
-	var d := SaveGame.load_or_new(SAVE)
-	if FogGrid.from_rooms(rooms, d.fog).to_bytes("c0r2") != f.to_bytes("c0r2"): return "fog not loaded back"
 	var raw := _read_save()
-	raw.erase("fog")
-	_write_save(raw)
-	d = SaveGame.load_or_new(SAVE)
-	if d.fog != {} or int(d.level) != 5: return "old save: fog %s level %s" % [d.fog, d.level]
-	raw.fog = "junk"
-	_write_save(raw)
-	d = SaveGame.load_or_new(SAVE)
+	if raw.has("fog"): return "a new state saved a fog key"
 	var r := ""
-	if FileAccess.file_exists(SAVE.get_basename() + ".bad.json"): r = "bad fog threw the save away"
-	elif d.fog != {} or int(d.level) != 5: r = "junk fog: fog %s level %s" % [d.fog, d.level]
+	for old in [f.to_save(), "junk", 12, null]:      # what Task 6 saves held (and broken copies of it)
+		raw.fog = old
+		_write_save(raw)
+		var d := SaveGame.load_or_new(SAVE)
+		if FileAccess.file_exists(SAVE.get_basename() + ".bad.json"): r = "old fog %s threw the save away" % [old]
+		elif d.has("fog"): r = "old fog %s kept in the loaded state" % [old]
+		elif int(d.level) != 5 or d.waypoints != ["c1r1", "c0r2"]: r = "old fog %s: level %s waypoints %s" % [old, d.level, d.waypoints]
+		if r != "": break
+		SaveGame.save(d, SAVE)
+		if _read_save().has("fog"): r = "old fog %s written back" % [old]
+		raw = _read_save()
+		if r != "": break
 	_clean()
 	return r
 
 ## In game: the start room is revealed round the arrival at once; walking reveals the cells round the hero on
-## the next physics frame; the fog is saved; entering another room reveals its arrival at once (and saves it);
-## a new game (a new ground from the same save) keeps the fog (Task 6 decision: kept per room id); the world is
-## not covered (no fog node in the world).
-func test_in_game_reveal_save_and_new_game():
+## the next physics frame; entering another room reveals its arrival at once; coming back (and a waypoint
+## re-roll, which is not a new game) keeps every room's fog for the rest of the game; the save never holds fog;
+## a new game (a new ground from the same save, also an old Task 6 save with fog in it) starts with all fog
+## except its own arrival (owner 2026-11-08, "หมอกกลับมาใหม่ทุกเกมใหม่"; this replaces the Task 6 "kept on a new
+## game" check); the world is not covered (no fog node in the world).
+func test_in_game_reveal_kept_in_game_reset_on_new_game():
 	_clean()
 	var g: Node2D = await _ground()
 	var r := ""
@@ -324,39 +330,48 @@ func test_in_game_reveal_save_and_new_game():
 	if r == "":
 		g.save_now()
 		keep = g.fog.to_bytes(id)
-		var saved: Dictionary = _read_save()
-		if typeof(saved.get("fog")) != TYPE_DICTIONARY or Marshalls.base64_to_raw(saved.fog.get(id, "")) != keep: r = "fog not in the save file"
+		if _read_save().has("fog"): r = "the save holds fog"
 	var other := ""
+	var keep_other := PackedByteArray()
 	if r == "":
 		other = String(g.rooms.room(id).warps[0].to)
 		g.go_to(other, "", false)
 		var a: Vector2 = g.hero.position
+		keep_other = g.fog.to_bytes(other)
 		if not g.fog.is_revealed(other, int(a.x) / 32, int(a.y) / 32): r = "arrival in %s not revealed at once" % other
-		elif not _read_save().fog.has(other): r = "%s's arrival not saved by go_to" % other
+		elif _read_save().has("fog"): r = "go_to saved fog"
+	if r == "":
+		g.reroll()                                     # what a waypoint trip does: not a new game
+		g.go_to(id, "", false)
+		var now: PackedByteArray = g.fog.to_bytes(id)
+		for i in 32:
+			if (now[i] & keep[i]) != keep[i]: r = "start room's fog lost within the game (byte %d)" % i
+		var now_other: PackedByteArray = g.fog.to_bytes(other)
+		if r == "" and now_other != keep_other: r = "%s's fog changed after leaving it" % other
 	if r == "":
 		for n in g.world.get_children():
 			if n.get_script() and String(n.get_script().resource_path).contains("fog"): r = "a fog node in the world"
+	if r == "":
+		g.save_now()
 	await _free(g)
-	if r == "":
+	for with_old_fog in [false, true]:
+		if r != "": break
+		if with_old_fog:                               # a Task 6 save that still holds the old game's fog
+			var old := FogGrid.from_rooms(RoomSet.open())
+			for rid in [id, other]:
+				for y in range(16, 512, 32):
+					for x in range(16, 512, 32): old.reveal(rid, Vector2(x, y))
+			var raw := _read_save()
+			raw.fog = old.to_save()
+			_write_save(raw)
 		var g2: Node2D = await _ground()                # a new game from the same save
-		if not g2.get_script().FOG_KEPT_ACROSS_GAMES: r = "decision flag changed without updating this test"
-		elif not g2.fog.known(other): r = "%s's fog lost on a new game" % other
-		else:
-			var now: PackedByteArray = g2.fog.to_bytes(id)
-			for i in 32:
-				if (now[i] & keep[i]) != keep[i]: r = "start room's fog lost on a new game (byte %d)" % i
-		await _free(g2)
-	if r == "":
-		var raw := _read_save()
-		raw.erase("fog")                                # an old save
-		_write_save(raw)
-		var g3: Node2D = await _ground()
-		if g3.fog.known_ids() != [g3.room_id]: r = "old save: rooms known %s (want only the start room)" % [g3.fog.known_ids()]
+		var start: String = g2.room_id
+		if g2.fog.known_ids() != [start]: r = "new game (old fog %s): rooms known %s (want only the start room)" % [with_old_fog, g2.fog.known_ids()]
 		else:
 			var only := FogGrid.new()
-			only.reveal(g3.room_id, g3.hero.position)
-			if g3.fog.to_bytes(g3.room_id) != only.to_bytes(g3.room_id): r = "old save: more than the arrival revealed"
-		await _free(g3)
+			only.reveal(start, g2.hero.position)
+			if g2.fog.to_bytes(start) != only.to_bytes(start): r = "new game (old fog %s): more than the arrival revealed" % with_old_fog
+		await _free(g2)
 	_clean()
 	return r
 

@@ -434,7 +434,8 @@ func waypoints_open() -> bool:
 ## Task 5: puts the open list where it fits (WaypointList.spot): inside safe_rect(), clear of blocked_rects() and
 ## of the hero (waypoint_avoid) and, where the screen allows, his stone (waypoint_avoid_stone), as near the
 ## screen's middle as it can. It stays where it is while that spot still
-## fits (no jumping about while the hero shuffles on the stone) unless `again`.
+## fits (no jumping about while the hero shuffles on the stone) unless `again`. Sideways it tries two columns
+## first; when no two-column spot clears the hero (a 640 x 360 view), it takes one column if that clears him.
 func place_waypoints(again := false) -> void:
 	if not waypoints_open(): return
 	var sz := waypoint_list.get_combined_minimum_size()
@@ -449,9 +450,28 @@ func place_waypoints(again := false) -> void:
 			and (hero_r.size == Vector2.ZERO or not here.intersects(hero_r)):
 		return
 	var v := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360)
-	var at := WaypointList.spot(sz, safe_rect(), blocked, [waypoint_avoid, waypoint_avoid_stone], v / 2.0)
-	if at == Vector2.INF: at = (v - sz) / 2.0       # cannot happen on the supported screens (tests); centred
+	waypoint_list.fit_columns(ScreenFit.is_portrait(v))
+	var at := _waypoint_spot(blocked, v)
+	if waypoint_list.grid.columns > 1 and not _waypoints_clear_hero(at, hero_r):
+		var two := at
+		waypoint_list.set_columns(1)
+		at = _waypoint_spot(blocked, v)
+		if not _waypoints_clear_hero(at, hero_r):    # one column does no better: keep two
+			waypoint_list.set_columns(2)
+			at = two
+	if at == Vector2.INF: at = (v - waypoint_list.size) / 2.0       # cannot happen on the supported screens (tests); centred
 	waypoint_list.position = at
+
+## The list's spot at its current size (WaypointList.spot; Vector2.INF when none).
+func _waypoint_spot(blocked: Array, v: Vector2) -> Vector2:
+	var sz := waypoint_list.get_combined_minimum_size()
+	waypoint_list.size = sz
+	return WaypointList.spot(sz, safe_rect(), blocked, [waypoint_avoid, waypoint_avoid_stone], v / 2.0)
+
+## The list at `at` (its current size) keeps clear of hero_r (the hero grown by MARGIN; empty = no hero).
+func _waypoints_clear_hero(at: Vector2, hero_r: Rect2) -> bool:
+	if at == Vector2.INF: return false
+	return hero_r.size == Vector2.ZERO or not Rect2(at, waypoint_list.size).intersects(hero_r)
 
 ## The map button: the full map comes with Task 8; until then a short "เร็ว ๆ นี้" note.
 func open_map() -> void:

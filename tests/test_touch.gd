@@ -1,5 +1,11 @@
 extends RefCounted
-## Touch controls + HUD. Uses the pure handle_* APIs so no input frames are needed.
+## Touch controls + HUD. Uses the pure handle_* APIs so no input frames are needed (the second-finger panel
+## test pushes touches into the root viewport).
+
+var tree: SceneTree
+
+func setup(t: SceneTree) -> void:
+	tree = t
 
 func _joy() -> TouchJoystick:
 	var j := TouchJoystick.new()
@@ -157,4 +163,118 @@ func test_hud_unlocks_spread_at_lv3():
 	if r == "" and not hud.buttons.buttons["skill2"].enabled: r = "spread still locked at Lv3"
 	if r == "" and hud.buttons.buttons["potion_hp"].note != "5": r = "potion count label '%s'" % hud.buttons.buttons["potion_hp"].note
 	hud.free(); hero.free()
+	return r
+
+## A touch (finger `index`) at p (HUD px) pushed into the root viewport; `mouse` first sends the emulated mouse
+## button Godot makes for the one finger it turns into the mouse (device DEVICE_ID_EMULATION).
+func _touch(index: int, p: Vector2, pressed: bool, mouse := false) -> void:
+	if mouse:
+		var mm := InputEventMouseMotion.new()
+		mm.device = InputEvent.DEVICE_ID_EMULATION
+		mm.position = p
+		mm.global_position = p
+		tree.root.push_input(mm, true)
+		var mb := InputEventMouseButton.new()
+		mb.device = InputEvent.DEVICE_ID_EMULATION
+		mb.button_index = MOUSE_BUTTON_LEFT
+		mb.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+		mb.pressed = pressed
+		mb.position = p
+		mb.global_position = p
+		tree.root.push_input(mb, true)
+	var st := InputEventScreenTouch.new()
+	st.index = index
+	st.position = p
+	st.pressed = pressed
+	tree.root.push_input(st, true)
+
+func _tap(index: int, c: Control, mouse := false) -> void:
+	var p := c.get_global_rect().get_center()
+	_touch(index, p, true, mouse)
+	await tree.process_frame
+	_touch(index, p, false, mouse)
+	await tree.process_frame
+
+## Owner report 2026-11-08 (second finger): with the thumb still down (the finger Godot turns into the mouse),
+## another finger's taps work on the bag (tab, close), the ตีบวก window under it is not pressed through, and on
+## the skill · gem screen (close); a one-finger tap (emulated mouse) presses a button exactly once.
+func test_second_finger_on_bag_and_skill_panels():
+	var hero: Hero = load("res://scenes/hero.tscn").instantiate()
+	hero.setup_sprites()
+	hero.set_progress(5, 0)
+	var hud := Hud.new()
+	tree.root.add_child(hud)
+	await tree.process_frame
+	hud.bind(hero)
+	await tree.process_frame
+	var thumb := Vector2(60, 300)
+	var r := ""
+	_touch(0, thumb, true, true)                       # the thumb: Godot's mouse finger
+	hud.open_bag()
+	for i in 2: await tree.process_frame
+	var bag := hud.bag_panel
+	if not bag.is_open(): r = "setup: bag not open"
+	if r == "":
+		var presses := [0]
+		(bag._tab_buttons[2] as Button).pressed.connect(func(): presses[0] += 1)
+		await _tap(1, bag._tab_buttons[2])
+		if bag.tab != 2 or presses[0] != 1: r = "second finger on tab 2: tab %d, pressed %d times" % [bag.tab, presses[0]]
+	if r == "":
+		await _tap(1, bag._close_button)
+		if bag.is_open() or tree.paused: r = "second finger on ✕ did not close the bag"
+	_touch(0, thumb, false, true)                      # thumb up
+	await tree.process_frame
+	if r == "":
+		hud.open_bag()
+		for i in 2: await tree.process_frame
+		var presses := [0]
+		(bag._tab_buttons[1] as Button).pressed.connect(func(): presses[0] += 1)
+		await _tap(0, bag._tab_buttons[1], true)       # one finger alone: the GUI presses it, nothing more
+		if bag.tab != 1 or presses[0] != 1: r = "one-finger tap on tab 1: tab %d, pressed %d times (want once)" % [bag.tab, presses[0]]
+	if r == "":
+		_touch(0, thumb, true, true)
+		hero.inventory.add("ore_himmapan", 5)
+		hero.inventory.gold = 5000
+		bag.select_worn("bow")
+		bag.press_enhance()
+		await tree.process_frame
+		var ep := bag.enhance_panel
+		if not ep.is_open(): r = "setup: ตีบวก window not open"
+		else:
+			# any bag button outside the window (under its dim) must not be pressed by another finger
+			var under: Button = null
+			var stack: Array = [bag._root]
+			while not stack.is_empty() and under == null:
+				var n: Node = stack.pop_back()
+				if n is Button and n.is_visible_in_tree() and not n.disabled and not ep._panel.get_global_rect().intersects(n.get_global_rect()):
+					under = n
+				stack.append_array(n.get_children())
+			if under == null: r = "setup: no bag button outside the ตีบวก window"
+			else:
+				var hits := [0]
+				under.pressed.connect(func(): hits[0] += 1)
+				await _tap(1, under)
+				if hits[0] != 0 or not ep.is_open(): r = "a second finger pressed the bag's %s through the ตีบวก window" % under.name
+			if r == "":
+				await _tap(1, ep._close_button)
+				if ep.is_open(): r = "second finger on the ตีบวก ✕ did not close it"
+		_touch(0, thumb, false, true)
+		await tree.process_frame
+	if bag.is_open(): bag.close()
+	if r == "":
+		_touch(0, thumb, true, true)
+		hud.open_skills()
+		for i in 2: await tree.process_frame
+		var sp := hud.skill_panel
+		if not sp.is_open(): r = "setup: skill screen not open"
+		else:
+			await _tap(1, sp._close_button)
+			if sp.is_open() or tree.paused: r = "second finger on the skill screen's ✕ did not close it"
+		_touch(0, thumb, false, true)
+		await tree.process_frame
+	if hud.skill_panel.is_open(): hud.skill_panel.close()
+	tree.paused = false
+	hud.queue_free()
+	hero.queue_free()
+	for i in 2: await tree.process_frame
 	return r

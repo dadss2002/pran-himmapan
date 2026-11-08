@@ -332,9 +332,11 @@ func test_travel_rerolls_and_lands_by_the_stone():
 func TestGround_fade() -> float:
 	return 0.25 + 0.25 + 0.2     # FADE_OUT + FADE_IN + slack
 
-## The travel list upright (780x1688) and sideways (1688x780) with touch on, 4 rows (one marked "ที่นี่") and the
-## unlock toast showing, for heroes at several places on screen: rows and close button at least 44 px tall and
-## inside the panel; one column upright, two sideways; the panel inside the safe area, clear of the status panel,
+## The travel list upright (780x1688, 750x1334) and sideways (1688x780, 1334x750 = a 640 x 360 view) with touch on,
+## 4 rows (one marked "ที่นี่") and the unlock toast showing, for heroes at several places on screen (the centred
+## camera too; hero and stone sized by the camera zoom of that view): rows and close button at least 44 px tall and
+## inside the panel; one column upright; two sideways unless no two-column spot clears the hero and the HUD, then
+## one; the hero is never covered; the panel inside the safe area, clear of the status panel,
 ## the minimap box, the FPS line, the top-right block, the toast, every touch button (with its note), the joystick
 ## ring and the hero with his stone; a touch on it never starts the joystick; listed in blocked_rects (exit labels avoid it).
 func test_list_layout_portrait_and_landscape():
@@ -351,7 +353,9 @@ func test_list_layout_portrait_and_landscape():
 	var covered := 0
 	var entries := []
 	for id in ["c1r1", "c0r2", "c2r0", "c2r1"]: entries.append({"id": id, "name": STONES[id]})
-	for o in [Vector2i(780, 1688), Vector2i(1688, 780)]:
+	var cases := 0
+	var one_col := 0
+	for o in [Vector2i(780, 1688), Vector2i(1688, 780), Vector2i(750, 1334), Vector2i(1334, 750)]:
 		DisplayServer.window_set_size(o)
 		w.size = o
 		w.content_scale_size = ScreenFit.base_for(o)
@@ -362,21 +366,43 @@ func test_list_layout_portrait_and_landscape():
 		hud.joystick.reset()
 		hud.layout(view)
 		var portrait: bool = o.y > o.x
-		var heroes := [Vector2(0.5, 0.5), Vector2(0.25, 0.5), Vector2(0.75, 0.5), Vector2(0.5, 0.3), Vector2(0.5, 0.75), Vector2(0.3, 0.8)]
+		var heroes := [Vector2(0.5, 0.5), Vector2(0.25, 0.5), Vector2(0.75, 0.5), Vector2(0.5, 0.3), Vector2(0.5, 0.75), Vector2(0.3, 0.8),
+			Vector2(0.6, 0.6)]
+		# camera zoom of this view for a 512 px room (1.52 on 1688x780, 1.25 on 1334x750)
+		var zoom := ScreenFit.camera_zoom(view, Vector2(512, 512))
+		var zk := zoom / 1.52
+		# and the hero landed on each real stone, where the camera (kept inside the room) shows him in this view
+		var rooms := RoomSet.open()
+		var half := view / zoom / 2.0
+		for id in STONES:
+			var feet: Vector2 = rooms.waypoint_landing(id)
+			var cam_at := Vector2(clampf(feet.x, half.x, 512.0 - half.x), clampf(feet.y, half.y, 512.0 - half.y))
+			heroes.append(((feet - cam_at) * zoom + view / 2.0) / view)
 		for hp in heroes:
-			# the hero (HERO_BOX x camera scale 1.52) and the stone just above his head (ART_BOX x 1.52)
-			var hero := Rect2(view * hp - Vector2(18, 64), Vector2(36, 67))
-			var stone_r := Rect2(view * hp - Vector2(33, 112), Vector2(67, 85))
+			cases += 1
+			# the hero (HERO_BOX x camera zoom) and the stone just above his head (ART_BOX x camera zoom)
+			var hero := Rect2(view * hp - Vector2(18, 64) * zk, Vector2(36, 67) * zk)
+			var stone_r := Rect2(view * hp - Vector2(33, 112) * zk, Vector2(67, 85) * zk)
 			hud.close_waypoints()
 			hud.show_toast("ปลดล็อกจุดวาป")
 			hud.waypoint_avoid = hero
 			hud.waypoint_avoid_stone = stone_r
 			hud.open_waypoints(entries, "c2r0")
 			await tree.process_frame
-			var tag := "%s hero %s" % ["portrait" if portrait else "landscape", hp]
+			var tag := "%s %s hero %s" % ["portrait" if portrait else "landscape", o, hp]
 			var panel: Rect2 = hud.waypoint_list.get_global_rect()
-			var want_cols := 1 if portrait else 2
-			if hud.waypoint_list.grid.columns != want_cols: fails.append("%s: %d columns" % [tag, hud.waypoint_list.grid.columns])
+			var cols: int = hud.waypoint_list.grid.columns
+			if portrait and cols != 1: fails.append("%s: %d columns upright" % [tag, cols])
+			if not portrait and cols == 1:
+				# one column sideways only when no two-column spot clears the HUD and the hero
+				one_col += 1
+				hud.waypoint_list.set_columns(2)
+				var sz2: Vector2 = hud.waypoint_list.get_combined_minimum_size()
+				hud.waypoint_list.set_columns(1)
+				var hud_hero: Array = hud.blocked_rects(false) + [hud.top_right.get_global_rect(), hero]
+				if WaypointList.spot(sz2, hud.safe_rect(), hud_hero, [], view / 2.0) != Vector2.INF:
+					fails.append("%s: one column though two columns clear the hero" % tag)
+			elif not portrait and cols != 2: fails.append("%s: %d columns sideways" % [tag, cols])
 			var rects := {"close": hud.waypoint_list.close_button.get_global_rect()}
 			for id in hud.waypoint_list.rows: rects["row " + id] = hud.waypoint_list.rows[id].get_global_rect()
 			if hud.waypoint_list.rows.size() != 4: fails.append("%s: %d rows" % [tag, hud.waypoint_list.rows.size()])
@@ -409,7 +435,7 @@ func test_list_layout_portrait_and_landscape():
 				else: covered += 1
 			for k in rects:
 				if hud.joystick.in_zone(rects[k].get_center()): fails.append("%s: a tap on %s starts the joystick" % [tag, k])
-	print("    (list over the stone, no clear spot: %d of 12 cases)" % covered)
+	print("    (list over the stone, no clear spot: %d of %d cases; one column sideways: %d)" % [covered, cases, one_col])
 	hud.close_waypoints()
 	if hud.joystick.ignore_at.call(Vector2(100, 200)): fails.append("joystick still ignores touches with the list shut")
 	DisplayServer.window_set_size(size0)
@@ -438,3 +464,102 @@ func test_spot_rule():
 	if at == Vector2.INF or Rect2(at, sz).intersects(Rect2(250, 0, 50, 60).grow(WaypointList.MARGIN)): return "hero not kept clear when the stone had to go: %s" % at
 	if WaypointList.spot(sz, safe, [Rect2(0, 0, 300, 200)], [], Vector2(150, 100)) != Vector2.INF: return "a full block still found a spot"
 	return ""
+
+## A touch (finger `index`) at p (HUD px) pushed into the root viewport; with `mouse` it first sends the emulated
+## mouse button Godot makes for the finger it turns into the mouse (device DEVICE_ID_EMULATION, sent just before
+## that finger's touch). true when the touch was marked handled.
+func _touch(index: int, p: Vector2, pressed: bool, mouse := false) -> bool:
+	if mouse:
+		var mb := InputEventMouseButton.new()
+		mb.device = InputEvent.DEVICE_ID_EMULATION
+		mb.button_index = MOUSE_BUTTON_LEFT
+		mb.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+		mb.pressed = pressed
+		mb.position = p
+		mb.global_position = p
+		tree.root.push_input(mb, true)
+	var st := InputEventScreenTouch.new()
+	st.index = index
+	st.position = p
+	st.pressed = pressed
+	tree.root.push_input(st, true)
+	return tree.root.is_input_handled()
+
+## Second-finger taps (owner report 2026-11-08): with a thumb held on the joystick (the finger Godot turns into
+## the mouse), a tap on a row with another finger chooses it, once; the joystick keeps the thumb and no touch
+## button is pressed; the tap is marked handled. Down on one row and up on another chooses nothing. Another
+## finger on the close button closes the list. A one-finger tap (emulated mouse + its touch) chooses once.
+func test_second_finger_taps_rows():
+	_clean()
+	var hud := Hud.new()
+	hud.settings_path = SETTINGS
+	hud.build()
+	tree.root.add_child(hud)
+	hud.touch_ui.visible = true
+	await tree.process_frame
+	var view := tree.root.get_visible_rect().size
+	hud.buttons.layout(view)
+	hud.joystick.view_size = view
+	hud.joystick.reset()
+	hud.layout(view)
+	var entries := []
+	for id in ["c1r1", "c0r2", "c2r0", "c2r1"]: entries.append({"id": id, "name": STONES[id]})
+	var picked := []
+	var shut := [0]
+	hud.waypoint_list.chosen.connect(func(id): picked.append(id))
+	hud.waypoint_list.closed.connect(func(): shut[0] += 1)
+	hud.waypoint_avoid = Rect2(view / 2.0 - Vector2(15, 50), Vector2(30, 55))
+	hud.open_waypoints(entries, "c2r0")
+	for i in 2: await tree.process_frame
+	var row := func(id: String) -> Vector2: return hud.waypoint_list.rows[id].get_global_rect().get_center()
+	var r := ""
+	# the thumb on the joystick: left half, clear of the list
+	var thumb := Vector2(hud.joystick.idle_center().x, hud.joystick.idle_center().y)
+	if hud.waypoint_list.get_global_rect().grow(WaypointList.MARGIN).has_point(thumb): r = "setup: the joystick spot is under the list"
+	if r == "":
+		_touch(0, thumb, true, true)
+		if not hud.joystick.active: r = "setup: the thumb did not take the joystick"
+	if r == "":
+		var down := _touch(1, row.call("c0r2"), true)
+		await tree.process_frame
+		var up := _touch(1, row.call("c0r2"), false)
+		await tree.process_frame
+		if picked != ["c0r2"]: r = "second finger on c0r2 chose %s" % [picked]
+		elif not down or not up: r = "the second finger's touch was not marked handled (down %s, up %s)" % [down, up]
+		elif not hud.joystick.active or hud.joystick._index != 0: r = "the joystick lost the thumb"
+		elif not hud.buttons.pressed_names().is_empty(): r = "touch buttons pressed: %s" % [hud.buttons.pressed_names()]
+	if r == "":
+		picked.clear()
+		_touch(1, row.call("c0r2"), true)
+		_touch(1, row.call("c2r1"), false)
+		await tree.process_frame
+		if not picked.is_empty(): r = "down on c0r2, up on c2r1 chose %s" % [picked]
+	if r == "":
+		_touch(2, hud.waypoint_list.close_button.get_global_rect().get_center(), true)
+		_touch(2, hud.waypoint_list.close_button.get_global_rect().get_center(), false)
+		await tree.process_frame
+		if hud.waypoints_open() or shut[0] != 1: r = "second finger on ปิด: open %s, closed %d" % [hud.waypoints_open(), shut[0]]
+	if r == "":
+		_touch(0, thumb, false, true)
+		await tree.process_frame
+		if hud.joystick.active: r = "the joystick kept a lifted thumb"
+	if r == "":
+		# one finger alone: Godot's emulated mouse presses the button (GUI); the helper must not press it again
+		hud.open_waypoints(entries, "c2r0")
+		for i in 2: await tree.process_frame
+		picked.clear()
+		var p: Vector2 = row.call("c1r1")
+		var motion := InputEventMouseMotion.new()
+		motion.device = InputEvent.DEVICE_ID_EMULATION
+		motion.position = p
+		motion.global_position = p
+		tree.root.push_input(motion, true)
+		_touch(0, p, true, true)
+		await tree.process_frame
+		_touch(0, p, false, true)
+		await tree.process_frame
+		if picked != ["c1r1"]: r = "one-finger tap on c1r1 chose %s (want exactly once)" % [picked]
+	hud.queue_free()
+	for i in 2: await tree.process_frame
+	_clean()
+	return r

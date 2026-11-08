@@ -4,8 +4,9 @@ extends PanelContainer
 ## "จุดวาป" with a close button ("ปิด"), then one row per unlocked stone with its room's Thai name (rooms.json
 ## "name"); the room the hero stands in is marked "· ที่นี่" (still tappable: a trip there re-rolls the monsters,
 ## the way to reset a room). Rows and the close button are at least IconButton.MIN_TOUCH (44) HUD px tall; one
-## column upright, two side by side on a phone held sideways. The HUD places it (spot()) inside the safe area,
-## clear of the HUD panels, the touch buttons, the joystick ring and the hero.
+## column upright, two side by side on a phone held sideways, unless the two-column panel cannot clear the hero
+## there (a small sideways phone, 640 x 360 UI px): then one column (Hud.place_waypoints). The HUD places it
+## (spot()) inside the safe area, clear of the HUD panels, the touch buttons, the joystick ring and the hero.
 
 signal chosen(id: String)
 signal closed
@@ -21,10 +22,13 @@ var close_button: Button
 var grid: GridContainer
 var rows := {}                       # room id -> Button
 var here := ""
+## Taps from any finger (TouchTaps): a thumb held on the joystick must not stop another finger choosing a row.
+var taps := TouchTaps.new()
 
 func build() -> void:
 	name = "WaypointList"
 	visible = false
+	process_mode = Node.PROCESS_MODE_ALWAYS    # keeps TouchTaps' finger tracking whole even while paused
 	add_theme_stylebox_override("panel", UiKit.box(Color(0.055, 0.145, 0.11, 0.92), GOLD, 8, 6))
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 4)
@@ -79,13 +83,24 @@ func open(entries: Array, here_id: String) -> void:
 
 func close() -> void:
 	visible = false
+	if taps: taps.reset()
+
+## Every finger, not only the one Godot turns into the mouse: a tap on a row or the close button with another
+## finger presses it; touches on the open list are kept from the joystick and the touch buttons.
+func _input(e: InputEvent) -> void:
+	if taps.feed(e, self, get_global_rect().grow(MARGIN), visible):
+		get_viewport().set_input_as_handled()
 
 func is_open() -> bool:
 	return visible
 
 ## One column upright, two sideways (only when there is more than one row).
 func fit_columns(portrait: bool) -> void:
-	var cols := 1 if portrait or rows.size() < 2 else 2
+	set_columns(1 if portrait else 2)
+
+## n columns (1 when there is only one row), the panel resized to fit.
+func set_columns(n: int) -> void:
+	var cols := 1 if rows.size() < 2 else clampi(n, 1, 2)
 	if grid.columns != cols:
 		grid.columns = cols
 	size = get_combined_minimum_size()

@@ -2,7 +2,8 @@ class_name FogGrid
 extends RefCounted
 ## M4c §3 fog (Task 6, owner-approved 2026-11-07, docs/superpowers/specs/2026-11-07-m4c-farm-links-fog-minimap.md):
 ## each room has a fog grid of ⚙ CELL x CELL px cells (16 x 16 for a 512 x 512 room). A cell is revealed when the
-## hero comes within ⚙ RADIUS px of it; revealed cells stay revealed and are saved per room (16 x 16 bits = 32 bytes).
+## hero comes within ⚙ RADIUS px of it; revealed cells stay revealed for the rest of the game (16 x 16 bits = 32
+## bytes per room). Owner 2026-11-08: every new game starts with all fog, so the game save does not hold the fog.
 ## The fog is drawn on the minimap / full map only (Tasks 7-8), never over the game world. Pure rules, no scene.
 ##
 ## Choices (Task 6, not in the spec):
@@ -15,10 +16,9 @@ extends RefCounted
 ##   byte stay 0. The save holds each room's bytes as base64 ({room id: text}); a room with no revealed cell is
 ##   left out. Anything wrong in it (not a dict, a non-string id or value, an id not in the room set, bad base64,
 ##   the wrong length) is ignored room by room: that room stays all fog, the rest of the save loads.
-## - Persistence: the fog is kept per room id across sessions (the spec's "saved per room"), although each
-##   session (= a new game, spec addendum 2026-11-08) has a new layout: a room keeps its id and picture in every
-##   layout, so what the hero has seen of it stays seen. clear_all() is the hook if the owner wants fresh fog
-##   with each new game (test_ground.FOG_KEPT_ACROSS_GAMES).
+## - Persistence (owner 2026-11-08, spec addendum): the fog lives for one game (one session) and comes back with
+##   every new game; the test ground builds a fresh FogGrid per game and never saves it. to_save / load_save
+##   stay as a tested data format (unused by the game save).
 
 ## Emitted when room_id's revealed cells change (reveal() revealed new cells, from_bytes(), clear()): the
 ## minimap redraws its fog then (Task 7).
@@ -34,7 +34,7 @@ var _ids := {}       # the room set's ids (load_save keeps only these); empty = 
 var _last_room := ""
 var _last_pos := Vector2.INF
 
-## A fog grid for a room set's rooms (their sizes), with `saved` (SaveGame "fog", may be null) loaded.
+## A fog grid for a room set's rooms (their sizes), with `saved` (to_save() data, may be null) loaded.
 static func from_rooms(rooms: RoomSet, saved = null) -> FogGrid:
 	var f := FogGrid.new()
 	for id in rooms.ids():
@@ -153,7 +153,7 @@ func clear(room_id: String) -> void:
 	if _bits.erase(room_id): changed.emit(room_id)
 	_forget_last()
 
-## Fogs every room again (the reset hook: a new game with fresh fog, if the owner wants it).
+## Fogs every room again.
 func clear_all() -> void:
 	var ids := _bits.keys()
 	_bits.clear()
