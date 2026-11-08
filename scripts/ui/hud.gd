@@ -35,6 +35,9 @@ var minimap_box: PanelContainer
 var toast: Label
 var _toast_tween: Tween
 const TOAST_TIME := 1.5
+## M4d addendum 3 follow-up: the iPhone "เต็มจอ" tip stays 4 s ("ข้อความนี้ค้าง 4 วินาที"); other toasts 1.5 s.
+const IOS_TIP_TIME := 4.0
+var toast_secs := TOAST_TIME             # how long the toast showing now stays (tests read it)
 var settings_path := GameSettings.PATH   # tests point this at a scratch file before build()
 ## What "เต็มจอ" calls off iOS (tests swap it so the real window is left alone).
 var fullscreen_toggle: Callable = ScreenFit.toggle_fullscreen
@@ -86,6 +89,13 @@ func layout(size: Vector2) -> void:
 		var y := top_right.position.y + top_right.size.y + 4
 		if settings_panel and settings_panel.visible: y = maxf(y, settings_panel.position.y + settings_panel.size.y + 4)
 		toast.position = Vector2(clampf(mr.get_center().x - toast.size.x / 2.0, 4, size.x - 4 - toast.size.x), y)
+		# the backing makes it a little wider: slide left off any touch button it would touch
+		if touch_ui and touch_ui.visible and buttons:
+			for n in buttons.buttons:
+				var b: Dictionary = buttons.buttons[n]
+				var br := Rect2(b.center - Vector2(b.radius, b.radius), Vector2(b.radius, b.radius) * 2.0).grow(1.0)
+				if Rect2(toast.position, toast.size).intersects(br):
+					toast.position.x = maxf(4.0, br.position.x - toast.size.x)
 	exp_bar.position = Vector2(0, size.y - 4)
 	exp_bar.size.x = size.x
 	exp_bar.custom_minimum_size.x = size.x
@@ -235,6 +245,17 @@ func build() -> void:
 	# --- short notes under the top-right block ("เร็ว ๆ นี้" for the map until Task 8)
 	toast = _label("", 9, Color("#f3e9d2"))
 	toast.name = "Toast"
+	# dark rounded backing so the note reads over bright grass
+	var tb := StyleBoxFlat.new()
+	tb.bg_color = Color(0.03, 0.07, 0.05, 0.86)
+	tb.border_color = Color(GOLD, 0.55)
+	tb.set_border_width_all(1)
+	tb.set_corner_radius_all(4)
+	tb.content_margin_left = 6
+	tb.content_margin_right = 6
+	tb.content_margin_top = 2
+	tb.content_margin_bottom = 3
+	toast.add_theme_stylebox_override("normal", tb)
 	toast.visible = false
 	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(toast)
@@ -316,24 +337,29 @@ func open_skills() -> void:
 func open_map() -> void:
 	show_toast("เร็ว ๆ นี้")
 
-## A short note under the top-right block (and the open settings panel) that fades after TOAST_TIME s.
-func show_toast(text: String) -> void:
+## A short note under the top-right block (and the open settings panel) that fades after `secs`
+## (TOAST_TIME unless given).
+func show_toast(text: String, secs := TOAST_TIME) -> void:
 	if _toast_tween and _toast_tween.is_valid(): _toast_tween.kill()
 	toast.text = text
+	toast_secs = secs
 	toast.modulate.a = 1.0
 	toast.visible = true
 	layout(get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360))
 	if not is_inside_tree(): return
 	_toast_tween = create_tween()
-	_toast_tween.tween_interval(TOAST_TIME)
+	_toast_tween.tween_interval(secs)
 	_toast_tween.tween_property(toast, "modulate:a", 0.0, 0.3)
 	_toast_tween.tween_callback(func(): toast.visible = false)
 
-## "เต็มจอ": full screen on/off; on iPhone / iPad web (no full-screen call in Safari) a tip toast instead
-## (M4d addendum 3).
+## "เต็มจอ": full screen on/off; on iPhone web (no full-screen call in Safari) a 4 s tip toast instead
+## (M4d addendum 3); on iPhone opened from the home screen nothing happens (already full screen); iPad
+## gets real full screen (ScreenFit.fullscreen_action).
 func press_fullscreen() -> void:
-	if ScreenFit.is_ios_web(): show_toast(ScreenFit.IOS_TIP)
-	else: fullscreen_toggle.call()
+	var iphone := ScreenFit.is_ios_web()
+	match ScreenFit.fullscreen_action(iphone, iphone and ScreenFit.is_standalone_web()):
+		"tip": show_toast(ScreenFit.IOS_TIP, IOS_TIP_TIME)
+		"toggle": fullscreen_toggle.call()
 
 ## The settings button opens / closes the small settings panel under the top-right block.
 func toggle_settings() -> void:

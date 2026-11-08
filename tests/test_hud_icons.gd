@@ -114,7 +114,7 @@ func test_settings_panel_fullscreen_and_fps():
 	_clean()
 	return r
 
-## M4d addendum 3: on iPhone / iPad web "เต็มจอ" shows the tip toast and leaves the window alone; on desktop
+## M4d addendum 3: on iPhone web "เต็มจอ" shows the tip toast and leaves the window alone; on desktop
 ## and Android it toggles full screen (as before) and shows no toast. ScreenFit.ios_override forces the check.
 func test_fullscreen_ios_tip():
 	_clean()
@@ -126,6 +126,7 @@ func test_fullscreen_ios_tip():
 	var r := ""
 	hud.toggle_settings()
 	ScreenFit.ios_override = 1
+	ScreenFit.standalone_override = 0
 	hud.fullscreen_button.pressed.emit()
 	if calls[0] != 0: r = "iOS: full screen was called"
 	elif not hud.toast.visible or hud.toast.text != "กดแชร์ → เพิ่มไปยังหน้าจอโฮม": r = "iOS: toast '%s' visible=%s" % [hud.toast.text, hud.toast.visible]
@@ -137,17 +138,19 @@ func test_fullscreen_ios_tip():
 		if calls[0] != 1: r = "desktop/Android: full screen called %d times (want 1)" % calls[0]
 		elif hud.toast.visible: r = "desktop/Android: a toast showed"
 	ScreenFit.ios_override = -1
+	ScreenFit.standalone_override = -1
 	hud.queue_free()
 	await tree.process_frame
 	_clean()
 	return r
 
-## The user-agent rule behind ScreenFit.is_ios_web (when the web_ios feature tag is missing).
+## The user-agent rule behind ScreenFit.is_ios_web: iPhone / iPod only (spec addendum 4, iPad line).
 func test_ios_user_agent_rule():
 	var cases := {
 		"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1|5": true,
-		"Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)|5": true,
-		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15|5": true,   # iPadOS
+		"Mozilla/5.0 (iPod touch; CPU iPhone OS 15_0 like Mac OS X)|5": true,
+		"Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)|5": false,                  # iPad: real full screen (owner 2026-11-08)
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15|5": false,  # iPadOS
 		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15|0": false,  # a Mac
 		"Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/130.0 Mobile Safari/537.36|5": false,
 		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0|0": false,
@@ -156,7 +159,79 @@ func test_ios_user_agent_rule():
 		if ScreenFit.ios_user_agent(ua) != cases[ua]: return "%s -> %s" % [ua, not cases[ua]]
 	ScreenFit.ios_override = -1
 	if not OS.has_feature("web") and ScreenFit.is_ios_web(): return "not a web build but is_ios_web() is true"
+	ScreenFit.standalone_override = -1
+	if not OS.has_feature("web") and ScreenFit.is_standalone_web(): return "not a web build but is_standalone_web() is true"
 	return ""
+
+## What "เต็มจอ" does: tip on iPhone Safari, nothing on iPhone from the home screen, toggle elsewhere.
+func test_fullscreen_action_rule():
+	var cases := [[true, false, "tip"], [true, true, "none"], [false, false, "toggle"], [false, true, "toggle"]]
+	for c in cases:
+		var got := ScreenFit.fullscreen_action(c[0], c[1])
+		if got != c[2]: return "iphone=%s standalone=%s -> %s (want %s)" % [c[0], c[1], got, c[2]]
+	return ""
+
+## iPhone opened from the home screen: "เต็มจอ" shows no tip and does not call full screen.
+func test_fullscreen_standalone_iphone_no_tip():
+	_clean()
+	var hud := _hud()
+	tree.root.add_child(hud)
+	await tree.process_frame
+	var calls := [0]
+	hud.fullscreen_toggle = func(): calls[0] += 1
+	ScreenFit.ios_override = 1
+	ScreenFit.standalone_override = 1
+	hud.press_fullscreen()
+	var r := ""
+	if hud.toast.visible: r = "standalone iPhone: a toast showed ('%s')" % hud.toast.text
+	elif calls[0] != 0: r = "standalone iPhone: full screen called %d times" % calls[0]
+	ScreenFit.ios_override = -1
+	ScreenFit.standalone_override = -1
+	hud.queue_free()
+	await tree.process_frame
+	_clean()
+	return r
+
+## Addendum 3 follow-up: the iPhone tip stays 4 s; the map's "เร็ว ๆ นี้" note keeps 1.5 s.
+func test_ios_tip_stays_4s():
+	_clean()
+	var hud := _hud()
+	tree.root.add_child(hud)
+	await tree.process_frame
+	hud.fullscreen_toggle = func(): pass
+	var r := ""
+	if Hud.IOS_TIP_TIME != 4.0 or Hud.TOAST_TIME != 1.5: r = "times %s / %s" % [Hud.IOS_TIP_TIME, Hud.TOAST_TIME]
+	if r == "":
+		ScreenFit.ios_override = 1
+		ScreenFit.standalone_override = 0
+		hud.press_fullscreen()
+		ScreenFit.ios_override = -1
+		ScreenFit.standalone_override = -1
+		if not hud.toast.visible or hud.toast_secs != 4.0: r = "tip: visible=%s secs=%s" % [hud.toast.visible, hud.toast_secs]
+	if r == "":
+		await tree.create_timer(Hud.TOAST_TIME + 0.6).timeout
+		if not hud.toast.visible: r = "the tip went away before 4 s"
+	if r == "":
+		await tree.create_timer(4.0 + 0.6 - (Hud.TOAST_TIME + 0.6) + 0.3).timeout
+		if hud.toast.visible: r = "the tip still shows after 4 s + fade"
+	if r == "":
+		hud.open_map()
+		if hud.toast_secs != Hud.TOAST_TIME: r = "map note lasts %s s (want %s)" % [hud.toast_secs, Hud.TOAST_TIME]
+	hud.queue_free()
+	await tree.process_frame
+	_clean()
+	return r
+
+## The toast has a dark rounded backing (readable over bright grass).
+func test_toast_has_dark_backing():
+	var hud := _hud()
+	var sb := hud.toast.get_theme_stylebox("normal")
+	var r := ""
+	if not (sb is StyleBoxFlat): r = "toast stylebox is %s" % sb
+	elif (sb as StyleBoxFlat).bg_color.get_luminance() > 0.2 or (sb as StyleBoxFlat).bg_color.a < 0.7: r = "backing not dark: %s" % (sb as StyleBoxFlat).bg_color
+	elif (sb as StyleBoxFlat).corner_radius_top_left < 2: r = "backing not rounded"
+	hud.free()
+	return r
 
 ## The toast (short "เร็ว ๆ นี้" and the long iPhone tip) never covers the open or closed settings panel, the
 ## minimap box or a touch button, upright and sideways, and stays on screen.
@@ -191,7 +266,7 @@ func test_toast_clear_of_settings_and_minimap():
 				for n in hud.buttons.buttons:
 					var b: Dictionary = hud.buttons.buttons[n]
 					var br := Rect2(b.center - Vector2(b.radius, b.radius), Vector2(b.radius, b.radius) * 2.0)
-					if t.intersects(br): fails.append("%s: toast over the touch button %s" % [tag, n])
+					if t.intersects(br): fails.append("%s: toast %s over the touch button %s %s" % [tag, t, n, br])
 				if not hud.safe_rect().encloses(t): fails.append("%s: toast %s off the safe area" % [tag, t])
 	hud.settings_panel.visible = false
 	DisplayServer.window_set_size(size0)
