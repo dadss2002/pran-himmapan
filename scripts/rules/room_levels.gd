@@ -11,10 +11,13 @@ extends RefCounted
 ## room's first group in the room data keeps that +1 (cap MAX_LV). e0 keeps its own level-by-hero sets.
 ## e0's set (addendum 2, approved 2026-11-08): target = max(hero level, level of the room the hero came
 ## from); the set whose average monster level is closest to the target, ties to the higher set (arena_set).
+## e0's level (addendum 3, approved 2026-11-08): every monster of the chosen set = level of the room the hero
+## came from + 1, max ARENA_MAX_LV (an arena-only level); the set keeps its kinds, counts and homes.
 
 const MIN_LV := 2       # ⚙ approved: the rooms next to the start
 const MAX_LV := 10      # ⚙ approved: the farthest forest room, and the cap for +1 groups
 const SPAN := 8.0       # ⚙ approved: levels spread over d = 1..D
+const ARENA_MAX_LV := 11  # ⚙ approved (addendum 3): e0 = previous room + 1, at most Lv11
 
 ## L for a room d rooms from the start when the farthest forest room is `far` rooms away.
 static func level_at(d: int, far: int) -> int:
@@ -69,3 +72,20 @@ static func arena_set(sets: Array, hero_level: int, from_level: int) -> int:
 			best_gap = gap
 			best_lv = lv
 	return best
+
+## e0 monster level for a hero who came from a room of from_level (addendum 3): from_level + 1, at most
+## ARENA_MAX_LV; 0 when the previous room's level is unknown (from_level <= 0).
+static func arena_level(from_level: int) -> int:
+	if from_level <= 0: return 0
+	return mini(from_level + 1, ARENA_MAX_LV)
+
+## Copies of one e0 monster set with every group at arena_level(from_level): the same kinds, counts and
+## homes. An unknown previous room (from_level <= 0) keeps the set's own levels.
+static func arena_groups(monster_set: Array, from_level: int) -> Array:
+	var lv := arena_level(from_level)
+	var out: Array = []
+	for m in monster_set:
+		var g: Dictionary = m.duplicate(true)
+		if lv > 0: g["level"] = lv
+		out.append(g)
+	return out

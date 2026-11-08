@@ -1,6 +1,6 @@
 extends SceneTree
 ## M4d Task 3d HUD icon buttons screenshots (skills, bag, map, settings; the settings panel open; the
-## map's "เร็ว ๆ นี้" note) on a phone held upright (780x1688) and sideways (1688x780), touch controls on:
+## map's "เร็ว ๆ นี้" note; addendum 3's iPhone "เต็มจอ" tip) on a phone held upright (780x1688) and sideways (1688x780), touch controls on:
 ## xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_m4b_hud.gd
 
 const OUT := "res://docs/preview/m4b/"
@@ -28,10 +28,14 @@ func _run() -> void:
 		if FileAccess.file_exists(f): DirAccess.remove_absolute(ProjectSettings.globalize_path(f))
 	g = load("res://scenes/test_ground.tscn").instantiate()
 	g.save_path = SAVE
+	g.settings_path = SETTINGS              # before build(): never read or write the player's settings file
 	g.layout_seed = 7
 	root.add_child(g)
 	await process_frame
-	g.hud.settings_path = SETTINGS          # never write the player's settings file
+	if g.hud.settings_path != SETTINGS:
+		print("settings_path not applied before the HUD was built")
+		quit(1)
+		return
 	g.hero.set_physics_process(false)
 	for p in g.packs:
 		p.set_physics_process(false)
@@ -48,5 +52,9 @@ func _run() -> void:
 		g.hud.toggle_settings()
 		g.hud.open_map()
 		await _snap("m4b_hud_%s_settings.png" % o[1])
+		ScreenFit.ios_override = 1              # addendum 3: what an iPhone sees after tapping เต็มจอ
+		g.hud.press_fullscreen()
+		ScreenFit.ios_override = -1
+		await _snap("m4b_hud_%s_ios_tip.png" % o[1])
 		g.hud.toggle_settings()
 	quit(0)

@@ -36,6 +36,8 @@ var toast: Label
 var _toast_tween: Tween
 const TOAST_TIME := 1.5
 var settings_path := GameSettings.PATH   # tests point this at a scratch file before build()
+## What "เต็มจอ" calls off iOS (tests swap it so the real window is left alone).
+var fullscreen_toggle: Callable = ScreenFit.toggle_fullscreen
 var settings := {}
 ## Frame-rate meter for phone testing (owner 2026-11-07): "FPS 60 · 16 ms"; tap to fold it down to
 ## a faint "FPS" and tap again to bring it back.
@@ -77,9 +79,13 @@ func layout(size: Vector2) -> void:
 		settings_panel.size = settings_panel.get_combined_minimum_size()
 		settings_panel.position = Vector2(size.x - 6 - settings_panel.size.x, top_right.position.y + top_right.size.y + 4)
 	if toast and map_button:
+		# under the whole top-right block (so never over the minimap box) and, while the settings panel is
+		# open, under the panel too; centred under the map button, kept on screen
 		toast.size = toast.get_combined_minimum_size()
 		var mr := Rect2(top_right.position + map_button.position, map_button.size)
-		toast.position = Vector2(clampf(mr.get_center().x - toast.size.x / 2.0, 4, size.x - 4 - toast.size.x), mr.end.y + 4)
+		var y := top_right.position.y + top_right.size.y + 4
+		if settings_panel and settings_panel.visible: y = maxf(y, settings_panel.position.y + settings_panel.size.y + 4)
+		toast.position = Vector2(clampf(mr.get_center().x - toast.size.x / 2.0, 4, size.x - 4 - toast.size.x), y)
 	exp_bar.position = Vector2(0, size.y - 4)
 	exp_bar.size.x = size.x
 	exp_bar.custom_minimum_size.x = size.x
@@ -212,7 +218,7 @@ func build() -> void:
 	fs.focus_mode = Control.FOCUS_NONE
 	fs.add_theme_font_size_override("font_size", UiKit.fs(9))
 	fs.custom_minimum_size = Vector2(110, IconButton.MIN_TOUCH)
-	fs.pressed.connect(ScreenFit.toggle_fullscreen)
+	fs.pressed.connect(press_fullscreen)
 	fullscreen_button = fs
 	sv.add_child(fs)
 	fps_toggle = CheckButton.new()
@@ -310,7 +316,7 @@ func open_skills() -> void:
 func open_map() -> void:
 	show_toast("เร็ว ๆ นี้")
 
-## A short note under the map button that fades after TOAST_TIME s.
+## A short note under the top-right block (and the open settings panel) that fades after TOAST_TIME s.
 func show_toast(text: String) -> void:
 	if _toast_tween and _toast_tween.is_valid(): _toast_tween.kill()
 	toast.text = text
@@ -323,11 +329,16 @@ func show_toast(text: String) -> void:
 	_toast_tween.tween_property(toast, "modulate:a", 0.0, 0.3)
 	_toast_tween.tween_callback(func(): toast.visible = false)
 
+## "เต็มจอ": full screen on/off; on iPhone / iPad web (no full-screen call in Safari) a tip toast instead
+## (M4d addendum 3).
+func press_fullscreen() -> void:
+	if ScreenFit.is_ios_web(): show_toast(ScreenFit.IOS_TIP)
+	else: fullscreen_toggle.call()
+
 ## The settings button opens / closes the small settings panel under the top-right block.
 func toggle_settings() -> void:
 	settings_panel.visible = not settings_panel.visible
-	if settings_panel.visible:
-		layout(get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360))
+	layout(get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360))   # the toast moves too
 
 ## "แสดง FPS": shows or hides the frame-rate line; remembered in the settings file.
 func set_show_fps(on: bool, save := true) -> void:

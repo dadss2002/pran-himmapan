@@ -19,7 +19,30 @@ static func camera_zoom(view: Vector2, room: Vector2) -> float:
 	if room.x <= 0.0 or room.y <= 0.0: return 1.0
 	return maxf(1.0, maxf(view.x / room.x, view.y / room.y))
 
-## Full screen on/off (on the web it must come from a tap; iPhone Safari does not allow it).
+## M4d addendum 3: what "เต็มจอ" shows on iPhone / iPad web, where Safari has no full-screen call.
+const IOS_TIP := "กดแชร์ → เพิ่มไปยังหน้าจอโฮม"
+## Tests force the iOS check: -1 = detect, 0 = not iOS web, 1 = iOS web.
+static var ios_override := -1
+
+## Running in a browser on iPhone / iPad (feature tag web_ios; iPadOS Safari says "Macintosh", so the
+## user agent with a touch screen counts too).
+static func is_ios_web() -> bool:
+	if ios_override >= 0: return ios_override == 1
+	if not OS.has_feature("web"): return false
+	if OS.has_feature("web_ios"): return true
+	var ua = JavaScriptBridge.eval("navigator.userAgent + '|' + (navigator.maxTouchPoints || 0)", true)
+	return ua is String and ios_user_agent(ua)
+
+## The user-agent rule on its own (unit-tested): iPhone / iPad / iPod, or a "Macintosh" with touch points.
+static func ios_user_agent(ua_and_touch: String) -> bool:
+	var parts := ua_and_touch.split("|")
+	var ua := parts[0]
+	var touch := int(parts[1]) if parts.size() > 1 else 0
+	if ua.contains("iPhone") or ua.contains("iPad") or ua.contains("iPod"): return true
+	return ua.contains("Macintosh") and touch > 1
+
+## Full screen on/off (on the web it must come from a tap; iPhone Safari does not allow it: the HUD shows
+## IOS_TIP there instead, Hud.press_fullscreen).
 static func toggle_fullscreen() -> void:
 	var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)

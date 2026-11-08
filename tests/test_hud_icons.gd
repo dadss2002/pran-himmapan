@@ -89,8 +89,9 @@ func test_settings_panel_fullscreen_and_fps():
 	if r == "":
 		var wired := false
 		for c in hud.fullscreen_button.pressed.get_connections():
-			if c.callable.get_method() == "toggle_fullscreen": wired = true
-		if not wired: r = "เต็มจอ is not wired to ScreenFit.toggle_fullscreen"
+			if c.callable.get_method() == "press_fullscreen": wired = true
+		if not wired: r = "เต็มจอ is not wired to Hud.press_fullscreen"
+		elif hud.fullscreen_toggle.get_method() != "toggle_fullscreen": r = "off iOS เต็มจอ does not call ScreenFit.toggle_fullscreen"
 		elif hud.fullscreen_button.text != "เต็มจอ" or hud.fps_toggle.text != "แสดง FPS": r = "panel texts %s / %s" % [hud.fullscreen_button.text, hud.fps_toggle.text]
 		elif hud.fullscreen_button.size.y < 44 or hud.fps_toggle.size.y < 44: r = "panel buttons under 44 px"
 	if r == "":
@@ -111,6 +112,125 @@ func test_settings_panel_fullscreen_and_fps():
 		if r == "" and not back.fps_button.visible: r = "FPS on not remembered"
 		back.free()
 	_clean()
+	return r
+
+## M4d addendum 3: on iPhone / iPad web "เต็มจอ" shows the tip toast and leaves the window alone; on desktop
+## and Android it toggles full screen (as before) and shows no toast. ScreenFit.ios_override forces the check.
+func test_fullscreen_ios_tip():
+	_clean()
+	var hud := _hud()
+	tree.root.add_child(hud)
+	await tree.process_frame
+	var calls := [0]
+	hud.fullscreen_toggle = func(): calls[0] += 1
+	var r := ""
+	hud.toggle_settings()
+	ScreenFit.ios_override = 1
+	hud.fullscreen_button.pressed.emit()
+	if calls[0] != 0: r = "iOS: full screen was called"
+	elif not hud.toast.visible or hud.toast.text != "กดแชร์ → เพิ่มไปยังหน้าจอโฮม": r = "iOS: toast '%s' visible=%s" % [hud.toast.text, hud.toast.visible]
+	elif not hud.blocked_rects().has(hud.toast.get_global_rect()): r = "iOS: the tip is not in blocked_rects"
+	if r == "":
+		hud.toast.visible = false
+		ScreenFit.ios_override = 0
+		hud.fullscreen_button.pressed.emit()
+		if calls[0] != 1: r = "desktop/Android: full screen called %d times (want 1)" % calls[0]
+		elif hud.toast.visible: r = "desktop/Android: a toast showed"
+	ScreenFit.ios_override = -1
+	hud.queue_free()
+	await tree.process_frame
+	_clean()
+	return r
+
+## The user-agent rule behind ScreenFit.is_ios_web (when the web_ios feature tag is missing).
+func test_ios_user_agent_rule():
+	var cases := {
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1|5": true,
+		"Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)|5": true,
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15|5": true,   # iPadOS
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15|0": false,  # a Mac
+		"Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/130.0 Mobile Safari/537.36|5": false,
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0|0": false,
+	}
+	for ua in cases:
+		if ScreenFit.ios_user_agent(ua) != cases[ua]: return "%s -> %s" % [ua, not cases[ua]]
+	ScreenFit.ios_override = -1
+	if not OS.has_feature("web") and ScreenFit.is_ios_web(): return "not a web build but is_ios_web() is true"
+	return ""
+
+## The toast (short "เร็ว ๆ นี้" and the long iPhone tip) never covers the open or closed settings panel, the
+## minimap box or a touch button, upright and sideways, and stays on screen.
+func test_toast_clear_of_settings_and_minimap():
+	_clean()
+	var w := tree.root
+	var size0 := w.size
+	var scale0 := w.content_scale_size
+	var hud := _hud()
+	w.add_child(hud)
+	hud.touch_ui.visible = true
+	var fails := []
+	for o in [Vector2i(780, 1688), Vector2i(1688, 780)]:
+		DisplayServer.window_set_size(o)
+		w.size = o
+		w.content_scale_size = ScreenFit.base_for(o)
+		for i in 4: await tree.process_frame
+		var view := w.get_visible_rect().size
+		hud.buttons.layout(view)
+		for open in [false, true]:
+			for text in ["เร็ว ๆ นี้", ScreenFit.IOS_TIP]:
+				hud.settings_panel.visible = open
+				hud.show_toast(text)
+				hud.layout(view)
+				await tree.process_frame
+				var tag := "%s%s '%s'" % ["portrait" if o.y > o.x else "landscape", " settings open" if open else "", text]
+				var t := hud.toast.get_global_rect()
+				if t.size.x < 10: fails.append("%s: toast not laid out %s" % [tag, t])
+				if t.intersects(hud.minimap_box.get_global_rect()): fails.append("%s: toast %s over the minimap box %s" % [tag, t, hud.minimap_box.get_global_rect()])
+				if open and t.intersects(hud.settings_panel.get_global_rect()): fails.append("%s: toast %s over the settings panel %s" % [tag, t, hud.settings_panel.get_global_rect()])
+				if t.intersects(hud.top_right.get_global_rect()): fails.append("%s: toast over the top-right block" % tag)
+				for n in hud.buttons.buttons:
+					var b: Dictionary = hud.buttons.buttons[n]
+					var br := Rect2(b.center - Vector2(b.radius, b.radius), Vector2(b.radius, b.radius) * 2.0)
+					if t.intersects(br): fails.append("%s: toast over the touch button %s" % [tag, n])
+				if not hud.safe_rect().encloses(t): fails.append("%s: toast %s off the safe area" % [tag, t])
+	hud.settings_panel.visible = false
+	DisplayServer.window_set_size(size0)
+	w.size = size0
+	w.content_scale_size = scale0
+	hud.queue_free()
+	for i in 3: await tree.process_frame
+	_clean()
+	return "" if fails.is_empty() else "%d problems, e.g. %s" % [fails.size(), fails.slice(0, 4)]
+
+## Review: only the four chosen icons ship under assets/ui/icons (the PixelLab candidates *_0..3 live in
+## docs/preview/m4b/icon_candidates/, which the web export leaves out).
+func test_only_chosen_icons_ship():
+	var extra := []
+	for f in DirAccess.get_files_at("res://assets/ui/icons"):
+		if f.ends_with(".png") and not f.get_basename() in ICONS.values(): extra.append(f)
+	if not extra.is_empty(): return "candidate icons still in assets/ui/icons: %s" % extra
+	var cfg := ConfigFile.new()
+	if cfg.load("res://export_presets.cfg") != OK: return "no export_presets.cfg"
+	if not String(cfg.get_value("preset.0", "exclude_filter", "")).contains("docs/*"): return "the export does not leave out docs/"
+	return ""
+
+## The test ground hands its settings file to the HUD before the HUD reads it (screenshots, tests).
+func test_ground_passes_settings_path_before_build():
+	_clean()
+	var f := FileAccess.open(TMP_SETTINGS, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"show_fps": false}))
+	f.close()
+	var g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = "user://test_hud_ground_save.json"
+	g.settings_path = TMP_SETTINGS
+	g.layout_seed = 7
+	g.build()
+	var r := ""
+	if g.hud.settings_path != TMP_SETTINGS: r = "HUD settings_path %s" % g.hud.settings_path
+	elif g.hud.fps_toggle.button_pressed: r = "HUD did not read the scratch settings (FPS on)"
+	g.free()
+	_clean()
+	if FileAccess.file_exists("user://test_hud_ground_save.json"): DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_hud_ground_save.json"))
 	return r
 
 func test_broken_settings_file_gives_defaults():

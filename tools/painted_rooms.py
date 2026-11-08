@@ -139,22 +139,30 @@ def ring_fits(roomy: np.ndarray, home, count: int) -> bool:
     return True
 
 
-def ring_mask(roomy: np.ndarray, count: int) -> np.ndarray:
-    """Open cells where a group of `count` can be homed with its whole spawn ring on open ground."""
+def ring_clear(home, count: int, arrivals: list, floor: float) -> bool:
+    """Every spawn point of the group is at least `floor` px from every arrival (M4d addendum 3)."""
+    return all(math.hypot(x - a[0], y - a[1]) >= floor for x, y in ring(home, count) for a in arrivals)
+
+
+def ring_mask(roomy: np.ndarray, count: int, arrivals=(), floor: float = 0.0) -> np.ndarray:
+    """Open cells where a group of `count` can be homed with its whole spawn ring on open ground and, when
+    floor > 0, every spawn point at least floor px from every arrival."""
     out = np.zeros_like(roomy)
     for cy, cx in zip(*np.nonzero(roomy)):
-        out[cy, cx] = ring_fits(roomy, ((cx + 0.5) * CELL, (cy + 0.5) * CELL), count)
+        home = ((cx + 0.5) * CELL, (cy + 0.5) * CELL)
+        out[cy, cx] = ring_fits(roomy, home, count) and (floor <= 0 or ring_clear(home, count, arrivals, floor))
     return out
 
 
 def spread_home(roomy: np.ndarray, homes: list, arrivals: list, keep_off: float, hard_off: float,
-                count: int = 1) -> list:
+                count: int = 1, floor: float = 0.0) -> list:
     """The open cell farthest from every other group home (and the arrivals), keep_off from each
     arrival if the room allows, else at least hard_off (the test's minimum), else as far as possible.
     Cells EDGE_CELLS from blocked ground come first; when none of them is hard_off from the arrivals
     (M4d x2: open ground only on a narrow plateau), any open cell that is (keep_off, else hard_off) is used.
-    Every candidate, fallbacks included, has the group's whole spawn ring on open ground (M4d addendum 2)."""
-    fit = ring_mask(roomy, count)
+    Every candidate, fallbacks included, has the group's whole spawn ring on open ground (M4d addendum 2)
+    and, with floor > 0, every spawn point floor px from each arrival (addendum 3)."""
+    fit = ring_mask(roomy, count, arrivals, floor)
     if not fit.any(): raise SystemExit("no open ground fits a group of %d" % count)
     inner = ndimage.binary_erosion(roomy, np.ones((2 * EDGE_CELLS + 1, 2 * EDGE_CELLS + 1), bool)) & fit
     if not inner.any(): inner = fit
@@ -182,17 +190,22 @@ def spread_home(roomy: np.ndarray, homes: list, arrivals: list, keep_off: float,
     return [int(cx[i]), int(cy[i])]
 
 
-def place_monsters(src_monsters: list, roomy: np.ndarray, arrivals: list):
+NEAR_ARRIVAL_MIN = 48.0   # M4d addendum 2/3: near_arrival_ok rooms keep every spawn point this far from arrivals
+
+
+def place_monsters(src_monsters: list, roomy: np.ndarray, arrivals: list, near_ok: bool = False):
     """Group homes for one monster list: given "at" points move to the nearest cell whose whole spawn ring
     is on the main open ground; others are split into groups of at most GROUP_MAX and spread over the room
     (farthest from the other homes), out of aggro range of every warp arrival for kinds that attack first
-    (M3g)."""
+    (M3g). In a near_arrival_ok room every spawn point of every group keeps NEAR_ARRIVAL_MIN px from each
+    arrival (M4d addendum 3: measured for the whole spawn ring, not only the home)."""
+    floor = NEAR_ARRIVAL_MIN if near_ok else 0.0
     monsters = []
     homes = []
     for m in src_monsters:
         m = dict(m)
         if "at" in m:
-            fit = ring_mask(roomy, int(m["count"]))
+            fit = ring_mask(roomy, int(m["count"]), arrivals, floor)
             if not fit.any(): raise SystemExit("no open ground fits a %s group of %d" % (m["kind"], m["count"]))
             want = m["at"]
             m["at"] = nearest_roomy(fit, want)
@@ -207,7 +220,7 @@ def place_monsters(src_monsters: list, roomy: np.ndarray, arrivals: list):
         keep_off = aggro_of(m["kind"]) + 40 if first else 90
         hard_off = aggro_of(m["kind"]) + 12 if first else 60
         for sz in sizes:
-            at = spread_home(roomy, homes, arrivals, keep_off, hard_off, sz)
+            at = spread_home(roomy, homes, arrivals, keep_off, hard_off, sz, floor)
             homes.append(at)
             monsters.append({"kind": m["kind"], "level": m["level"], "count": sz, "at": at})
     return monsters, homes
@@ -263,9 +276,10 @@ def main():
             arrivals.append(nearest_roomy(roomy, [ax + dx / ln * ARRIVAL, ay + dy / ln * ARRIVAL]))
         if "spawn" in rs:
             arrivals.append(nearest_roomy(roomy, rs["spawn"]))   # the hero's start point counts too
-        monsters, homes = place_monsters(rs.get("monsters", []), roomy, arrivals)
+        near_ok = bool(rs.get("near_arrival_ok"))
+        monsters, homes = place_monsters(rs.get("monsters", []), roomy, arrivals, near_ok)
         # e0 (M4b): the arena sets in level order; each set is placed on its own like "monsters"
-        sets = [place_monsters(ms, roomy, arrivals)[0] for ms in rs.get("monster_sets", [])]
+        sets = [place_monsters(ms, roomy, arrivals, near_ok)[0] for ms in rs.get("monster_sets", [])]
         over = np.asarray(Image.open(over_file).convert("L")) > 127 if over_file.exists() else overlay(rgb, walk)
         ov_file = None
         if over.any():
@@ -278,8 +292,8 @@ def main():
         if sets: room["monster_sets"] = sets
         if rs.get("name"): room["name"] = rs["name"]       # M4c: exit labels "→ <name>"
         if rs.get("arena"): room["arena"] = True
-        # M4d addendum 2: groups may sit closer to the arrivals than their aggro (calm 1 s on arrival),
-        # but never nearer than NEAR_ARRIVAL_MIN (tests/test_monsters.gd)
+        # M4d addendum 2/3: groups may sit closer to the arrivals than their aggro (calm 1 s on arrival),
+        # but no spawn point nearer than NEAR_ARRIVAL_MIN (place_monsters; tests/test_monsters.gd)
         if rs.get("near_arrival_ok"): room["near_arrival_ok"] = True
         if spawn: room["spawn"] = spawn
         rooms[rid] = room

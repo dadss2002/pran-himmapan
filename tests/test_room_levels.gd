@@ -143,8 +143,8 @@ func _ground(seed: int) -> Node2D:
 	g.build()
 	return g
 
-## A real session spawns every pack with its room's layout level (+1 kept); e0 spawns its chosen set with the
-## set's own levels (M4d addendum 2).
+## A real session spawns every pack with its room's layout level (+1 kept); e0 spawns its chosen set
+## (M4d addendum 2) at the previous room's level + 1, max 11 (addendum 3): here from the farthest room, Lv11.
 func test_session_spawns_layout_levels():
 	for s in [1, 3, 58]:
 		var g := _ground(s)
@@ -165,7 +165,7 @@ func test_session_spawns_layout_levels():
 			if id == "e0": src = g.rooms.room(id).monster_sets[3]
 			if g.packs.size() != src.size(): r = "seed %d %s: %d packs (want %d)" % [s, id, g.packs.size(), src.size()]
 			for i in mini(g.packs.size(), src.size()):
-				var want := int(src[i].level)
+				var want := 11                   # addendum 3: from the farthest forest room (Lv10) + 1
 				if id != "e0":
 					var room_lv := _want(int(dist[id]), far)
 					want = mini(room_lv + (1 if int(src[i].level) == int(src[0].level) + 1 else 0), 10)
@@ -202,4 +202,76 @@ func test_arena_set_tie_goes_higher():
 	if RoomLevels.arena_set([low, high], 1, 3) != 1: return "tie from the previous room's level chose the lower"
 	var mixed := [{"kind": "boar", "level": 2, "count": 3}, {"kind": "wolf", "level": 6, "count": 1}]   # avg 3.0
 	if absf(RoomLevels.set_level(mixed) - 3.0) > 0.001: return "set level %.2f (want 3.0, weighted by count)" % RoomLevels.set_level(mixed)
+	return ""
+
+## M4d addendum 3: e0 monster level = level of the room the hero came from + 1, at most Lv11; unknown
+## previous room (0) keeps the set's own levels; kinds, counts and homes never change.
+func test_arena_level_previous_room_plus_one():
+	for c in [[10, 11], [6, 7], [1, 2], [9, 10], [11, 11], [15, 11], [0, 0], [-1, 0]]:
+		if RoomLevels.arena_level(c[0]) != c[1]: return "from a Lv%d room: Lv%d (want %d)" % [c[0], RoomLevels.arena_level(c[0]), c[1]]
+	var sets: Array = RoomSet.open().room("e0").get("monster_sets", [])
+	for from_lv in range(0, 16):
+		for st in sets:
+			var before: Array = st.duplicate(true)
+			var got := RoomLevels.arena_groups(st, from_lv)
+			if st != before: return "arena_groups changed the room data in place"
+			if got.size() != st.size(): return "set size changed"
+			for i in got.size():
+				var want := int(st[i].level) if from_lv <= 0 else mini(from_lv + 1, 11)
+				if int(got[i].level) != want: return "from Lv%d: %s Lv%d (want %d)" % [from_lv, got[i].kind, got[i].level, want]
+				if int(got[i].level) > 11: return "above Lv11"
+				if got[i].kind != st[i].kind or int(got[i].count) != int(st[i].count) or got[i].at != st[i].at:
+					return "from Lv%d: group %d changed kind/count/home" % [from_lv, i]
+	return ""
+
+## Addendum 3 in a real session: e0 from a Lv10 room spawns Lv11, from a Lv6 room Lv7; the set is still
+## chosen by addendum 2's rule (kinds unchanged).
+func test_session_arena_level_from_previous_room():
+	var r := ""
+	for c in [[10, 11], [6, 7]]:
+		var g := _ground(7)
+		var levels: Dictionary = g.rooms.room_levels()
+		var from := ""
+		for id in levels:
+			if int(levels[id]) == c[0]: from = id
+		if from == "":
+			g.free()
+			return "seed 7 has no Lv%d room" % c[0]
+		g.hero.set_progress(1, 0)
+		g.go_to(from, "", false)
+		g.go_to("e0", "west", false)
+		var sets: Array = g.rooms.room("e0").monster_sets
+		var want_set := RoomLevels.arena_set(sets, 1, c[0])
+		if g.arena_set != want_set: r = "from Lv%d: set %d (want %d)" % [c[0], g.arena_set, want_set]
+		elif g.packs.size() != sets[want_set].size(): r = "from Lv%d: %d packs" % [c[0], g.packs.size()]
+		else:
+			for i in g.packs.size():
+				var p: WolfPack = g.packs[i]
+				if p.kind != String(sets[want_set][i].kind): r = "from Lv%d: pack %d is %s" % [c[0], i, p.kind]
+				for w in p.wolves:
+					if w.level != c[1]: r = "from Lv%d %s: a %s is Lv%d (want %d)" % [c[0], from, p.kind, w.level, c[1]]
+		g.free()
+		if r != "": return r
+	return ""
+
+## Addendum 3 check: the monster, EXP and loot numbers accept Lv11 (linear formulas, no level tables).
+## Ring/necklace drops take the source level clamped to option_ref_level (10): a Lv11 monster drops a Lv10
+## one (no Lv11 item numbers exist; owner decision pending).
+func test_level_11_numbers():
+	var b: Dictionary = Balance.data()
+	for k in b["monsters"]:
+		var s10 := Monster.stats_for(String(k), 10)
+		var s11 := Monster.stats_for(String(k), 11)
+		for f in ["hp", "atk", "def", "exp"]:
+			if int(s11[f]) < int(s10[f]): return "%s Lv11 %s %d below Lv10 %d" % [k, f, s11[f], s10[f]]
+		if int(s11.hp) <= int(s10.hp) or int(s11.exp) <= 0: return "%s Lv11 stats %s" % [k, s11]
+	var w11 := Balance.wolf(11)
+	if int(w11.hp) <= int(Balance.wolf(10).hp): return "wolf Lv11 %s" % w11
+	if Progression.kill_exp(int(w11.exp), 11, 10) != int(w11.exp): return "Lv10 hero gets reduced EXP from Lv11"
+	var rng := RandomNumberGenerator.new()
+	for kind in b["loot"]:
+		for i in 300:
+			rng.seed = i
+			for it in Loot.roll(String(kind), 11, rng, i % 2 == 0):
+				if it.has("item") and int(it.item.level) > 10: return "Lv11 %s drop item Lv%d" % [kind, it.item.level]
 	return ""

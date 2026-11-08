@@ -46,6 +46,7 @@ var _built := false
 var _bag_full_cd := 0.0
 var lock_ring: FxSprite
 var save_path := SaveGame.PATH
+var settings_path := GameSettings.PATH   # the HUD's settings file (tests / screenshots set a scratch one)
 var _autosave_t := 0.0
 
 func _ready() -> void:
@@ -119,6 +120,7 @@ func build() -> void:
 	world.move_child(lock_ring, 0)
 	lock_ring.play("lock_on")
 	hud = Hud.new()
+	hud.settings_path = settings_path        # before the HUD builds (it reads the file in build())
 	add_child(hud)
 	if hud.hp_label == null: hud.build()
 	hud.bind(hero)
@@ -186,14 +188,16 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		warps.append(n)
 	if not _navs.has(id): _navs[id] = layout.make_nav()
 	# M4d addendum: forest rooms spawn at the level of their distance from c1r1 in this session's layout;
-	# e0 spawns its chosen monster set (addendum 2); a room off the map keeps the levels in rooms.json.
+	# e0 spawns its chosen monster set (addendum 2) at the previous room's level + 1, max Lv11 (addendum 3);
+	# a room off the map keeps the levels in rooms.json.
 	var groups: Array = rooms.room(id).get("monsters", [])
 	var levels := rooms.room_levels()
 	if levels.has(id): groups = RoomLevels.groups(groups, int(levels[id]))
 	var sets: Array = rooms.room(id).get("monster_sets", [])
 	if not sets.is_empty():
 		if arena_set < 0: choose_arena_set(from_id)
-		groups = sets[clampi(arena_set, 0, sets.size() - 1)]
+		# addendum 3: the set's kinds and counts at the previous room's level + 1 (max Lv11)
+		groups = RoomLevels.arena_groups(sets[clampi(arena_set, 0, sets.size() - 1)], int(levels.get(from_id, 0)))
 	for m in groups:
 		_add_group(m, _navs[id])
 	if with_fade and is_inside_tree():

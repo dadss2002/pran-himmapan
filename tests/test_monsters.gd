@@ -387,7 +387,8 @@ func test_group_calm_during_fade():
 
 ## Review fix: no group that attacks first has its home within its aggro range of a warp arrival.
 ## M4d addendum 2: a room marked "near_arrival_ok" in data (x1, x2: hand-placed homes; monsters are calm 1 s
-## after arrival) only has to keep every group NEAR_ARRIVAL_MIN px from each arrival.
+## after arrival) only has to keep every group NEAR_ARRIVAL_MIN px from each arrival; addendum 3: measured for
+## every spawn point of the group's ring (test_near_arrival_spawn_points), not only the home.
 const NEAR_ARRIVAL_MIN := 48.0
 func test_no_aggressive_home_by_an_arrival():
 	var rooms := RoomSet.open()
@@ -413,6 +414,49 @@ func test_no_aggressive_home_by_an_arrival():
 				var d := rooms.arrival(id, w.id).distance_to(home)
 				if d <= aggro: bad.append("%s %s by %s arrival: %d px (aggro %d)" % [id, k, w.id, d, aggro])
 	return "" if bad.is_empty() else ", ".join(bad)
+
+## M4d addendum 3: in a near_arrival_ok room (x1, x2) every spawn point of every group (PaintedLayout.ring,
+## radius wolf.pack_ring) is at least NEAR_ARRIVAL_MIN px from every arrival (review: an x2 macaque point was 45).
+func test_near_arrival_spawn_points():
+	var rooms := RoomSet.open()
+	var bad := []
+	var checked := 0
+	for id in rooms.ids():
+		if not bool(rooms.room(id).get("near_arrival_ok", false)): continue
+		var lists: Array = [rooms.room(id).get("monsters", [])]
+		lists.append_array(rooms.room(id).get("monster_sets", []))
+		for list in lists:
+			for m in list:
+				for q in PaintedLayout.ring(Vector2(m.at[0], m.at[1]), int(m.count)):
+					checked += 1
+					for w in rooms.exits(id):
+						var d := rooms.arrival(id, w.id).distance_to(q)
+						if d < NEAR_ARRIVAL_MIN:
+							bad.append("%s %s x%d at %s: spawn point %s is %.1f px from the %s arrival" % [id, m.kind, m.count, m.at, q.round(), d, w.id])
+	if checked < 30: return "only %d spawn points checked (x1 and x2 should give 36)" % checked
+	return "" if bad.is_empty() else ", ".join(bad)
+
+## Review fix (M4d addendum 2, x2): its monsters spawn on the grass round the rise, not on the dirt paths:
+## no x2 spawn point has more than a quarter of the 7x7 pixels round it in path-dirt colours.
+func test_x2_spawn_points_on_grass():
+	var img := Image.load_from_file(ProjectSettings.globalize_path("res://assets/map/painted/raw/x2.png"))
+	if img == null or img.is_empty(): return "x2.png did not load"
+	var rooms := RoomSet.open()
+	var bad := []
+	for m in rooms.room("x2").monsters:
+		for q in PaintedLayout.ring(Vector2(m.at[0], m.at[1]), int(m.count)):
+			var p: Vector2 = q
+			var dirt := 0
+			for dy in range(-3, 4):
+				for dx in range(-3, 4):
+					if _is_path_dirt(img.get_pixel(int(p.x) + dx, int(p.y) + dy)): dirt += 1
+			if dirt > 12: bad.append("%s at %s: spawn point %s on the path (%d/49 dirt pixels)" % [m.kind, m.at, p.round(), dirt])
+	return "" if bad.is_empty() else ", ".join(bad)
+
+## The painted dirt path's colours (light/dark brown): hue 15-46 deg, saturation 0.18-0.6, value >= 0.33.
+func _is_path_dirt(c: Color) -> bool:
+	var h := c.h * 360.0
+	return h >= 15.0 and h <= 46.0 and c.s >= 0.18 and c.s <= 0.6 and c.v >= 0.33
 
 ## M4d addendum 2: every monster spawn point (each group's spawn ring, PaintedLayout.ring) is on open ground
 ## (a hero-sized body fits, and it can be walked to from the room's spawn) in every room, e0's sets included.
