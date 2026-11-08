@@ -47,6 +47,16 @@ static func is_standalone_web() -> bool:
 	var v = JavaScriptBridge.eval("!!(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches))", true)
 	return v == true
 
+## Owner 2026-11-08 ("กดสวมใส่ไม่ได้"): Safari's floating bottom bar on iPhone covered the bag's action
+## button. Portrait pause screens (bag, skill · gem) keep this many UI px free at the bottom on iPhone web.
+const IOS_BOTTOM_INSET := 64.0
+
+## Space a portrait pause screen keeps free at the bottom: Safari's bar on iPhone (portrait, not opened
+## from the home screen). 0 elsewhere.
+static func bottom_inset(portrait: bool) -> float:
+	if not portrait or not is_ios_web() or is_standalone_web(): return 0.0
+	return IOS_BOTTOM_INSET
+
 ## What "เต็มจอ" does (unit-tested): "tip" on iPhone web in Safari, "none" on iPhone already opened from the
 ## home screen (it is full screen already; Safari has no full-screen call), "toggle" everywhere else.
 static func fullscreen_action(iphone_web: bool, standalone: bool) -> String:

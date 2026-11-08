@@ -94,3 +94,65 @@ func test_full_bag_refusal_shown():
 	var r := "" if not l.is_empty() and Color(l.color).is_equal_approx(SkillPanel.DOWN) else "refusal not shown red: %s" % [p.gem_detail().lines]
 	p.free(); h.free()
 	return r
+
+## Owner 2026-11-08 (same fix as the bag, "กดสวมใส่ไม่ได้"): after selecting a gem the panel refits by itself
+## (refresh() defers _layout; nothing calls it by hand here), the action button stays on screen, sits beside
+## the gem's name in portrait (touch-sized) and right under the name row in landscape, for a tall phone and
+## an iPhone-SE-like window. On iPhone web (Safari, not from the home screen) portrait keeps the bottom
+## ScreenFit.IOS_BOTTOM_INSET px free; opened from the home screen it does not need to.
+func test_action_button_on_screen_after_select():
+	var w := tree.root
+	var size0 := w.size
+	var scale0 := w.content_scale_size
+	var h := _hero(10)
+	h.inventory.add_gem({"type": "split", "level": 1, "exp": 0, "rarity": "good", "opts": [{"k": "mp_cut", "v": 0.05}, {"k": "crit", "v": 0.03}]})
+	h.inventory.add_gem({"type": "split", "level": 2, "exp": 0, "rarity": "good", "opts": [{"k": "crit", "v": 0.03}, {"k": "mp_cut", "v": 0.05}]})
+	h.socket("piercing", 0, 0)
+	var p := SkillPanel.new()
+	p.build()
+	w.add_child(p)
+	await tree.process_frame
+	var fails := []
+	for o in [Vector2i(780, 1688), Vector2i(1688, 780), Vector2i(750, 1334), Vector2i(1334, 750)]:
+		DisplayServer.window_set_size(o)
+		w.size = o
+		w.content_scale_size = ScreenFit.base_for(o)
+		for i in 3: await tree.process_frame
+		for mode in ["plain", "iphone", "home"]:
+			ScreenFit.ios_override = 0 if mode == "plain" else 1
+			ScreenFit.standalone_override = 1 if mode == "home" else 0
+			for pick in ["socket", "bag"]:
+				p._sel = {}
+				p.open(h)
+				if pick == "socket": p.press_slot("piercing", 0)
+				else: p.select_gem(p.gem_cells()[0])
+				for i in 3: await tree.process_frame
+				var view := Rect2(Vector2.ZERO, w.get_visible_rect().size)
+				var portrait: bool = o.y > o.x
+				var tag := "%s %s %s %s" % ["portrait" if portrait else "landscape", o, mode, pick]
+				var d := p.gem_detail()
+				if d.name == "": fails.append("%s: no gem selected" % tag)
+				if pick == "socket" and not d.action_ok: fails.append("%s: ถอดเจม not offered" % tag)
+				var a := p._d_action.get_global_rect()
+				var panel := p._panel.get_global_rect()
+				if not p._d_action.visible: fails.append("%s: action hidden" % tag)
+				if not view.encloses(a): fails.append("%s: action %s off screen %s" % [tag, a, view])
+				if not view.grow(0.5).encloses(panel): fails.append("%s: panel %s off screen %s" % [tag, panel, view])
+				var name_row := p._d_name.get_global_rect()
+				if portrait and absf(a.get_center().y - name_row.get_center().y) > 24.0: fails.append("%s: action %s not beside the name %s" % [tag, a, name_row])
+				if a.position.y > name_row.end.y + 60.0: fails.append("%s: action %s far below the name %s" % [tag, a, name_row])
+				if portrait and p._d_action.size.y * p._panel.scale.y < IconButton.MIN_TOUCH - 0.01:
+					fails.append("%s: action only %.1f px tall (touch minimum %d)" % [tag, p._d_action.size.y * p._panel.scale.y, IconButton.MIN_TOUCH])
+				var keep := ScreenFit.IOS_BOTTOM_INSET if mode == "iphone" and portrait else 0.0
+				if panel.end.y > view.size.y - keep + 0.5: fails.append("%s: panel bottom %.1f over Safari bar (free to %.1f)" % [tag, panel.end.y, view.size.y - keep])
+				p.close()
+	ScreenFit.ios_override = -1
+	ScreenFit.standalone_override = -1
+	tree.paused = false
+	DisplayServer.window_set_size(size0)
+	w.size = size0
+	w.content_scale_size = scale0
+	p.queue_free()
+	h.free()
+	await tree.process_frame
+	return "; ".join(fails)

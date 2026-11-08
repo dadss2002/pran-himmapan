@@ -122,7 +122,8 @@ func step(delta: float, hero: Hero, inv: Inventory) -> bool:
 			if is_inside_tree(): queue_free()
 			return true
 		var left := inv.add(item_id, count)
-		if left > 0:          # only part fitted
+		if left > 0:          # only part fitted: what went in still sounds (reviewer 2026-11-08)
+			if left < count: Sfx.play("coin" if item_id == "gold" else "pickup", position)
 			count = left
 			return false
 		_collected(count)

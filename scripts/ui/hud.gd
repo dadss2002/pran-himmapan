@@ -31,10 +31,13 @@ var settings_button: Button
 var settings_panel: PanelContainer
 var fullscreen_button: Button            # in the settings panel
 var fps_toggle: CheckButton              # in the settings panel
+## Margin of the "ความดัง" label from the panel's left edge, and of the "80%" from its right edge (HUD px).
+const VOLUME_INSET := 6.0
 ## Task 3g (sound spec): "เสียง" on/off and the volume slider (0-100 %), in the settings panel too. The panel's
 ## rows sit in a grid: one column upright, two side by side on a phone held sideways (clear of the touch buttons).
 var sound_toggle: CheckButton
 var volume_slider: HSlider
+var volume_label: Label                  # "80%" beside the slider, follows it live (owner 2026-11-08)
 var settings_grid: GridContainer
 var minimap_box: PanelContainer
 var toast: Label
@@ -274,7 +277,11 @@ func build() -> void:
 	vol_row.add_theme_constant_override("separation", 2)
 	vol_row.custom_minimum_size = Vector2(110, IconButton.MIN_TOUCH)
 	var vl := _label("ความดัง", 8, Color("#f3e9d2"))
+	vl.name = "VolumeName"
 	vl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var inset := StyleBoxEmpty.new()     # owner 2026-11-08: not flush with the panel's edge
+	inset.content_margin_left = VOLUME_INSET
+	vl.add_theme_stylebox_override("normal", inset)
 	vol_row.add_child(vl)
 	volume_slider = HSlider.new()
 	volume_slider.name = "VolumeSlider"
@@ -287,6 +294,15 @@ func build() -> void:
 	volume_slider.value = int(settings.volume)
 	volume_slider.value_changed.connect(func(v): set_volume(int(round(v))))
 	vol_row.add_child(volume_slider)
+	volume_label = _label("", 8, Color("#f3e9d2"))
+	volume_label.name = "VolumePct"
+	volume_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	volume_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	volume_label.custom_minimum_size = Vector2(34, 0)   # room for "100%" + margin, so the slider does not jump
+	var inset_r := StyleBoxEmpty.new()   # the same margin at the right edge
+	inset_r.content_margin_right = VOLUME_INSET
+	volume_label.add_theme_stylebox_override("normal", inset_r)
+	vol_row.add_child(volume_label)
 	sv.add_child(vol_row)
 	set_sound(bool(settings.sound), false)
 	set_volume(int(settings.volume), false)
@@ -437,6 +453,7 @@ func set_volume(pct: int, save := true) -> void:
 	settings["volume"] = pct
 	Sfx.set_volume(pct / 100.0)
 	if volume_slider and int(round(volume_slider.value)) != pct: volume_slider.set_value_no_signal(pct)
+	if volume_label: volume_label.text = "%d%%" % pct
 	if save: GameSettings.save(settings, settings_path)
 
 ## Every HUD / menu button (the panels' too, and ones made later: _ready watches the tree) clicks

@@ -37,6 +37,8 @@ var _d_bar: ProgressBar
 var _d_effect: Label
 var _d_lines: VBoxContainer
 var _d_action: Button
+var _d_top: HBoxContainer       # icon + name row; in portrait the action button sits at its right
+var _d_box: VBoxContainer       # the detail column
 var _close_button: Button
 
 func _ready() -> void:
@@ -300,8 +302,11 @@ func build() -> void:
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 8)
 	dv.add_child(top)
+	_d_top = top
+	_d_box = dv
 	_d_frame = PanelContainer.new()
 	_d_frame.custom_minimum_size = Vector2(40, 40)
+	_d_frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER   # stays square beside the 44 px button
 	top.add_child(_d_frame)
 	_d_icon = UiKit.icon("", 32)
 	_d_frame.add_child(_d_icon)
@@ -326,15 +331,13 @@ func build() -> void:
 	_d_lines = VBoxContainer.new()
 	_d_lines.add_theme_constant_override("separation", 0)
 	dv.add_child(_d_lines)
-	var fill := Control.new()
-	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dv.add_child(fill)
 	_d_action = Button.new()
 	_d_action.custom_minimum_size = Vector2(0, 32)
 	_d_action.focus_mode = Control.FOCUS_NONE
 	_d_action.add_theme_font_size_override("font_size", UiKit.fs(11))
 	_d_action.pressed.connect(func(): press_action())
 	dv.add_child(_d_action)
+	dv.move_child(_d_action, 1)     # right under the name row (landscape); _place_button moves it in portrait
 
 func _on_gem_cell(cell: int) -> void:
 	var v := gem_cells()
@@ -404,13 +407,17 @@ func refresh() -> void:
 	_d_action.visible = d.action != ""
 	_d_action.text = d.action
 	UiKit.style_action(_d_action, d.action_ok)
+	_layout.call_deferred()          # the detail changed size: fit the panel to the screen again
 
 ## Landscape: the 624x344 three-column panel. Portrait: the columns stack and the panel takes the
-## screen width (scaled down only if it would still not fit).
+## screen width (scaled down only if it would still not fit). Owner 2026-11-08 (same fix as the bag): on
+## iPhone web the portrait panel keeps Safari's bottom bar clear (ScreenFit.bottom_inset), and refresh()
+## refits it each time the detail changes.
 func _layout() -> void:
 	if _panel == null or not is_inside_tree(): return
 	var size := get_viewport().get_visible_rect().size
 	var portrait := ScreenFit.is_portrait(size)
+	_place_button(portrait)
 	if _body.vertical != portrait:
 		_body.vertical = portrait
 		_panel.size = Vector2.ZERO
@@ -418,8 +425,22 @@ func _layout() -> void:
 		_panel.size = Vector2(size.x - 12, 0)
 		_panel.size = Vector2(size.x - 12, _panel.get_combined_minimum_size().y)
 	else:
-		_panel.size = Vector2(624, 344)
-	var fit := minf(1.0, minf((size.x - 8) / _panel.size.x, (size.y - 8) / _panel.size.y))
+		_panel.size = Vector2(624, maxf(344.0, _panel.get_combined_minimum_size().y))
+	var bottom := ScreenFit.bottom_inset(portrait)
+	var room := Vector2(size.x - 8, size.y - 8 - bottom)
+	var fit := minf(1.0, minf(room.x / _panel.size.x, room.y / _panel.size.y))
 	_panel.scale = Vector2(fit, fit)
 	var shown := _panel.size * fit
-	_panel.position = Vector2(floorf((size.x - shown.x) / 2.0), floorf((size.y - shown.y) / 2.0))
+	_panel.position = Vector2(floorf((size.x - shown.x) / 2.0), floorf((size.y - bottom - shown.y) / 2.0))
+
+## Portrait: the action button sits at the right of the icon + name row, at least IconButton.MIN_TOUCH
+## tall. Landscape (narrow detail column): right under that row.
+func _place_button(portrait: bool) -> void:
+	if _d_action == null: return
+	var want: Node = _d_top if portrait else _d_box
+	if _d_action.get_parent() != want:
+		_d_action.get_parent().remove_child(_d_action)
+		want.add_child(_d_action)
+		if want == _d_box: _d_box.move_child(_d_action, 1)
+	_d_action.custom_minimum_size = Vector2(72, IconButton.MIN_TOUCH) if portrait else Vector2(0, 32)
+	_d_action.size_flags_horizontal = Control.SIZE_SHRINK_END if portrait else Control.SIZE_FILL

@@ -176,6 +176,7 @@ static func _start(id: String, path: String, ui: bool, jitter: bool, at := Vecto
 		p.volume_db = vdb
 		p.set_meta("ui", ui)
 		p.set_meta("id", id)
+		p.set_meta("end", ends[-1])
 		p.play()
 	return true
 
@@ -190,6 +191,7 @@ static func _players() -> Array:
 	return host.get_children().filter(func(c): return c is AudioStreamPlayer)
 
 ## A player that is not sounding, a new one while under MAX_PLAYERS, else the one started longest ago.
+## A stolen player's sound stops, so its voice leaves its id's count (_voices) too.
 static func _free_player() -> AudioStreamPlayer:
 	if host == null or not is_instance_valid(host) or not host.is_inside_tree(): return null
 	var all := _players()
@@ -199,7 +201,11 @@ static func _free_player() -> AudioStreamPlayer:
 		var n := AudioStreamPlayer.new()
 		host.add_child(n)
 		return n
-	return _to_back(all[0])
+	var old: AudioStreamPlayer = all[0]
+	var old_id := String(old.get_meta("id", ""))
+	if _voices.has(old_id) and old.has_meta("end"): (_voices[old_id] as Array).erase(old.get_meta("end"))
+	old.stop()
+	return _to_back(old)
 
 static func _to_back(p: AudioStreamPlayer) -> AudioStreamPlayer:
 	host.move_child(p, -1)        # the oldest stays first

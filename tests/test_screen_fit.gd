@@ -155,3 +155,17 @@ func test_fps_meter_folds():
 	hud.queue_free()
 	if not open_text.begins_with("FPS "): return "meter shows %s" % open_text
 	return "" if folded == "FPS" else "folded meter shows %s" % folded
+
+## Owner 2026-11-08: portrait pause screens keep Safari's bottom bar clear on iPhone web only — not
+## landscape, not when opened from the home screen, not off iPhone.
+func test_bottom_inset_iphone_safari_portrait_only():
+	var cases := [[true, 1, 0, ScreenFit.IOS_BOTTOM_INSET], [false, 1, 0, 0.0], [true, 1, 1, 0.0], [true, 0, 0, 0.0]]
+	var r := ""
+	for c in cases:
+		ScreenFit.ios_override = c[1]
+		ScreenFit.standalone_override = c[2]
+		var got := ScreenFit.bottom_inset(c[0])
+		if got != c[3]: r = "portrait=%s iphone=%d home=%d: %.0f (want %.0f)" % [c[0], c[1], c[2], got, c[3]]; break
+	ScreenFit.ios_override = -1
+	ScreenFit.standalone_override = -1
+	return r

@@ -1,6 +1,7 @@
 extends SceneTree
-## M4d Task 3g: the settings panel with the new "เสียง" toggle and volume slider (defaults: on, 100 %), on a
-## phone held upright (780x1688) and sideways (1688x780), touch controls on:
+## M4d Task 3g: the settings panel with the new "เสียง" toggle and volume slider (sound on, volume set to 80 %
+## so the "80%" beside the slider shows, owner 2026-11-08), on a phone held upright (780x1688) and sideways
+## (1688x780), touch controls on:
 ## xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_m4b_sound.gd
 
 const OUT := "res://docs/preview/m4b/"
@@ -37,6 +38,7 @@ func _run() -> void:
 		p.set_physics_process(false)
 		p.set_process(false)
 	g.hud.touch_ui.visible = true
+	g.hud.set_volume(80)                    # the temp settings file only
 	for o in [[Vector2i(780, 1688), "portrait"], [Vector2i(1688, 780), "landscape"]]:
 		DisplayServer.window_set_size(o[0])
 		root.size = o[0]

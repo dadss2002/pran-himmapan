@@ -210,6 +210,38 @@ func test_room_change_stops_world_sounds():
 	_done()
 	return r
 
+## Reviewer 2026-11-08: when all MAX_PLAYERS players are busy, the oldest is stolen; its sound stops, so its
+## voice must leave that id's count (else the id stays "full" with fewer voices really sounding).
+func test_stolen_player_frees_its_voice():
+	await tree.process_frame
+	_fresh()
+	var host_parent := Node.new()
+	tree.root.add_child(host_parent)
+	var host := Sfx.attach(host_parent)
+	var ids := ["arrow_hit", "bow_shot", "crit_hit", "pickup", "coin", "level_up"]
+	var r := ""
+	for id in ids:
+		for i in Sfx.VOICES:
+			if not Sfx.play(id): r = "%s voice %d not started" % [id, i + 1]
+	var players := host.get_children().filter(func(c): return c is AudioStreamPlayer)
+	if r == "" and players.size() != Sfx.MAX_PLAYERS: r = "%d players (want all %d busy)" % [players.size(), Sfx.MAX_PLAYERS]
+	if r == "" and players.any(func(p): return not p.playing): r = "a player is not playing before the steal"
+	if r == "" and Sfx.voices_of("arrow_hit") != Sfx.VOICES: r = "arrow_hit %d voices (want %d)" % [Sfx.voices_of("arrow_hit"), Sfx.VOICES]
+	if r == "":
+		var oldest: AudioStreamPlayer = players[0]
+		if String(oldest.get_meta("id", "")) != "arrow_hit": r = "oldest player is %s" % oldest.get_meta("id", "")
+		elif not Sfx.play("warp"): r = "warp not started with every player busy"
+		elif String(oldest.get_meta("id", "")) != "warp": r = "the oldest player was not reused"
+		elif host.get_children().filter(func(c): return c is AudioStreamPlayer).size() != Sfx.MAX_PLAYERS: r = "more than MAX_PLAYERS players"
+		elif Sfx.voices_of("arrow_hit") != Sfx.VOICES - 1: r = "arrow_hit still counts %d voices after its player was stolen (want %d)" % [Sfx.voices_of("arrow_hit"), Sfx.VOICES - 1]
+		elif Sfx.voices_of("warp") != 1: r = "warp counts %d voices" % Sfx.voices_of("warp")
+		elif not Sfx.play("arrow_hit"): r = "arrow_hit refused although only 3 of its voices still sound"
+	Sfx.stop_all()
+	host_parent.queue_free()
+	await tree.process_frame
+	_done()
+	return r
+
 # ---------- settings ----------
 
 func test_settings_saved_and_loaded():
@@ -250,6 +282,42 @@ func test_settings_saved_and_loaded():
 		f.close()
 		d = GameSettings.load_or_default(TMP_SETTINGS)
 		if d.sound != true or d.volume != 100: r = "bad values gave %s" % d
+	_clean()
+	_done()
+	return r
+
+## Owner 2026-11-08: the volume row shows the % beside the slider, live, and "ความดัง" keeps a left margin.
+func test_volume_percent_shown_live():
+	_fresh()
+	_clean()
+	var hud := Hud.new()
+	hud.settings_path = TMP_SETTINGS
+	hud.build()
+	tree.root.add_child(hud)                   # a slider only sends value_changed inside the tree
+	var r := ""
+	var pct: Label = hud.volume_label
+	if pct == null or pct.get_parent() != hud.volume_slider.get_parent(): r = "no % label in the volume row"
+	elif pct.text != "100%": r = "label '%s' at 100" % pct.text
+	if r == "":
+		hud.volume_slider.value = 80               # dragging the slider
+		if pct.text != "80%": r = "slider 80 shows '%s'" % pct.text
+	if r == "":
+		hud.set_volume(35, false)
+		if pct.text != "35%": r = "set_volume(35) shows '%s'" % pct.text
+	if r == "":
+		var w100 := pct.get_combined_minimum_size().x
+		hud.set_volume(100, false)
+		if pct.get_combined_minimum_size().x != w100: r = "the %% label changes width (%.1f / %.1f): the slider would jump" % [w100, pct.get_combined_minimum_size().x]
+	if r == "":
+		var row: HBoxContainer = hud.volume_slider.get_parent()
+		var name_label: Label = row.get_child(0)
+		var kids := row.get_children()
+		if name_label.text != "ความดัง": r = "first in the row is '%s'" % name_label.text
+		elif kids.find(pct) < kids.find(hud.volume_slider): r = "% label is left of the slider"
+		else:
+			var sb := name_label.get_theme_stylebox("normal")
+			if sb == null or sb.content_margin_left < 4.0: r = "ความดัง has no left margin (%s)" % (sb.content_margin_left if sb else "none")
+	hud.free()
 	_clean()
 	_done()
 	return r
@@ -349,6 +417,33 @@ func test_pickup_and_coin_sounds():
 	h.free()
 	_done()
 	return r
+
+## Reviewer 2026-11-08: with the bag nearly full only part of a stack fits; what went in still plays "pickup"
+## (once), and the rest stays on the ground.
+func test_partial_pickup_plays_sound():
+	_fresh()
+	var h: Hero = load("res://scenes/hero.tscn").instantiate()
+	h.setup_sprites()
+	var inv := Inventory.new()
+	var stack := int(Balance.num("bag.stack"))
+	for i in int(Balance.num("bag.slots")) - 1: inv.add_item(_bow())
+	inv.add("ore_himmapan", stack - 2)            # room for 2 more ore only
+	var d := LootDrop.make("ore_himmapan", 5)
+	d.position = Vector2(10, 0)
+	d.settle()
+	var r := ""
+	for i in 30:
+		if d.step(DT, h, inv): r = "the whole stack of 5 was taken into a bag with room for 2"; break
+	if r == "" and inv.count_of("ore_himmapan") != stack: r = "bag holds %d ore (want %d)" % [inv.count_of("ore_himmapan"), stack]
+	elif r == "" and d.count != 3: r = "%d left on the ground (want 3)" % d.count
+	elif r == "" and _ids(Sfx.requested) != ["pickup"]: r = "partial pickup sounds: %s (want [pickup])" % [_ids(Sfx.requested)]
+	d.free()
+	h.free()
+	_done()
+	return r
+
+func _bow() -> Dictionary:
+	return {"base": "bow_buffalo_horn", "rarity": "good", "level": 5, "opts": []}
 
 func test_level_up_gong_once():
 	_fresh()
