@@ -219,6 +219,40 @@ func revive() -> void:
 	else: shape.disabled = false
 	_refresh(true)
 
+## Task 4 (M4c §1: walking between rooms keeps every room as you left it): what RoomReset keeps of this monster
+## when the hero leaves its room. alive, where it stood, elite, and whether it was busy (anything but idle:
+## chasing, attacking, fleeing, walking home). HP, statuses and cooldowns are not kept (restore_kept).
+func kept_state() -> Dictionary:
+	return {"alive": is_alive(), "pos": _pos(), "elite": elite, "busy": is_alive() and state != "idle"}
+
+## Task 4: back in a kept room. A dead monster stays dead, unseen, with no death cry, loot or EXP (its pack
+## restores its respawn time). A living one stands where it was with its elite mark; HP back to full and
+## statuses cleared, as when it loses the hero now (_go_home heals); one that was busy walks home ("return"),
+## as a fighting monster does now once the hero is gone.
+func restore_kept(st: Dictionary) -> void:
+	if not bool(st.get("alive", true)):
+		_end_lunge()
+		status.clear()
+		_update_status_fx()
+		set_elite(bool(st.get("elite", false)))
+		health.hp = 0
+		state = "dead"
+		_t = 0.0
+		velocity = Vector2.ZERO
+		visible = false
+		body.modulate.a = 0.0
+		if is_inside_tree(): shape.set_deferred("disabled", true)
+		else: shape.disabled = true
+		_refresh(true)
+		return
+	revive()                              # full HP, statuses and cooldowns cleared, idle on its spawn point
+	set_elite(bool(st.get("elite", false)))
+	_set_pos(st.pos)
+	if bool(st.get("busy", false)) and _pos().distance_to(home) >= 4.0:
+		state = "return"
+		_t = 0.0
+		_refresh(true)
+
 ## Flames / ice crystals at the feet while burning / slowed (vfx_workbench strips).
 func _update_status_fx() -> void:
 	if not is_inside_tree(): return

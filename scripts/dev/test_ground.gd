@@ -20,13 +20,21 @@ var rooms: RoomSet
 var room_id := ""
 var layout_seed := -1             # M4d: -1 = a new random room layout every session; tests set one
 var session_seed := 0             # the seed this session's layout was made from (saved for reference only)
-## M4d addendum 4: the seed monster piles are placed from (MonsterPiles.room_seed with the room id): made from
-## the layout seed at the start of a session, so walking out and back shows the same piles; Task 4's re-roll
-## (waypoint travel / new game) sets a new one with reroll_piles().
-var pile_seed := 0
+## Task 4 (RoomReset): monsters re-roll only on a new game (build: the session's layout seed) or waypoint travel
+## (reroll()); walking out of a room and back keeps it as it was left (dead stay dead, the living where they
+## stood). reset holds the pile seed and the kept rooms.
+var reset := RoomReset.new()
+## M4d addendum 4: the seed monster piles are placed from (MonsterPiles.room_seed with the room id): the layout
+## seed at the start of a session (a new game), a new one at each reroll().
+var pile_seed: int:
+	get: return reset.pile_seed
 var _piles := {}                  # "room|seed|groups hash" -> RoomSet.piles() result (this session)
+var _room_groups: Array = []      # the current room's groups and piles as built (kept by RoomReset on leaving)
+var _room_piles: Array = []
+var _room_roll := -1              # reset.roll when the current room was built (an older roll is not kept)
 ## M4d addendum 2: e0's monster set this session (index into its monster_sets; -1 = not chosen yet). Chosen
-## on the first entry each session (a new game is a new session); Task 4 re-chooses it on every re-roll.
+## on the first entry after a new game or a re-roll (reroll() clears it; spec addendum 2: re-chosen at each
+## re-roll), with the hero's level and the room he came from at that entry.
 var arena_set := -1
 var warps: Array = []
 var cam: Camera2D
@@ -111,7 +119,8 @@ func build() -> void:
 	rooms = RoomSet.open()
 	session_seed = layout_seed if layout_seed >= 0 else int(randi() & 0x7fffffff)
 	rooms.use_layout(RoomLayout.generate(session_seed, rooms.exit_table()))
-	pile_seed = session_seed
+	reset.reroll_all(session_seed)          # Task 4: a new game re-rolls every room (piles from the layout seed)
+	arena_set = -1
 	stage.add_child(world)
 	hero = HERO_SCENE.instantiate()
 	world.add_child(hero)
@@ -167,6 +176,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	if _fade_gate: _fade_gate.set_process(false)
 	if fade: fade.color.a = 0.0
 	Sfx.stop_world()                     # sound spec: the old room's hits and cries stop (the warp gong goes on)
+	_keep_room()                         # Task 4: the room being left stays as it is (unless re-rolled since)
 	if warping:                          # the fade out ended (or anything else moved the hero on)
 		warping = false
 		hero.set_physics_process(_hero_was_on)
@@ -212,24 +222,22 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		n.place_label(sz)
 		warps.append(n)
 	if not _navs.has(id): _navs[id] = layout.make_nav()
-	# M4d addendum: forest rooms spawn at the level of their distance from c1r1 in this session's layout;
-	# e0 spawns its chosen monster set (addendum 2) at the previous room's level + 1, max Lv11 (addendum 3);
-	# a room off the map keeps the levels in rooms.json.
-	var groups: Array = rooms.room(id).get("monsters", [])
-	var levels := rooms.room_levels()
-	if levels.has(id): groups = RoomLevels.groups(groups, int(levels[id]))
-	var sets: Array = rooms.room(id).get("monster_sets", [])
-	if not sets.is_empty():
-		if arena_set < 0: choose_arena_set(from_id)
-		# addendum 3: the set's kinds and counts at the previous room's level + 1 (max Lv11)
-		groups = RoomLevels.arena_groups(sets[clampi(arena_set, 0, sets.size() - 1)], int(levels.get(from_id, 0)))
+	# Task 4: a room left since the last re-roll comes back as it was (its groups, piles and monsters);
+	# otherwise its groups (groups_for) stand on this roll's piles
+	var kept := reset.state(id)
+	var groups: Array = kept.groups if not kept.is_empty() else groups_for(id, from_id)
 	# addendum 4 + follow-up: about half of each kind in piles of 2-4, the rest singles, spread over the room
 	# (MonsterPiles); one pack per group, a single is its own pile
-	var piles := piles_for(id, groups)
+	var piles: Array = kept.piles if not kept.is_empty() else piles_for(id, groups)
 	for gi in groups.size():
 		var m: Dictionary = groups[gi].duplicate()
 		m["piles"] = piles.filter(func(p): return int(p.group) == gi)
 		_add_group(m, _navs[id])
+	if not kept.is_empty():
+		for gi in mini(packs.size(), kept.packs.size()): packs[gi].restore(kept.packs[gi])
+	_room_groups = groups
+	_room_piles = piles
+	_room_roll = reset.roll
 	if with_fade and is_inside_tree():
 		fade.color.a = 1.0
 		_new_fade().tween_property(fade, "color:a", 0.0, FADE_IN)
@@ -241,6 +249,30 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	save_now()
 	room_changed.emit(id)
 
+## Room id's monster groups for this roll, entered from room from_id. M4d addendum: forest rooms spawn at the
+## level of their distance from c1r1 in this session's layout; e0 spawns its chosen monster set (addendum 2;
+## chosen here when arena_set < 0) at the previous room's level + 1, max Lv11 (addendum 3); a room off the map
+## keeps the levels in rooms.json.
+func groups_for(id: String, from_id: String) -> Array:
+	var groups: Array = rooms.room(id).get("monsters", [])
+	var levels := rooms.room_levels()
+	if levels.has(id): groups = RoomLevels.groups(groups, int(levels[id]))
+	var sets: Array = rooms.room(id).get("monster_sets", [])
+	if not sets.is_empty():
+		if arena_set < 0: choose_arena_set(from_id)
+		# addendum 3: the set's kinds and counts at the previous room's level + 1 (max Lv11)
+		groups = RoomLevels.arena_groups(sets[clampi(arena_set, 0, sets.size() - 1)], int(levels.get(from_id, 0)))
+	return groups
+
+## Task 4: the room being left is kept by RoomReset (its groups, piles and each monster's state), unless a
+## re-roll came after it was built (then it spawns fresh from the new roll next time).
+func _keep_room() -> void:
+	if room_id == "" or _room_roll != reset.roll: return
+	var states: Array = []
+	for p in packs:
+		states.append(p.snapshot() if is_instance_valid(p) else [])
+	reset.keep(room_id, states, _room_groups, _room_piles)
+
 ## The piles for room id's groups this session (seed from pile_seed and the room id): follow-up 3, the baked
 ## bank's entry, or live placement when the bank is stale (RoomSet.piles).
 func piles_for(id: String, groups: Array) -> Array:
@@ -249,10 +281,15 @@ func piles_for(id: String, groups: Array) -> Array:
 		_piles[key] = rooms.piles(id, groups, MonsterPiles.room_seed(pile_seed, id))
 	return _piles[key]
 
-## Task 4 hook: new piles everywhere from a new seed (the next room entered uses them).
-func reroll_piles(new_seed: int) -> void:
-	pile_seed = new_seed
+## Task 4 re-roll, the waypoint hook (Task 5: call reroll() and then go_to() the destination): a new pile seed
+## (new_seed, or a random one when < 0), every kept room forgotten (the current room too: it is not kept when
+## left), e0's set chosen again on its next entry (addendum 2). Every room entered after this spawns fresh,
+## its piles from the baked bank with the new seed. Returns the seed used.
+func reroll(new_seed := -1) -> int:
+	reset.reroll_all(new_seed if new_seed >= 0 else RoomReset.new_seed())
 	_piles.clear()
+	arena_set = -1
+	return reset.pile_seed
 
 ## M4d addendum 2: pick e0's set for a hero coming from room from_id (RoomLevels.arena_set).
 func choose_arena_set(from_id: String) -> void:

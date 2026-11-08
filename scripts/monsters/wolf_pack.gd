@@ -82,6 +82,27 @@ func mark_unreachable(w: Wolf, at: Vector2) -> void:
 func _on_wolf_died(w: Wolf) -> void:
 	_respawn[w] = Balance.num("wolf.respawn")
 
+## Task 4 (RoomReset): each monster's kept_state() in spawn order, a dead one with its respawn seconds left.
+func snapshot() -> Array:
+	var out: Array = []
+	for w in wolves:
+		var st: Dictionary = w.kept_state()
+		if not st.alive: st["respawn"] = float(_respawn.get(w, Balance.num("wolf.respawn")))
+		out.append(st)
+	return out
+
+## Task 4: put back a snapshot() taken of this group when the hero left (same group, same piles, so the same
+## monsters in the same order). The respawn time of the dead goes on from where it stopped (it does not run
+## while the hero is in another room). A list of another size is ignored (the room spawns fresh).
+func restore(kept: Array) -> void:
+	if kept.size() != wolves.size(): return
+	_respawn.clear()
+	_lungers.clear()
+	for i in wolves.size():
+		var w: Wolf = wolves[i]
+		w.restore_kept(kept[i])
+		if not w.is_alive(): _respawn[w] = float(kept[i].get("respawn", Balance.num("wolf.respawn")))
+
 func tick(delta: float) -> void:
 	calm = maxf(0.0, calm - delta)
 	for w in _respawn.keys():

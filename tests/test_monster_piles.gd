@@ -609,7 +609,7 @@ func test_ground_spawns_piles_and_keeps_them():
 	g.go_to("c1r1", "", false)
 	g.go_to(id, "", false)
 	if r == "" and _spots(g) != first: r = "walking out and back moved the piles"
-	g.reroll_piles(g.pile_seed + 1)
+	g.reroll(g.pile_seed + 1)
 	g.go_to(id, "", false)
 	if r == "" and _spots(g) == first: r = "a new pile seed gave the same piles"
 	g.free()
