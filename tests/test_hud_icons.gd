@@ -277,6 +277,38 @@ func test_toast_clear_of_settings_and_minimap():
 	_clean()
 	return "" if fails.is_empty() else "%d problems, e.g. %s" % [fails.size(), fails.slice(0, 4)]
 
+## Review (Task 3e): sliding the toast left off one touch button may put it on another one; it keeps sliding
+## until it touches none. Two made-up buttons: B (checked first) just left of the toast, A over its right end.
+func test_toast_slides_until_clear_of_every_touch_button():
+	_clean()
+	var hud := _hud()
+	var view := Vector2(640, 360)
+	hud.toast.text = "เร็ว ๆ นี้"
+	hud.toast.visible = true
+	hud.touch_ui.visible = true
+	hud.buttons.buttons = {}
+	hud.layout(view)
+	var t0 := Rect2(hud.toast.position, hud.toast.size)
+	var r := ""
+	if t0.position.x < t0.size.x + 60.0: r = "toast at %s: no room to test the slide" % t0
+	if r == "":
+		var rad := 10.0
+		var a := Vector2(t0.end.x - 5.0, t0.get_center().y)              # over the toast's right end
+		var slid_x := a.x - rad - 1.0 - t0.size.x                         # where sliding off A puts it
+		var b := Vector2(t0.position.x - rad - 3.0, t0.get_center().y)    # clear of the toast at first ...
+		if b.x + rad + 1.0 <= slid_x: r = "made-up button B would not be hit after the slide"
+		hud.buttons.buttons = {"b": {"center": b, "radius": rad}, "a": {"center": a, "radius": rad}}
+		hud.layout(view)
+		var t := Rect2(hud.toast.position, hud.toast.size)
+		for n in hud.buttons.buttons:
+			var bt: Dictionary = hud.buttons.buttons[n]
+			var br := Rect2(bt.center - Vector2(rad, rad), Vector2(rad, rad) * 2.0)
+			if r == "" and t.intersects(br): r = "toast %s still over made-up button %s %s" % [t, n, br]
+		if r == "" and t.position.x < 4.0: r = "toast off the left edge: %s" % t
+	hud.free()
+	_clean()
+	return r
+
 ## Review: only the four chosen icons ship under assets/ui/icons (the PixelLab candidates *_0..3 live in
 ## docs/preview/m4b/icon_candidates/, which the web export leaves out).
 func test_only_chosen_icons_ship():

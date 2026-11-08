@@ -130,7 +130,7 @@ func manifest_path() -> String:
 
 ## Whether the idle wolf starts a chase with the hero this far away.
 func _wants_aggro(dist: float) -> bool:
-	var walled_off := pack != null and pack.unreachable_at.distance_to(_hpos()) < 24.0
+	var walled_off := pack != null and pack.unreachable_for(self).distance_to(_hpos()) < 24.0
 	var calm := pack != null and pack.calm > 0.0
 	return dist <= n("aggro") and not walled_off and not calm
 
@@ -377,7 +377,7 @@ func _chase(delta: float) -> void:
 	if _no_route:
 		# no way round (hero walled in or across water): go home healed, and don't re-aggro on
 		# the same spot, so a walled-off hero can't farm the pack
-		if pack: pack.unreachable_at = _hpos()
+		if pack: pack.mark_unreachable(self, _hpos())
 		_go_home()
 		return
 	if to.length() < 1.0: to = _hpos() - _pos()

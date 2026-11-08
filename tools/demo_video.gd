@@ -65,6 +65,11 @@ func _pack(kind: String) -> WolfPack:
 		if p.kind == kind: return p
 	return null
 
+## Where a pack's monsters really stand: its first monster's home (its pile's centre; M4d addendum 4 piles
+## spread a group over the room, so the group's built home may be empty ground).
+func _spot(p: WolfPack) -> Vector2:
+	return p.wolves[0].home if not p.wolves.is_empty() else p.home
+
 func _alive(p: WolfPack) -> int:
 	var c := 0
 	for w in p.wolves:
@@ -114,13 +119,13 @@ func _run() -> void:
 	await _frames(40)
 	# start room: hit a deer, it runs away
 	var deer := _pack("deer")
-	await _go(deer.home + Vector2(-60, 30))
+	await _go(_spot(deer) + Vector2(-60, 30))
 	await _fight_for(deer, 150)
 	await _frames(40)
 	# west to the boars: they leave you alone until you shoot one
 	await _through("west")
 	var boars := _pack("boar")
-	await _go(boars.home + Vector2(90, 40))
+	await _go(_spot(boars) + Vector2(90, 40))
 	await _frames(60)
 	await _fight(boars, 1200)
 	await _frames(30)
@@ -132,7 +137,7 @@ func _run() -> void:
 	# south to the pond: poison mushrooms and a hidden viper
 	await _through("south")
 	var shrooms := _pack("shroom")
-	await _go(shrooms.home + Vector2(-90, 0))
+	await _go(_spot(shrooms) + Vector2(-90, 0))
 	await _fight(shrooms, 900)
 	await _frames(60)
 	print("DEMO frames=%d" % n)

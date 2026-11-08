@@ -89,13 +89,20 @@ func layout(size: Vector2) -> void:
 		var y := top_right.position.y + top_right.size.y + 4
 		if settings_panel and settings_panel.visible: y = maxf(y, settings_panel.position.y + settings_panel.size.y + 4)
 		toast.position = Vector2(clampf(mr.get_center().x - toast.size.x / 2.0, 4, size.x - 4 - toast.size.x), y)
-		# the backing makes it a little wider: slide left off any touch button it would touch
+		# the backing makes it a little wider: slide left off any touch button it would touch, again and again
+		# until it touches none (sliding off one may land it on another); it stops at the left edge
 		if touch_ui and touch_ui.visible and buttons:
-			for n in buttons.buttons:
-				var b: Dictionary = buttons.buttons[n]
-				var br := Rect2(b.center - Vector2(b.radius, b.radius), Vector2(b.radius, b.radius) * 2.0).grow(1.0)
-				if Rect2(toast.position, toast.size).intersects(br):
-					toast.position.x = maxf(4.0, br.position.x - toast.size.x)
+			var moved := true
+			while moved:
+				moved = false
+				for n in buttons.buttons:
+					var b: Dictionary = buttons.buttons[n]
+					var br := Rect2(b.center - Vector2(b.radius, b.radius), Vector2(b.radius, b.radius) * 2.0).grow(1.0)
+					if Rect2(toast.position, toast.size).intersects(br):
+						var x := maxf(4.0, br.position.x - toast.size.x)
+						if x < toast.position.x:
+							toast.position.x = x
+							moved = true
 	exp_bar.position = Vector2(0, size.y - 4)
 	exp_bar.size.x = size.x
 	exp_bar.custom_minimum_size.x = size.x

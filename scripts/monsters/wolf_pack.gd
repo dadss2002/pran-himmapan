@@ -2,10 +2,11 @@ class_name WolfPack
 extends Node2D
 ## A pack of ghost wolves sharing aggro and a single lunge token; respawns its dead after
 ## wolf.respawn seconds. The pack node sits at the world origin; wolves use world positions.
-## M4d addendum 4: a room group's pack may hold several piles (MonsterPiles.place): `piles` gives each its
-## home and spawn points; a monster's home is its pile's centre, it spawns and respawns on its own point, and
-## seeing or being hit wakes only its pile. Monsters closer than one body width push apart gently
-## (monster_push.speed px/s at most, walls stop it, the hero is never pushed), across packs too.
+## M4d addendum 4: a room group's pack may hold several piles (MonsterPiles.place; a single is a pile of 1):
+## `piles` gives each its home and spawn points; a monster's home is its pile's centre, it spawns and respawns
+## on its own point, and seeing or being hit wakes only its pile (owner: "ปลุกแค่กองที่โดน/เห็น"). Each pile has
+## its own lunge token and its own "hero unreachable here" spot. Monsters closer than one body width push apart
+## gently at all times (monster_push.speed px/s at most, walls stop it, the hero is never pushed), across packs.
 
 const WOLF_SCENE := preload("res://scenes/wolf.tscn")
 const MONSTER_SCENE := preload("res://scenes/monster.tscn")
@@ -21,8 +22,8 @@ var wolves: Array = []
 var hero: Hero
 var nav: AStarGrid2D = null     # the map's walk grid (PaintedLayout.make_nav), shared by the pack
 var calm := 0.0                 # seconds the group ignores the hero (the room fade-in after a warp)
-var unreachable_at := Vector2.INF   # where the hero was when no route reached him: no re-aggro there
-var _lunger: Wolf = null
+var _unreachable := {}  # pile -> where the hero was when no route reached him: that pile does not re-aggro there
+var _lungers := {}      # pile -> the one monster of that pile allowed to lunge now
 var _respawn := {}      # Wolf -> seconds left
 
 func _ready() -> void:
@@ -59,14 +60,23 @@ func alert(h: Hero, who: Wolf = null) -> void:
 	for w in wolves:
 		if who == null or who.pile < 0 or w.pile == who.pile: w.start_chase(h)
 
+## One lunge at a time per pile (two piles of one group may each lunge).
 func request_lunge(w: Wolf) -> bool:
-	if _lunger == null or not is_instance_valid(_lunger) or _lunger.state not in ["lunge_warn", "lunge"]:
-		_lunger = w
-	return _lunger == w
+	var cur: Wolf = _lungers.get(w.pile)
+	if cur == null or not is_instance_valid(cur) or cur.state not in ["lunge_warn", "lunge"]:
+		_lungers[w.pile] = w
+	return _lungers[w.pile] == w
 
 func end_lunge(w: Wolf) -> void:
-	if _lunger == w:
-		_lunger = null
+	if _lungers.get(w.pile) == w:
+		_lungers.erase(w.pile)
+
+## Where the hero stood when no route from w's pile reached him (INF: nowhere): that pile does not re-aggro there.
+func unreachable_for(w: Wolf) -> Vector2:
+	return _unreachable.get(w.pile, Vector2.INF)
+
+func mark_unreachable(w: Wolf, at: Vector2) -> void:
+	_unreachable[w.pile] = at
 
 func _on_wolf_died(w: Wolf) -> void:
 	_respawn[w] = Balance.num("wolf.respawn")
@@ -96,10 +106,7 @@ func _enter_tree() -> void:
 ## monsters, so a pair from two packs is pushed once from each side. Lunging monsters neither push nor move.
 func _separate(delta: float) -> void:
 	var others: Array = wolves
-	if is_inside_tree():
-		others = []
-		for p in get_tree().get_nodes_in_group("monster_packs"):
-			if p.get_parent() == get_parent(): others.append_array(p.wolves)
+	if is_inside_tree(): others = _room_monsters()
 	var step := Balance.num("monster_push.speed") * delta
 	for a in wolves:
 		if not a.is_alive() or a.state in ["lunge_warn", "lunge"]: continue
@@ -114,6 +121,27 @@ func _separate(delta: float) -> void:
 			var dir := d / dist if dist > 0.01 else (Vector2.RIGHT if a.get_instance_id() > b.get_instance_id() else Vector2.LEFT)
 			away += dir * (gap - dist) * 0.5
 		if away != Vector2.ZERO: a.push(away.limit_length(step))
+
+static var _room_frame := -1
+static var _room_lists := {}     # parent instance id -> every monster of the packs under it (this physics frame)
+
+## Every monster of the packs sharing this pack's parent; the group is read once per physics frame.
+func _room_monsters() -> Array:
+	var f := Engine.get_physics_frames()
+	if f != _room_frame:
+		_room_frame = f
+		_room_lists = {}
+		for p in get_tree().get_nodes_in_group("monster_packs"):
+			var k: int = p.get_parent().get_instance_id() if p.get_parent() else 0
+			if not _room_lists.has(k): _room_lists[k] = []
+			_room_lists[k].append_array(p.wolves)
+	var key: int = get_parent().get_instance_id() if get_parent() else 0
+	# a pack added during this frame (its monsters not in the list yet): read the room again
+	if not _room_lists.has(key) or (not wolves.is_empty() and not _room_lists[key].has(wolves[0])):
+		_room_lists[key] = []
+		for p in get_tree().get_nodes_in_group("monster_packs"):
+			if p.get_parent() == get_parent(): _room_lists[key].append_array(p.wolves)
+	return _room_lists[key]
 
 func _physics_process(delta: float) -> void:
 	step_all(delta, hero)

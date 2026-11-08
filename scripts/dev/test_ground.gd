@@ -204,7 +204,8 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		if arena_set < 0: choose_arena_set(from_id)
 		# addendum 3: the set's kinds and counts at the previous room's level + 1 (max Lv11)
 		groups = RoomLevels.arena_groups(sets[clampi(arena_set, 0, sets.size() - 1)], int(levels.get(from_id, 0)))
-	# addendum 4: each group split into piles of 2-4 spread over the room (MonsterPiles); one pack per group
+	# addendum 4 + follow-up: about half of each kind in piles of 2-4, the rest singles, spread over the room
+	# (MonsterPiles); one pack per group, a single is its own pile
 	var piles := piles_for(id, groups)
 	for gi in groups.size():
 		var m: Dictionary = groups[gi].duplicate()
@@ -303,7 +304,7 @@ func _on_level_up(lv: int) -> void:
 	_text(hero.global_position + Vector2(0, -60), "Lv ขึ้น! %d" % lv, Color("#ffd36a"))
 
 func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
-	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30), amount, crit, false)
+	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30 * Wolf.size_scale()), amount, crit, false)
 	_fx("hit_spark", w.hurt_point())
 
 func save_now() -> bool:

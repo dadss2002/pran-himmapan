@@ -3,7 +3,8 @@ extends SceneTree
 ## their spawn points, for a forest room next to c1r1, x2 and e0 (layout seed 7). Works on the code before
 ## Task 3e too (run it from a worktree of the earlier commit with PILES_TAG=before):
 ## PILES_TAG=after PILES_OUT=/abs/dir xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_m4b_piles.gd
-## Also writes <out>/piles_<tag>.json: per room the monsters' positions and homes (for the sheet's circles).
+## Also writes <out>/piles_<tag>.json: per room the monsters' positions, homes, pile and whether it stands alone
+## (for the sheet's circles and dots: python3 tools/piles_sheet.py).
 
 var g: Node2D
 
@@ -51,8 +52,14 @@ func _run() -> void:
 		print("saved ", name, " ", img.get_size())
 		var mons := []
 		for p in g.packs:
+			var sizes := {}
 			for w in p.wolves:
-				mons.append({"kind": p.kind, "pos": [w.position.x, w.position.y], "home": [w.home.x, w.home.y], "pack": g.packs.find(p)})
+				var pi = w.get("pile")
+				sizes[pi] = int(sizes.get(pi, 0)) + 1
+			for w in p.wolves:
+				var pi = w.get("pile")
+				mons.append({"kind": p.kind, "pos": [w.position.x, w.position.y], "home": [w.home.x, w.home.y], "pack": g.packs.find(p),
+					"pile": pi if pi != null else -1, "single": pi != null and pi >= 0 and int(sizes[pi]) == 1})
 		dump[id] = mons
 	var f := FileAccess.open(out.path_join("piles_%s.json" % tag), FileAccess.WRITE)
 	f.store_string(JSON.stringify({"rooms": [near, "x2", "e0"], "monsters": dump}))
