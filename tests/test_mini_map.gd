@@ -236,7 +236,7 @@ func _fog_matches(m: MiniMap, f: FogGrid, id: String) -> String:
 			if not f.is_revealed(id, cx, cy) and (a.get_luminance() > 0.1 or a.a < 0.8): return "fog not dark: %s" % a
 	return ""
 
-## In the game (seed 7): every room's marks are its joined exits (rooms.json warps of this layout) as arrows on the
+## In the game (seed 7), each room fully revealed (B11: marks show once their fog cell is revealed): every room's marks are its joined exits (rooms.json warps of this layout) as arrows on the
 ## matching edge of the box at the exit's place along it, red only into the boss arena, and its waypoint stone as a
 ## diamond on the stone, blue when unlocked and grey when not; nothing else (no monsters, owner 2026-11-09).
 func test_exit_and_stone_marks():
@@ -250,6 +250,10 @@ func test_exit_and_stone_marks():
 	for id in g.rooms.active.get("pos", {}):
 		g.go_to(String(id), "", false)
 		_quiet(g)
+		var c: Vector2i = g.fog.cells(id)               # B11: marks show once revealed, so reveal the whole room
+		for cy in c.y:
+			for cx in c.x: g.fog.reveal(id, Vector2(cx * FogGrid.CELL + 16, cy * FogGrid.CELL + 16))
+		await tree.process_frame
 		var inner := m.inner_rect()
 		var want := []
 		for w in g.rooms.room(id).warps:
@@ -382,8 +386,13 @@ func _same_room(g: Node2D, m: MiniMap) -> String:
 	for mk in m.marks():
 		if mk.kind == "exit": exits += 1
 		if mk.kind == "stone": stone.append(mk)
-	if exits != g.rooms.room(id).warps.size(): return "%s: %d exit marks (want %d)" % [id, exits, g.rooms.room(id).warps.size()]
-	if (g.rooms.waypoint(id) != Vector2.INF) != (stone.size() == 1): return "%s: stone marks %s" % [id, stone]
+	var want_exits := 0                               # B11: only exits whose fog cell is revealed
+	for w in g.rooms.room(id).warps:
+		if MiniMap.mark_shown(g.fog, id, Vector2(w.at[0], w.at[1])): want_exits += 1
+	var st_at: Vector2 = g.rooms.waypoint(id)
+	var want_stone := st_at != Vector2.INF and MiniMap.mark_shown(g.fog, id, Waypoints.centre(st_at))
+	if exits != want_exits: return "%s: %d exit marks (want %d)" % [id, exits, want_exits]
+	if want_stone != (stone.size() == 1): return "%s: stone marks %s (want %s)" % [id, stone, want_stone]
 	if stone.size() == 1:
 		var want: Color = MiniMap.STONE_ON if g.waypoints.is_unlocked(id) else MiniMap.STONE_OFF
 		if not (stone[0].color as Color).is_equal_approx(want): return "%s: stone colour %s (unlocked %s)" % [id, stone[0].color, g.waypoints.is_unlocked(id)]
@@ -410,8 +419,8 @@ func _touch(index: int, p: Vector2, pressed: bool, mouse := false, canceled := f
 
 ## A one-finger tap (Godot's emulated mouse) and a second finger's tap (thumb on the joystick) each emit `tapped`
 ## once and are marked handled; neither starts the joystick nor presses a touch button; the thumb keeps the
-## joystick; a cancelled touch (iOS touchcancel) taps nothing. The HUD answers a tap like the map button (Task 8
-## brings the full map).
+## joystick until the full map opens (Task 8: the HUD answers a tap like the map button, which lets the joystick go);
+## a cancelled touch (iOS touchcancel) taps nothing.
 func test_tap_emits_and_not_passed_to_game():
 	_clean()
 	var hud := _hud()
@@ -441,7 +450,8 @@ func test_tap_emits_and_not_passed_to_game():
 	await tree.process_frame
 	if r == "" and taps[0] != 1: r = "one-finger tap: %d taps (want 1)" % taps[0]
 	if r == "" and (not down or not up): r = "one-finger tap not marked handled (down %s, up %s)" % [down, up]
-	if r == "" and (not hud.toast.visible or hud.toast.text != "เร็ว ๆ นี้"): r = "the HUD did not answer the tap (toast '%s')" % hud.toast.text
+	if r == "" and not hud.map_open(): r = "the HUD did not open the full map on the tap"
+	hud.close_map()                                   # Task 8: the map pauses the game; shut it for the next finger
 	var thumb: Vector2 = hud.joystick.idle_center()
 	if r == "":
 		_touch(0, thumb, true, true)
@@ -449,11 +459,15 @@ func test_tap_emits_and_not_passed_to_game():
 	if r == "":
 		var d2 := _touch(1, p, true)
 		await tree.process_frame
+		var kept: bool = hud.joystick.active and hud.joystick._index == 0   # the second finger going down steals nothing
 		var u2 := _touch(1, p, false)
 		await tree.process_frame
+		var released: bool = not hud.joystick.active    # Task 8: the full map opened and let go of the joystick (as the bag)
+		hud.close_map()
 		if taps[0] != 2: r = "second finger: %d taps (want 2)" % taps[0]
 		elif not d2 or not u2: r = "second finger not marked handled (down %s, up %s)" % [d2, u2]
-		elif not hud.joystick.active or hud.joystick._index != 0: r = "the joystick lost the thumb"
+		elif not kept: r = "the joystick lost the thumb to the second finger"
+		elif not released: r = "the full map opened with the joystick still held"
 		elif not hud.buttons.pressed_names().is_empty(): r = "touch buttons %s" % [hud.buttons.pressed_names()]
 	if r == "":
 		_touch(1, p, true)

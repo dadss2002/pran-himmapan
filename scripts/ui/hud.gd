@@ -46,6 +46,10 @@ var minimap_box: Control
 ## Task 5: the waypoint travel list (WaypointList), opened by the test ground while the hero stands on an unlocked
 ## stone; placed by place_waypoints() clear of the HUD, the touch controls and the hero (waypoint_avoid).
 var waypoint_list: WaypointList
+## Task 8 (M4c §4): the full map (WorldMap, a CanvasLayer over the HUD). Opened by the map button, a tap on the
+## minimap or the M key (open_map); map_source (set by the test ground) gives what it shows (WorldMap.open's data).
+var world_map: WorldMap
+var map_source: Callable
 var waypoint_avoid := Rect2()            # the hero's screen rect (HUD px), set by the test ground every frame
 var waypoint_avoid_stone := Rect2()      # his stone's (kept clear when the screen allows; the hero comes first)
 var toast: Label
@@ -134,6 +138,8 @@ func layout(size: Vector2) -> void:
 	if waypoint_list:                    # Task 5: last, so it sees the toast and the panels where they now are
 		waypoint_list.fit_columns(ScreenFit.is_portrait(size))
 		if waypoint_list.visible: place_waypoints(true)
+	if world_map and world_map.is_open():   # Task 8: a turn / resize while the full map is open
+		world_map.relayout(size, minimap.get_global_rect() if minimap else Rect2(), ScreenFit.bottom_inset(ScreenFit.is_portrait(size)))
 
 func build() -> void:
 	layer = 10
@@ -236,8 +242,7 @@ func build() -> void:
 	settings_button = IconButton.make("res://assets/ui/icons/settings.png", "SettingsButton")
 	settings_button.pressed.connect(toggle_settings)
 	tr.add_child(settings_button)
-	# --- Task 7: the corner minimap (placed by layout(); the full map comes with Task 8: a tap answers like the map
-	# button until then)
+	# --- Task 7: the corner minimap (placed by layout()); a tap opens the full map (Task 8)
 	minimap = MiniMap.new()
 	minimap.build()
 	minimap_box = minimap
@@ -326,7 +331,7 @@ func build() -> void:
 	waypoint_list.build()
 	root.add_child(waypoint_list)
 
-	# --- short notes under the top-right block ("เร็ว ๆ นี้" for the map until Task 8)
+	# --- short notes under the top-right block
 	toast = _label("", 9, Color("#f3e9d2"))
 	toast.name = "Toast"
 	# dark rounded backing so the note reads over bright grass
@@ -375,6 +380,10 @@ func build() -> void:
 	skill_panel = SkillPanel.new()
 	skill_panel.build()
 	add_child(skill_panel)
+	world_map = WorldMap.new()               # Task 8
+	world_map.build()
+	world_map.wants_open.connect(open_map)   # the M key
+	add_child(world_map)
 
 ## Task 7: the x where something placed left of the minimap must end (4 px gap); the screen's right edge margin when
 ## there is no minimap.
@@ -426,7 +435,7 @@ func bind(h: Hero) -> void:
 
 ## Opens the skill · gem screen (touch input lets go first, like the bag).
 func open_skills() -> void:
-	if hero == null or hero.warping or skill_panel.is_open() or bag_panel.is_open(): return   # M4c: not mid-fade
+	if hero == null or hero.warping or skill_panel.is_open() or bag_panel.is_open() or map_open(): return   # M4c: not mid-fade
 	close_waypoints()                    # Task 5: it opens again after if the hero still stands on the stone
 	joystick.release_all()
 	buttons.release_all()
@@ -491,10 +500,28 @@ func _waypoints_clear_hero(at: Vector2, hero_r: Rect2) -> bool:
 	if at == Vector2.INF: return false
 	return hero_r.size == Vector2.ZERO or not Rect2(at, waypoint_list.size).intersects(hero_r)
 
-## The map button (and, Task 7, a tap on the minimap): the full map comes with Task 8; until then a short
-## "เร็ว ๆ นี้" note.
+## Task 8: the map button, a tap on the minimap and the M key open the full map (WorldMap; it pauses the game),
+## or shut it when it is open. Not while the bag or the skill screen is open (they pause the game too) nor
+## mid-fade. Touch input lets go first, as for the bag.
 func open_map() -> void:
-	show_toast("เร็ว ๆ นี้")
+	if map_open():
+		world_map.close()
+		return
+	if bag_panel.is_open() or skill_panel.is_open() or (hero and hero.warping): return
+	joystick.release_all()
+	buttons.release_all()
+	if hero: hero.external_input = Vector2.ZERO
+	var v := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360)
+	var data: Dictionary = map_source.call() if map_source.is_valid() else {}
+	world_map.open(data, v, minimap.get_global_rect() if minimap and minimap.visible else Rect2(), ScreenFit.bottom_inset(ScreenFit.is_portrait(v)))
+	Sfx.play("ui_open")
+
+## Shuts the full map (and unpauses) if it is open: room changes call this.
+func close_map() -> void:
+	if map_open(): world_map.close()
+
+func map_open() -> bool:
+	return world_map != null and world_map.is_open()
 
 ## A short note under the top-right block (and the open settings panel) that fades after `secs`
 ## (TOAST_TIME unless given).
@@ -550,8 +577,8 @@ func set_volume(pct: int, save := true) -> void:
 	if save: GameSettings.save(settings, settings_path)
 
 ## Every HUD / menu button (the panels' too, and ones made later: _ready watches the tree) clicks
-## "ui_button" when pressed. The bag and skills icons play "ui_open" when their screen opens instead, and the
-## map icon only shows its toast for now ("toast" sound) until the full map (Task 8) opens with "ui_open".
+## "ui_button" when pressed. The bag, skills and map icons (and a tap on the minimap) play "ui_open" when their
+## screen opens instead.
 func wire_click_sounds(n: Node = self) -> void:
 	if n is BaseButton: _wire_click(n)
 	for c in n.get_children(): wire_click_sounds(c)
@@ -560,7 +587,7 @@ func _wire_click(b: BaseButton) -> void:
 	if b.has_meta("click_sound"): return
 	b.set_meta("click_sound", true)
 	if b == bag_button or b == skills_button or b == map_button: return
-	if minimap and b == minimap.tap_button: return     # answers like the map button (its toast / Task 8's ui_open)
+	if minimap and b == minimap.tap_button: return     # answers like the map button (ui_open)
 	b.pressed.connect(_click)
 
 func _click() -> void:
@@ -571,7 +598,7 @@ func _on_node_added(n: Node) -> void:
 
 ## Opens the bag; held touch buttons and the joystick let go first so nothing stays pressed.
 func open_bag() -> void:
-	if hero == null or hero.warping or bag_panel.is_open() or skill_panel.is_open(): return
+	if hero == null or hero.warping or bag_panel.is_open() or skill_panel.is_open() or map_open(): return
 	close_waypoints()                    # Task 5: it opens again after if the hero still stands on the stone
 	joystick.release_all()
 	buttons.release_all()

@@ -57,18 +57,27 @@ func test_icon_scale_whole_number():
 		if k > 1 and 48.0 * (k - 1) / s >= 44.0: return "scale %.3f: art scale %d is bigger than needed" % [s, k]
 	return ""
 
-func test_map_button_says_soon():
+## Task 8: the map button opens the full map (it pauses the game) and a second press shuts it (unpaused); no
+## "เร็ว ๆ นี้" toast any more. A toast is in blocked_rects and goes away after TOAST_TIME.
+func test_map_button_opens_full_map():
 	_clean()
 	var hud := _hud()
 	tree.root.add_child(hud)
 	await tree.process_frame
 	hud.map_button.pressed.emit()
 	var r := ""
-	if not hud.toast.visible or hud.toast.text != "เร็ว ๆ นี้": r = "map button: toast '%s' visible=%s" % [hud.toast.text, hud.toast.visible]
-	elif not hud.blocked_rects().has(hud.toast.get_global_rect()): r = "the toast is not in blocked_rects"
-	else:
-		await tree.create_timer(Hud.TOAST_TIME + 0.6).timeout
-		if hud.toast.visible: r = "the toast never went away"
+	if not hud.map_open(): r = "map button: the full map did not open"
+	elif not tree.paused: r = "the game is not paused"
+	elif hud.toast.visible: r = "a toast showed ('%s')" % hud.toast.text
+	hud.map_button.pressed.emit()
+	if r == "" and (hud.map_open() or tree.paused): r = "second press: open %s paused %s" % [hud.map_open(), tree.paused]
+	tree.paused = false
+	if r == "":
+		hud.show_toast("ปลดล็อกจุดวาป")
+		if not hud.blocked_rects().has(hud.toast.get_global_rect()): r = "the toast is not in blocked_rects"
+		else:
+			await tree.create_timer(Hud.TOAST_TIME + 0.6).timeout
+			if hud.toast.visible: r = "the toast never went away"
 	hud.queue_free()
 	await tree.process_frame
 	return r
@@ -192,7 +201,7 @@ func test_fullscreen_standalone_iphone_no_tip():
 	_clean()
 	return r
 
-## Addendum 3 follow-up: the iPhone tip stays 4 s; the map's "เร็ว ๆ นี้" note keeps 1.5 s.
+## Addendum 3 follow-up: the iPhone tip stays 4 s; other notes keep 1.5 s.
 func test_ios_tip_stays_4s():
 	_clean()
 	var hud := _hud()
@@ -215,8 +224,8 @@ func test_ios_tip_stays_4s():
 		await tree.create_timer(4.0 + 0.6 - (Hud.TOAST_TIME + 0.6) + 0.3).timeout
 		if hud.toast.visible: r = "the tip still shows after 4 s + fade"
 	if r == "":
-		hud.open_map()
-		if hud.toast_secs != Hud.TOAST_TIME: r = "map note lasts %s s (want %s)" % [hud.toast_secs, Hud.TOAST_TIME]
+		hud.show_toast("ปลดล็อกจุดวาป")
+		if hud.toast_secs != Hud.TOAST_TIME: r = "a plain note lasts %s s (want %s)" % [hud.toast_secs, Hud.TOAST_TIME]
 	hud.queue_free()
 	await tree.process_frame
 	_clean()

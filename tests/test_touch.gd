@@ -209,6 +209,10 @@ func test_second_finger_on_bag_and_skill_panels():
 	await tree.process_frame
 	var thumb := Vector2(60, 300)
 	var r := ""
+	# The bare HUD in the headless window lays the icon buttons out huge (the map button covers the thumb's spot);
+	# since Task 8 the thumb's emulated release would press it and open the full map (pausing the game). This test
+	# is about the bag and skill panels, so the icon row is kept out of the thumb's way.
+	hud.top_right.visible = false
 	_touch(0, thumb, true, true)                       # the thumb: Godot's mouse finger
 	hud.open_bag()
 	for i in 2: await tree.process_frame

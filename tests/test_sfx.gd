@@ -504,7 +504,8 @@ func test_hud_button_open_and_toast_sounds():
 	if r == "":
 		Sfx.requested.clear()
 		hud.map_button.pressed.emit()
-		if _ids(Sfx.requested) != ["toast"]: r = "map button (toast for now): %s" % [_ids(Sfx.requested)]
+		if _ids(Sfx.requested) != ["ui_open"]: r = "map button (opens the full map): %s" % [_ids(Sfx.requested)]
+		hud.close_map()
 	if r == "":
 		Sfx.requested.clear()
 		hud.bag_button.pressed.emit()

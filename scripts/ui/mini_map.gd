@@ -13,8 +13,11 @@ extends Control
 ## per room size and refilled only after FogGrid.changed for this room (at most once a frame); the exit / stone
 ## layer is redrawn only on a room change or an unlock.
 ##
-## Choices (not in the spec): exits and the stone show even under fog (they are map knowledge the room's picture
-## already gives); a room that is not square is stretched to the square box ("the room fills the box"); the fade
+## Marks under fog (risk B11, owner 2026-11-09 "แสดงเมื่อหมอกตรงนั้นเปิดแล้ว"): an exit arrow (the red arena one too)
+## and the stone diamond show only once the fog cell they sit on is revealed (MARKS_UNDER_FOG = false; the WorldMap
+## follows the same constant through mark_shown()). The marks layer is redrawn when a fog refill changes which marks
+## show (a reveal uncovering a mark's cell), not on every refill.
+## Choices (not in the spec): a room that is not square is stretched to the square box ("the room fills the box"); the fade
 ## takes FADE_TIME (linear, no Tween object); exit arrows sit on the box edge at the exit's place along it.
 
 signal tapped
@@ -38,6 +41,9 @@ const ARROW_HALF := 3.5
 const STONE_HALF := 3.5
 const DOT_R := 2.4
 const TICK_LEN := 4.5
+## Risk B11 (owner 2026-11-09): false = exits and waypoint stones show only once their fog cell is revealed; true =
+## they always show. The one switch for both the corner MiniMap and the full WorldMap.
+const MARKS_UNDER_FOG := false
 const SIDE_DIRS := {"north": Vector2.UP, "south": Vector2.DOWN, "east": Vector2.RIGHT, "west": Vector2.LEFT}
 
 var room_id := ""
@@ -58,6 +64,9 @@ var under := false               # the hero's screen box overlaps the minimap
 var taps := TouchTaps.new()
 var _marks_layer: MarksLayer
 var _fog_dirty := false
+## This minimap's copy of MARKS_UNDER_FOG (tests flip it to check both behaviours; the game never changes it).
+var marks_under_fog := MARKS_UNDER_FOG
+var _shown_key := -1             # which marks showed at the last marks redraw (bit per exit, then the stone)
 
 func build() -> void:
 	name = "MiniMap"
@@ -170,6 +179,23 @@ func track(feet: Vector2, facing: Vector2, hero_screen: Rect2) -> void:
 func dot_at() -> Vector2:
 	return hero_dot.position
 
+## Whether a mark at `at` (room px) of room id shows: always when under_fog, else only once FogGrid has revealed the
+## cell it sits on (a point outside the room counts as its nearest edge cell). No FogGrid = nothing hidden.
+static func mark_shown(f: FogGrid, id: String, at: Vector2, under_fog := MARKS_UNDER_FOG) -> bool:
+	if under_fog or f == null: return true
+	var c := f.cells(id)
+	var cx := clampi(floori(at.x / FogGrid.CELL), 0, c.x - 1)
+	var cy := clampi(floori(at.y / FogGrid.CELL), 0, c.y - 1)
+	return f.is_revealed(id, cx, cy)
+
+## Bit i set = exit i shows, bit exits.size() = the stone shows (for spotting a change after a fog refill).
+func _shown_bits() -> int:
+	var k := 0
+	for i in exits.size():
+		if mark_shown(fog, room_id, exits[i].at, marks_under_fog): k |= 1 << i
+	if stone != Vector2.INF and mark_shown(fog, room_id, Waypoints.centre(stone), marks_under_fog): k |= 1 << exits.size()
+	return k
+
 ## Opacity the fade heads for.
 func target_alpha() -> float:
 	return FADED if under else OPACITY
@@ -179,6 +205,7 @@ func marks() -> Array:
 	var out: Array = []
 	var inner := inner_rect()
 	for e in exits:
+		if not mark_shown(fog, room_id, e.at, marks_under_fog): continue
 		var at := to_map(e.at)
 		match String(e.side):
 			"north": at.y = inner.position.y
@@ -186,7 +213,7 @@ func marks() -> Array:
 			"west": at.x = inner.position.x
 			"east": at.x = inner.end.x
 		out.append({"kind": "exit", "side": String(e.side), "at": at, "color": EXIT_ARENA if e.arena else EXIT_COLOR})
-	if stone != Vector2.INF:
+	if stone != Vector2.INF and mark_shown(fog, room_id, Waypoints.centre(stone), marks_under_fog):
 		out.append({"kind": "stone", "at": to_map(Waypoints.centre(stone)), "color": STONE_ON if stone_unlocked else STONE_OFF})
 	return out
 
@@ -220,9 +247,11 @@ func _redraw_fog() -> void:
 				if fog.is_revealed(room_id, cx, cy): fog_img.set_pixel(cx, cy, clear)
 	fog_tex.update(fog_img)
 	fog_redraws += 1
+	if not marks_under_fog and _shown_bits() != _shown_key: _request_marks()   # B11: a reveal uncovered a mark
 
 func _request_marks() -> void:
 	if _marks_layer == null: return
+	_shown_key = _shown_bits()
 	marks_redraws += 1
 	_marks_layer.queue_redraw()
 

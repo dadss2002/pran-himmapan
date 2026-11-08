@@ -1,6 +1,6 @@
 extends SceneTree
 ## M4d Task 3d HUD icon buttons screenshots (skills, bag, map, settings; the settings panel open; the
-## map's "เร็ว ๆ นี้" note; addendum 3's iPhone "เต็มจอ" tip) on a phone held upright (780x1688) and sideways (1688x780), touch controls on:
+## a sample "เร็ว ๆ นี้" note; addendum 3's iPhone "เต็มจอ" tip) on a phone held upright (780x1688) and sideways (1688x780), touch controls on:
 ## xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_m4b_hud.gd
 
 const OUT := "res://docs/preview/m4b/"
@@ -50,7 +50,7 @@ func _run() -> void:
 		g.hud.layout(root.get_visible_rect().size)
 		await _snap("m4b_hud_%s.png" % o[1])
 		g.hud.toggle_settings()
-		g.hud.open_map()
+		g.hud.show_toast("เร็ว ๆ นี้")          # a sample note (the map button opens the full map since Task 8)
 		await _snap("m4b_hud_%s_settings.png" % o[1])
 		ScreenFit.ios_override = 1              # addendum 3: what an iPhone sees after tapping เต็มจอ
 		g.hud.press_fullscreen()

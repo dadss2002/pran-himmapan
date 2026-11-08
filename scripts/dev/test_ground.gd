@@ -170,6 +170,7 @@ func build() -> void:
 	hud.waypoint_list.chosen.connect(func(id): waypoints.travel(id))
 	hud.waypoint_list.closed.connect(func(): _stone_armed = false)
 	hud.minimap.bind_fog(fog)                # Task 7: the minimap's fog layer follows this game's fog
+	hud.map_source = world_map_info          # Task 8: what the full map shows
 	var fade_layer := CanvasLayer.new()
 	fade_layer.layer = 50
 	add_child(fade_layer)
@@ -196,6 +197,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	if _fade_gate: _fade_gate.set_process(false)
 	if fade: fade.color.a = 0.0
 	Sfx.stop_world()                     # sound spec: the old room's hits and cries stop (the warp gong goes on)
+	if hud: hud.close_map()              # Task 8: a room change never leaves the full map open (or the game paused)
 	_keep_room()                         # Task 4: the room being left stays as it is (unless re-rolled since)
 	if warping:                          # the fade out ended (or anything else moved the hero on)
 		warping = false
@@ -414,6 +416,60 @@ func track_minimap() -> void:
 	if hud == null or hud.minimap == null or hero == null: return
 	var on_screen := hero_screen_rect() if cam and cam.is_inside_tree() else Rect2()
 	hud.minimap.track(hero.global_position, BowLayer.dir_vector(hero.facing), on_screen)
+
+## Task 8: what the full map shows (WorldMap.open's data): this game's fog, the hero's room, feet and facing, and
+## every room on this session's layout with its grid place, size, picture, Thai name, level range, joined exits
+## (this layout's warps; arena flag), waypoint stone and the arena flag. WorldMap draws only the visited ones.
+func world_map_info() -> Dictionary:
+	var out := {}
+	for id in rooms.active.get("pos", {}):
+		id = String(id)
+		if not rooms.has(id): continue
+		var r: Dictionary = rooms.room(id)
+		var ex: Array = []
+		for w in r.get("warps", []):
+			var to := String(w.to)
+			ex.append({"side": String(w.id), "at": Vector2(w.at[0], w.at[1]), "to": to, "arena": rooms.has(to) and bool(rooms.room(to).get("arena", false))})
+		out[id] = {"grid": rooms.grid_pos(id), "size": rooms.room_size(id), "picture": String(r.get("image", "")),
+			"name": String(r.get("name", id)), "levels": level_range(id), "exits": ex, "stone": rooms.waypoint(id),
+			"stone_unlocked": waypoints != null and waypoints.is_unlocked(id), "arena": bool(r.get("arena", false))}
+	return {"fog": fog, "current": room_id, "hero": hero.global_position if hero else Vector2.ZERO,
+		"facing": BowLayer.dir_vector(hero.facing) if hero else Vector2.DOWN, "rooms": out}
+
+## Task 8: room id's monster level range this roll as Vector2i(lowest, highest) (0 = unknown): the groups as built
+## (the hero's room, or one kept since the last re-roll), else what entering it would give: a forest room's groups at
+## its layout level (RoomLevels.groups), e0's set at the level of any room joined to it + 1 (max Lv11; addendum 3,
+## the set's own levels when nothing is joined); a room without monsters shows its layout level.
+func level_range(id: String) -> Vector2i:
+	if not rooms.has(id): return Vector2i.ZERO
+	var groups: Array = []
+	var kept := reset.state(id)
+	if id == room_id and not _room_groups.is_empty(): groups = _room_groups
+	elif not kept.is_empty(): groups = kept.groups
+	else:
+		var levels := rooms.room_levels()
+		var sets: Array = rooms.room(id).get("monster_sets", [])
+		if not sets.is_empty():
+			var lo := 0
+			var hi := 0
+			for w in rooms.room(id).get("warps", []):
+				var lv := RoomLevels.arena_level(int(levels.get(String(w.to), 0)))
+				if lv <= 0: continue
+				lo = lv if lo == 0 else mini(lo, lv)
+				hi = maxi(hi, lv)
+			if lo > 0: return Vector2i(lo, hi)
+			for st in sets: groups.append_array(st)
+		else:
+			groups = rooms.room(id).get("monsters", [])
+			if levels.has(id): groups = RoomLevels.groups(groups, int(levels[id]))
+			if groups.is_empty() and levels.has(id): return Vector2i(int(levels[id]), int(levels[id]))
+	if groups.is_empty(): return Vector2i.ZERO
+	var lo := 1 << 20
+	var hi := 0
+	for g in groups:
+		lo = mini(lo, int(g.level))
+		hi = maxi(hi, int(g.level))
+	return Vector2i(lo, hi)
 
 ## The travel list's rows: the unlocked stones in list order with their rooms' Thai names.
 func waypoint_entries() -> Array:
