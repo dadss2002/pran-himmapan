@@ -31,6 +31,11 @@ var settings_button: Button
 var settings_panel: PanelContainer
 var fullscreen_button: Button            # in the settings panel
 var fps_toggle: CheckButton              # in the settings panel
+## Task 3g (sound spec): "เสียง" on/off and the volume slider (0-100 %), in the settings panel too. The panel's
+## rows sit in a grid: one column upright, two side by side on a phone held sideways (clear of the touch buttons).
+var sound_toggle: CheckButton
+var volume_slider: HSlider
+var settings_grid: GridContainer
 var minimap_box: PanelContainer
 var toast: Label
 var _toast_tween: Tween
@@ -55,6 +60,8 @@ func _ready() -> void:
 		build()
 	layout(get_viewport().get_visible_rect().size)
 	get_viewport().size_changed.connect(func(): layout(get_viewport().get_visible_rect().size))
+	wire_click_sounds()
+	get_tree().node_added.connect(_on_node_added)
 
 ## Screen px per HUD px (the window shows the HUD's visible rect enlarged by this much).
 func screen_scale() -> float:
@@ -79,6 +86,7 @@ func layout(size: Vector2) -> void:
 		# landscape: under the status panel; portrait: under the top-right row
 		fps_button.position = Vector2(6, 60 if not ScreenFit.is_portrait(size) else top_right.position.y + top_right.size.y + 4)
 	if settings_panel:
+		if settings_grid: settings_grid.columns = 1 if ScreenFit.is_portrait(size) else 2
 		settings_panel.size = settings_panel.get_combined_minimum_size()
 		settings_panel.position = Vector2(size.x - 6 - settings_panel.size.x, top_right.position.y + top_right.size.y + 4)
 	if toast and map_button:
@@ -226,8 +234,12 @@ func build() -> void:
 	settings_panel.add_theme_stylebox_override("panel", _box(Color(0.055, 0.145, 0.11, 0.92), GOLD, 8))
 	settings_panel.visible = false
 	root.add_child(settings_panel)
-	var sv := VBoxContainer.new()
-	sv.add_theme_constant_override("separation", 4)
+	var sv := GridContainer.new()
+	sv.name = "SettingsGrid"
+	sv.columns = 1
+	sv.add_theme_constant_override("h_separation", 4)
+	sv.add_theme_constant_override("v_separation", 4)
+	settings_grid = sv
 	settings_panel.add_child(sv)
 	var fs := Button.new()                 # full screen on/off (hides the browser bars on phones)
 	fs.name = "FullscreenButton"
@@ -248,6 +260,36 @@ func build() -> void:
 	fps_toggle.toggled.connect(func(on): set_show_fps(on))
 	sv.add_child(fps_toggle)
 	set_show_fps(bool(settings.show_fps), false)
+	sound_toggle = CheckButton.new()
+	sound_toggle.name = "SoundToggle"
+	sound_toggle.text = "เสียง"
+	sound_toggle.focus_mode = Control.FOCUS_NONE
+	sound_toggle.add_theme_font_size_override("font_size", UiKit.fs(9))
+	sound_toggle.custom_minimum_size = Vector2(110, IconButton.MIN_TOUCH)
+	sound_toggle.button_pressed = bool(settings.sound)
+	sound_toggle.toggled.connect(func(on): set_sound(on))
+	sv.add_child(sound_toggle)
+	var vol_row := HBoxContainer.new()
+	vol_row.name = "VolumeRow"
+	vol_row.add_theme_constant_override("separation", 2)
+	vol_row.custom_minimum_size = Vector2(110, IconButton.MIN_TOUCH)
+	var vl := _label("ความดัง", 8, Color("#f3e9d2"))
+	vl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	vol_row.add_child(vl)
+	volume_slider = HSlider.new()
+	volume_slider.name = "VolumeSlider"
+	volume_slider.min_value = 0
+	volume_slider.max_value = 100
+	volume_slider.step = 5
+	volume_slider.focus_mode = Control.FOCUS_NONE
+	volume_slider.custom_minimum_size = Vector2(68, IconButton.MIN_TOUCH)   # the whole row height is the touch target
+	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	volume_slider.value = int(settings.volume)
+	volume_slider.value_changed.connect(func(v): set_volume(int(round(v))))
+	vol_row.add_child(volume_slider)
+	sv.add_child(vol_row)
+	set_sound(bool(settings.sound), false)
+	set_volume(int(settings.volume), false)
 
 	# --- short notes under the top-right block ("เร็ว ๆ นี้" for the map until Task 8)
 	toast = _label("", 9, Color("#f3e9d2"))
@@ -339,6 +381,7 @@ func open_skills() -> void:
 	buttons.release_all()
 	hero.external_input = Vector2.ZERO
 	skill_panel.open(hero)
+	Sfx.play("ui_open")
 
 ## The map button: the full map comes with Task 8; until then a short "เร็ว ๆ นี้" note.
 func open_map() -> void:
@@ -352,6 +395,7 @@ func show_toast(text: String, secs := TOAST_TIME) -> void:
 	toast_secs = secs
 	toast.modulate.a = 1.0
 	toast.visible = true
+	Sfx.play("toast")
 	layout(get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360))
 	if not is_inside_tree(): return
 	_toast_tween = create_tween()
@@ -380,6 +424,40 @@ func set_show_fps(on: bool, save := true) -> void:
 	if fps_toggle and fps_toggle.button_pressed != on: fps_toggle.set_pressed_no_signal(on)
 	if save: GameSettings.save(settings, settings_path)
 
+## "เสียง": every sound on or off at once; remembered in the settings file.
+func set_sound(on: bool, save := true) -> void:
+	settings["sound"] = on
+	Sfx.set_enabled(on)
+	if sound_toggle and sound_toggle.button_pressed != on: sound_toggle.set_pressed_no_signal(on)
+	if save: GameSettings.save(settings, settings_path)
+
+## The volume slider: 0-100 %, applied at once (also to sounds still ringing) and remembered.
+func set_volume(pct: int, save := true) -> void:
+	pct = clampi(pct, 0, 100)
+	settings["volume"] = pct
+	Sfx.set_volume(pct / 100.0)
+	if volume_slider and int(round(volume_slider.value)) != pct: volume_slider.set_value_no_signal(pct)
+	if save: GameSettings.save(settings, settings_path)
+
+## Every HUD / menu button (the panels' too, and ones made later: _ready watches the tree) clicks
+## "ui_button" when pressed. The bag and skills icons play "ui_open" when their screen opens instead, and the
+## map icon only shows its toast for now ("toast" sound) until the full map (Task 8) opens with "ui_open".
+func wire_click_sounds(n: Node = self) -> void:
+	if n is BaseButton: _wire_click(n)
+	for c in n.get_children(): wire_click_sounds(c)
+
+func _wire_click(b: BaseButton) -> void:
+	if b.has_meta("click_sound"): return
+	b.set_meta("click_sound", true)
+	if b == bag_button or b == skills_button or b == map_button: return
+	b.pressed.connect(_click)
+
+func _click() -> void:
+	Sfx.play("ui_button")
+
+func _on_node_added(n: Node) -> void:
+	if n is BaseButton and is_ancestor_of(n): _wire_click(n)
+
 ## Opens the bag; held touch buttons and the joystick let go first so nothing stays pressed.
 func open_bag() -> void:
 	if hero == null or hero.warping or bag_panel.is_open() or skill_panel.is_open(): return
@@ -387,6 +465,7 @@ func open_bag() -> void:
 	buttons.release_all()
 	hero.external_input = Vector2.ZERO
 	bag_panel.open(hero)
+	Sfx.play("ui_open")
 	refresh()
 
 func refresh() -> void:

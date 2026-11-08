@@ -63,6 +63,7 @@ func build() -> void:
 	if _built: return
 	_built = true
 	add_child(ScreenFit.new())          # portrait phones: 360 px wide UI; the camera covers the screen
+	Sfx.attach(self)                    # Task 3g: the sound players (the HUD applies the sound settings)
 	# M3k physics interpolation: only the world (moved on the physics tick) is blended between
 	# ticks for 120 Hz screens; HUD, panels and damage text move in _process / tweens, so off.
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -148,6 +149,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	if _fade_tween and _fade_tween.is_valid(): _fade_tween.kill()
 	_fade_tween = null
 	if fade: fade.color.a = 0.0
+	Sfx.stop_world()                     # sound spec: the old room's hits and cries stop (the warp gong goes on)
 	if warping:                          # the fade out ended (or anything else moved the hero on)
 		warping = false
 		hero.set_physics_process(_hero_was_on)
@@ -239,6 +241,7 @@ func choose_arena_set(from_id: String) -> void:
 ## stands still and cannot be hurt; the old room's monsters and their shots stop while it is dark.
 func warp_through(w: Warp) -> void:
 	if warping: return
+	Sfx.play("warp")
 	if not is_inside_tree():
 		go_to(w.to_room, w.to_warp)
 		return

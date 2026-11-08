@@ -111,13 +111,13 @@ func step(delta: float, hero: Hero, inv: Inventory) -> bool:
 		position = hp
 		if not gem.is_empty():
 			if not inv.add_gem(gem): return false
-			collected.emit(item_id, 1)
+			_collected(1)
 			expired = true
 			if is_inside_tree(): queue_free()
 			return true
 		if not item.is_empty():
 			if not inv.add_item(item): return false
-			collected.emit(item_id, 1)
+			_collected(1)
 			expired = true
 			if is_inside_tree(): queue_free()
 			return true
@@ -125,12 +125,17 @@ func step(delta: float, hero: Hero, inv: Inventory) -> bool:
 		if left > 0:          # only part fitted
 			count = left
 			return false
-		collected.emit(item_id, count)
+		_collected(count)
 		expired = true
 		if is_inside_tree(): queue_free()
 		return true
 	position += to.normalized() * stepd
 	return false
+
+## Picked up: gold rings the ranat coin sound, anything else the pickup sound; then collected.
+func _collected(n: int) -> void:
+	Sfx.play("coin" if item_id == "gold" else "pickup", position)
+	collected.emit(item_id, n)
 
 func _expire() -> void:
 	expired = true

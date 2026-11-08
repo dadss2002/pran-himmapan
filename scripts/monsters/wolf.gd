@@ -182,7 +182,10 @@ func telegraph_visible() -> bool:
 func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, crit_mult := -1.0) -> int:
 	if not is_alive(): return 0
 	var r := Combat.roll_damage(atk, mult, stats().def, true, crit_chance, crit_mult)
-	health.take_hit(r.amount, r.crit)
+	var lands := not health.is_dead() and not health.is_invulnerable()
+	if lands: Sfx.play("crit_hit" if r.crit else "arrow_hit", _pos())
+	health.take_hit(r.amount, r.crit)              # a killing hit cries "die" in _on_died
+	if lands and is_alive(): Sfx.play_monster(sound_kind(), "hurt")
 	if not is_alive(): return r.amount
 	_flash = n("hit_flash")
 	if state != "bite" and not elite:          # elites do not get knocked back (M3h)
@@ -233,6 +236,13 @@ func _toggle_fx(fx: FxSprite, fx_name: String, on: bool) -> FxSprite:
 		fx = null
 	return fx
 
+## Sound spec (receive_hit): an arrow hit plays arrow_hit, a critical crit_hit instead; the monster cries
+## "hurt", or, on the killing hit, only its "die" cry (_on_died). Burn ticks are not hits: no hit sound, but a
+## burn kill still cries "die". The kind whose cries this monster uses (assets/audio/monsters/<kind>_*).
+func sound_kind() -> String:
+	var k = get("kind")
+	return String(k) if k != null else "wolf"
+
 func _on_died() -> void:
 	status.clear()
 	_update_status_fx()
@@ -242,6 +252,7 @@ func _on_died() -> void:
 	velocity = Vector2.ZERO
 	if is_inside_tree(): shape.set_deferred("disabled", true)
 	else: shape.disabled = true
+	Sfx.play_monster(sound_kind(), "die")
 	died.emit(self)
 	_refresh(true)
 

@@ -128,6 +128,7 @@ func gain_exp(amount: int) -> void:
 		health.setup(stats().hp)
 		mp = max_mp()
 		leveled_up.emit(level)
+	if r.levels_gained > 0: Sfx.play("level_up")      # one gong however many levels at once
 	exp = r.exp
 	exp_changed.emit()
 
@@ -564,6 +565,7 @@ func _release() -> void:
 			_fire(start, dir, b.arrow_mult, b.pierce_all, range_px, b)
 	else:
 		_fire(start, v, 1.0, false)
+	Sfx.play("bow_shot", start)                # one twang per release, also for the arrow skills' fans
 	_pending_skill = ""
 
 func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1.0, b := {}) -> void:

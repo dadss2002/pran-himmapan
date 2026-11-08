@@ -410,3 +410,66 @@ func test_layout_portrait_and_landscape():
 	hud.queue_free()
 	for i in 3: await tree.process_frame
 	return "" if fails.is_empty() else "%d problems, e.g. %s" % [fails.size(), fails.slice(0, 4)]
+
+## Task 3g: the settings panel's new rows ("เสียง" toggle and the volume slider), upright and sideways: at least
+## 44 px tall, inside the open panel and the safe area, clear of each other, the other rows, the status panel,
+## the minimap box, the FPS line, every touch button (with its note) and the joystick. Sideways the rows sit two
+## per line so the panel stays above the touch buttons.
+func test_sound_rows_layout_portrait_and_landscape():
+	_clean()
+	var w := tree.root
+	var size0 := w.size
+	var scale0 := w.content_scale_size
+	var hud := _hud()
+	w.add_child(hud)
+	hud.touch_ui.visible = true
+	var fails := []
+	for o in [Vector2i(780, 1688), Vector2i(1688, 780)]:
+		DisplayServer.window_set_size(o)
+		w.size = o
+		w.content_scale_size = ScreenFit.base_for(o)
+		for i in 4: await tree.process_frame
+		var view := w.get_visible_rect().size
+		hud.buttons.layout(view)
+		hud.joystick.view_size = view
+		hud.joystick.reset()
+		hud.settings_panel.visible = true
+		hud.layout(view)
+		await tree.process_frame
+		var tag := "portrait" if o.y > o.x else "landscape"
+		var want_cols := 1 if o.y > o.x else 2
+		if hud.settings_grid.columns != want_cols: fails.append("%s: %d columns (want %d)" % [tag, hud.settings_grid.columns, want_cols])
+		var panel := hud.settings_panel.get_global_rect()
+		var rows := {"เต็มจอ": hud.fullscreen_button.get_global_rect(), "แสดง FPS": hud.fps_toggle.get_global_rect(),
+			"เสียง": hud.sound_toggle.get_global_rect(), "volume row": hud.volume_slider.get_parent().get_global_rect(),
+			"volume slider": hud.volume_slider.get_global_rect()}
+		var keep := {"status panel": hud.status_panel.get_global_rect(), "minimap box": hud.minimap_box.get_global_rect(),
+			"FPS line": hud.fps_button.get_global_rect(), "top-right block": hud.top_right.get_global_rect()}
+		for n in hud.buttons.buttons:
+			var b: Dictionary = hud.buttons.buttons[n]
+			var rr := Rect2(b.center - Vector2(b.radius, b.radius), Vector2(b.radius, b.radius) * 2.0)
+			if b.note != "": rr = rr.merge(Rect2(b.center.x - 24.0, b.center.y + b.radius, 48.0, 16.0))
+			keep["touch " + n] = rr
+		var jr := TouchJoystick.RADIUS
+		keep["joystick"] = Rect2(hud.joystick.idle_center() - Vector2(jr, jr), Vector2(jr, jr) * 2.0)
+		for k in rows:
+			var rect: Rect2 = rows[k]
+			if rect.size.y < 44.0 - 0.01: fails.append("%s: %s is %s (under 44 px)" % [tag, k, rect.size])
+			if not panel.grow(0.5).encloses(rect): fails.append("%s: %s %s outside the panel %s" % [tag, k, rect, panel])
+			if not hud.safe_rect().encloses(rect): fails.append("%s: %s %s off the safe area" % [tag, k, rect])
+			for o2 in keep:
+				if keep[o2].intersects(rect): fails.append("%s: %s %s over %s %s" % [tag, k, rect, o2, keep[o2]])
+			for k2 in rows:
+				if k2 != k and not (k2 == "volume slider" and k == "volume row") and not (k == "volume slider" and k2 == "volume row") and rows[k2].intersects(rect):
+					fails.append("%s: %s over %s" % [tag, k, k2])
+		if hud.volume_slider.get_global_rect().size.x < 44.0: fails.append("%s: slider only %.0f px wide" % [tag, hud.volume_slider.get_global_rect().size.x])
+		for o2 in keep:
+			if keep[o2].intersects(panel): fails.append("%s: the open panel %s is over %s %s" % [tag, panel, o2, keep[o2]])
+	hud.settings_panel.visible = false
+	DisplayServer.window_set_size(size0)
+	w.size = size0
+	w.content_scale_size = scale0
+	hud.queue_free()
+	for i in 3: await tree.process_frame
+	_clean()
+	return "" if fails.is_empty() else "%d problems, e.g. %s" % [fails.size(), fails.slice(0, 4)]
