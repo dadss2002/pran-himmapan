@@ -1,6 +1,6 @@
 class_name Hud
 extends CanvasLayer
-## In-game HUD (approved mockup): status panel top-left, gold/bag/minimap top-right,
+## In-game HUD (approved mockup): status panel top-left, gold and icon buttons top-right with the minimap under them,
 ## EXP bar along the bottom, plus the touch joystick and buttons on touch devices.
 
 const GOLD := Color("#edbb55")
@@ -39,7 +39,10 @@ var sound_toggle: CheckButton
 var volume_slider: HSlider
 var volume_label: Label                  # "80%" beside the slider, follows it live (owner 2026-11-08)
 var settings_grid: GridContainer
-var minimap_box: PanelContainer
+## Task 7 (M4c §4): the corner minimap (MiniMap), under the top-right buttons at the right edge; the settings panel
+## and the toast sit left of it. minimap_box is the same node (older tests keep their keep-out checks on it).
+var minimap: MiniMap
+var minimap_box: Control
 ## Task 5: the waypoint travel list (WaypointList), opened by the test ground while the hero stands on an unlocked
 ## stone; placed by place_waypoints() clear of the HUD, the touch controls and the hero (waypoint_avoid).
 var waypoint_list: WaypointList
@@ -90,13 +93,17 @@ func layout(size: Vector2) -> void:
 	top_right.position.x = size.x - 6 - top_right.size.x
 	# portrait (360 wide): no room beside the status panel, so the block goes on a second row
 	top_right.position.y = 60.0 if ScreenFit.is_portrait(size) else 6.0
+	if minimap:
+		# Task 7: right edge, under the top-right buttons (the FPS line's row upright; it sits on the left)
+		minimap.fit(size)
+		minimap.position = Vector2(size.x - 6 - minimap.size.x, top_right.position.y + top_right.size.y + 4)
 	if fps_button:
 		# landscape: under the status panel; portrait: under the top-right row
 		fps_button.position = Vector2(6, 60 if not ScreenFit.is_portrait(size) else top_right.position.y + top_right.size.y + 4)
 	if settings_panel:
 		if settings_grid: settings_grid.columns = 1 if ScreenFit.is_portrait(size) else 2
 		settings_panel.size = settings_panel.get_combined_minimum_size()
-		settings_panel.position = Vector2(size.x - 6 - settings_panel.size.x, top_right.position.y + top_right.size.y + 4)
+		settings_panel.position = Vector2(_left_of_minimap() - settings_panel.size.x, top_right.position.y + top_right.size.y + 4)
 	if toast and map_button:
 		# under the whole top-right block (so never over the minimap box) and, while the settings panel is
 		# open, under the panel too; centred under the map button, kept on screen
@@ -105,6 +112,8 @@ func layout(size: Vector2) -> void:
 		var y := top_right.position.y + top_right.size.y + 4
 		if settings_panel and settings_panel.visible: y = maxf(y, settings_panel.position.y + settings_panel.size.y + 4)
 		toast.position = Vector2(clampf(mr.get_center().x - toast.size.x / 2.0, 4, size.x - 4 - toast.size.x), y)
+		if minimap and minimap.visible and y < minimap.position.y + minimap.size.y + 4:   # Task 7: beside it, not over it
+			toast.position.x = maxf(4.0, minimap_left_room(toast.size.x, toast.position.x))
 		# the backing makes it a little wider: slide left off any touch button it would touch, again and again
 		# until it touches none (sliding off one may land it on another); it stops at the left edge
 		if touch_ui and touch_ui.visible and buttons:
@@ -191,7 +200,7 @@ func build() -> void:
 	mp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	mp_bar.add_child(mp_label)
 
-	# --- top-right: gold, bag (M2c), minimap frame
+	# --- top-right: gold and the icon buttons (the minimap goes under them, Task 7)
 	var tr := HBoxContainer.new()
 	top_right = tr
 	tr.add_theme_constant_override("separation", 6)
@@ -227,16 +236,13 @@ func build() -> void:
 	settings_button = IconButton.make("res://assets/ui/icons/settings.png", "SettingsButton")
 	settings_button.pressed.connect(toggle_settings)
 	tr.add_child(settings_button)
-	var mini := PanelContainer.new()
-	mini.name = "MinimapBox"
-	minimap_box = mini
-	mini.custom_minimum_size = Vector2(72, 54)
-	mini.add_theme_stylebox_override("panel", _box(Color(0.055, 0.145, 0.11, 0.6), Color(0.93, 0.73, 0.33, 0.45), 8))
-	var ml := _label("แผนที่ย่อ", 8, Color("#cfc6b0"))
-	ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ml.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	mini.add_child(ml)
-	tr.add_child(mini)
+	# --- Task 7: the corner minimap (placed by layout(); the full map comes with Task 8: a tap answers like the map
+	# button until then)
+	minimap = MiniMap.new()
+	minimap.build()
+	minimap_box = minimap
+	minimap.tapped.connect(open_map)
+	root.add_child(minimap)
 
 	# --- settings panel (hidden until the settings button is tapped)
 	settings = GameSettings.load_or_default(settings_path)
@@ -361,7 +367,8 @@ func build() -> void:
 	touch_ui.add_child(buttons)
 	touch_ui.visible = show_touch()
 	joystick.ignore_at = func(p: Vector2) -> bool:
-		return waypoint_list.visible and waypoint_list.get_global_rect().grow(WaypointList.MARGIN).has_point(p)
+		return (waypoint_list.visible and waypoint_list.get_global_rect().grow(WaypointList.MARGIN).has_point(p)) \
+			or (minimap.is_visible_in_tree() and minimap.get_global_rect().has_point(p))   # Task 7: a tap on the minimap
 	bag_panel = BagPanel.new()
 	bag_panel.build()
 	add_child(bag_panel)
@@ -369,18 +376,29 @@ func build() -> void:
 	skill_panel.build()
 	add_child(skill_panel)
 
+## Task 7: the x where something placed left of the minimap must end (4 px gap); the screen's right edge margin when
+## there is no minimap.
+func _left_of_minimap() -> float:
+	var v := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360)
+	if minimap == null or not minimap.visible: return v.x - 6.0
+	return minimap.position.x - 4.0
+
+## Task 7: x for a box `w` wide that wants to start at `x` and must end left of the minimap.
+func minimap_left_room(w: float, x: float) -> float:
+	return minf(x, _left_of_minimap() - w)
+
 ## M4c: where world text (exit labels) may go on screen: inside the edges and above the EXP bar.
 func safe_rect() -> Rect2:
 	var v := get_viewport().get_visible_rect().size
 	return Rect2(Vector2(4, 4), v - Vector2(8, 8 + 4))
 
 ## M4c: screen rects (HUD px) that world text must stay clear of: the status panel, the FPS line, the
-## top-right block (gold, buttons, minimap), the EXP bar, and on touch screens every touch button with
+## top-right block (gold, buttons), the minimap (Task 7), the EXP bar, and on touch screens every touch button with
 ## its note under it and the joystick's resting ring; Task 5: the open waypoint list too (except when
 ## placing the list itself: with_list = false).
 func blocked_rects(with_list := true) -> Array:
 	var out := []
-	for c in [status_panel, fps_button, exp_bar, settings_panel, toast, waypoint_list if with_list else null]:
+	for c in [status_panel, fps_button, exp_bar, settings_panel, toast, minimap, waypoint_list if with_list else null]:
 		if c and c.is_visible_in_tree(): out.append(c.get_global_rect())
 	if top_right and top_right.is_visible_in_tree():
 		for c in top_right.get_children():
@@ -473,7 +491,8 @@ func _waypoints_clear_hero(at: Vector2, hero_r: Rect2) -> bool:
 	if at == Vector2.INF: return false
 	return hero_r.size == Vector2.ZERO or not Rect2(at, waypoint_list.size).intersects(hero_r)
 
-## The map button: the full map comes with Task 8; until then a short "เร็ว ๆ นี้" note.
+## The map button (and, Task 7, a tap on the minimap): the full map comes with Task 8; until then a short
+## "เร็ว ๆ นี้" note.
 func open_map() -> void:
 	show_toast("เร็ว ๆ นี้")
 
@@ -541,6 +560,7 @@ func _wire_click(b: BaseButton) -> void:
 	if b.has_meta("click_sound"): return
 	b.set_meta("click_sound", true)
 	if b == bag_button or b == skills_button or b == map_button: return
+	if minimap and b == minimap.tap_button: return     # answers like the map button (its toast / Task 8's ui_open)
 	b.pressed.connect(_click)
 
 func _click() -> void:

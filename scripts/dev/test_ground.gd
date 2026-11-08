@@ -169,6 +169,7 @@ func build() -> void:
 	hud.bind(hero)
 	hud.waypoint_list.chosen.connect(func(id): waypoints.travel(id))
 	hud.waypoint_list.closed.connect(func(): _stone_armed = false)
+	hud.minimap.bind_fog(fog)                # Task 7: the minimap's fog layer follows this game's fog
 	var fade_layer := CanvasLayer.new()
 	fade_layer.layer = 50
 	add_child(fade_layer)
@@ -275,6 +276,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 		_fade_gate.set_process(true)
 		for p in packs: p.calm = CALM        # nobody notices the hero during the fade and just after
 	if fog: fog.reveal(id, hero.position)    # Task 6: the arrival is seen at once
+	show_minimap_room()                      # Task 7: picture, fog, exits and stone of the new room
 	save_now()
 	room_changed.emit(id)
 
@@ -376,6 +378,7 @@ func step_waypoint() -> void:
 	var on := hero.state != "dead" and not warping and Waypoints.touching(stone.position, hero.global_position)
 	if on and waypoints.unlock(room_id):
 		stone.set_unlocked(true)
+		if hud: hud.minimap.set_stone_unlocked(true)   # Task 7: the diamond turns blue
 		if hud: hud.show_toast("ปลดล็อกจุดวาป")
 		save_now()
 	if not on: _stone_armed = true
@@ -392,6 +395,25 @@ func step_waypoint() -> void:
 func step_fog() -> void:
 	if fog == null or hero == null or warping or room_id == "": return
 	fog.reveal(room_id, hero.global_position)
+
+## Task 7: the corner minimap shows the current room: its picture, its joined exits (this layout's warps; red into
+## the boss arena) and its waypoint stone (blue when unlocked); the fog follows FogGrid.changed; the dot is placed at
+## once (then every frame, _process).
+func show_minimap_room() -> void:
+	if hud == null or hud.minimap == null: return
+	var ex: Array = []
+	for w in rooms.room(room_id).get("warps", []):
+		var to := String(w.to)
+		ex.append({"side": String(w.id), "at": Vector2(w.at[0], w.at[1]), "arena": rooms.has(to) and bool(rooms.room(to).get("arena", false))})
+	var pic: Texture2D = load(String(layout.chunks[0].file)) if not layout.chunks.is_empty() else null
+	hud.minimap.show_room(room_id, layout.size_px(), pic, ex, rooms.waypoint(room_id), waypoints != null and waypoints.is_unlocked(room_id))
+	track_minimap()
+
+## Task 7, every frame: the hero's dot and facing tick, and his body on screen (the minimap fades over him).
+func track_minimap() -> void:
+	if hud == null or hud.minimap == null or hero == null: return
+	var on_screen := hero_screen_rect() if cam and cam.is_inside_tree() else Rect2()
+	hud.minimap.track(hero.global_position, BowLayer.dir_vector(hero.facing), on_screen)
 
 ## The travel list's rows: the unlocked stones in list order with their rooms' Thai names.
 func waypoint_entries() -> Array:
@@ -571,6 +593,7 @@ func _text(at: Vector2, t: String, c: Color) -> void:
 func _process(delta: float) -> void:
 	if overlay and cam and cam.is_inside_tree():
 		overlay.transform = Transform2D(0.0, Vector2(_scale, _scale), 0.0, -_view_origin() * _scale)
+	if hero and hud: track_minimap()
 	if hero and hud and hud.waypoints_open() and cam and cam.is_inside_tree():
 		_set_waypoint_avoid()
 		hud.place_waypoints()
