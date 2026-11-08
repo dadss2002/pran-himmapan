@@ -495,6 +495,63 @@ func test_warp_fades_out_then_in():
 	await _done(g)
 	return r
 
+## Follow-up 3 (owner): the fade-in always plays its full 0.25 s, even after a slow room change (the long frame
+## after go_to used to step the fade-in tween past its end, so the room popped in). go_to is made 300 ms
+## slow; the screen stays dark through that frame, then clears over >= 0.2 s with no big jump.
+func test_fade_in_full_after_slow_go_to():
+	var g := _ground()
+	await tree.physics_frame
+	for i in 10: await tree.process_frame   # let the heavy set-up frame pass
+	var to := String(_dest(g, "east").to)
+	g.go_to(to, "", true)
+	OS.delay_msec(300)                       # a slow phone: the next frame's delta is over 0.3 s
+	var alphas: Array = []
+	var t_start := -1
+	var t_end := -1
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 2000:
+		await tree.process_frame
+		var a: float = g.fade.color.a
+		if t_start < 0 and a < 0.999: t_start = Time.get_ticks_msec()
+		alphas.append(a)
+		if a <= 0.0:
+			t_end = Time.get_ticks_msec()
+			break
+		OS.delay_msec(5)                     # frames of a few ms, as a real 60-120 Hz screen
+	var r := ""
+	var jump := 0.0
+	for i in range(1, alphas.size()): jump = maxf(jump, alphas[i - 1] - alphas[i])
+	if g.room_id != to: r = "not in %s" % to
+	elif alphas.size() < 2 or alphas[0] < 0.99: r = "the frame after a slow go_to already cleared the screen to %.2f" % (alphas[0] if alphas.size() > 0 else -1.0)
+	elif t_end < 0: r = "screen still dark 2 s after the room change (alpha %.2f)" % g.fade.color.a
+	elif t_end - t_start < 200: r = "fade-in took %d ms (want the full 250)" % (t_end - t_start)
+	elif jump > 0.5: r = "the fade-in jumped %.2f in one frame" % jump
+	print("    fade-in after a 300 ms go_to: %d ms over %d frames, largest step %.2f" % [t_end - t_start, alphas.size(), jump])
+	await _done(g)
+	return r
+
+## Follow-up 3: a device slow on every frame (each over FADE_GATE) still sees the room: the fade-in starts after
+## at most FADE_GATE_FRAMES frames and the screen clears.
+func test_fade_in_starts_on_a_slow_device():
+	var g := _ground()
+	await tree.physics_frame
+	for i in 10: await tree.process_frame
+	var slow := func(): OS.delay_msec(70)
+	tree.process_frame.connect(slow)
+	g.go_to(String(_dest(g, "east").to), "", true)
+	var frames := 0
+	var started := -1
+	while frames < 40 and g.fade.color.a > 0.0:
+		await tree.process_frame
+		frames += 1
+		if started < 0 and g.fade.color.a < 0.999: started = frames
+	tree.process_frame.disconnect(slow)
+	var r := ""
+	if g.fade.color.a > 0.0: r = "screen still dark after %d slow frames (alpha %.2f)" % [frames, g.fade.color.a]
+	elif started > g.FADE_GATE_FRAMES + 2: r = "fade-in started only on frame %d" % started
+	await _done(g)
+	return r
+
 ## The exit label shows in the game only near the ring, with the next room's name.
 func test_exit_label_near_ring():
 	var g := _ground()

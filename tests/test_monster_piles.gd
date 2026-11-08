@@ -2,7 +2,9 @@ extends RefCounted
 ## M4d addendum 4 (docs/superpowers/specs/2026-11-08-m4d-random-layout.md): monster groups split into piles of
 ## 2-4 (MonsterPiles.split), piles spread at random over open ground (MonsterPiles.place): same seed same piles,
 ## pile centres >= 80 px apart, in-pile spawn points >= 2 x body width apart, arrival rules kept, bosses never
-## piled, per-room kinds / counts / levels unchanged, and how many rooms fall back over 200 seeds.
+## piled, per-room kinds / counts / levels unchanged, and how many rooms fall back over 20 live seeds.
+## Follow-up 3: the baked bank (PileBank, data/piles_bank.json): matches today's data, every entry passes
+## _check, the game picks entry room_seed % 64 fast, a stale bank places live.
 ## Follow-up ("มอนกองบ้างกระจายบ้าง"): per kind in a room piled_count(n) = n / 2 halves up, at least 2 when
 ## n >= 2, stand in piles; the rest are singles >= 60 px from every single and pile centre. In the game a
 ## pile (or a single) wakes alone, lunges on its own token and a revived monster comes back on its own spot.
@@ -330,13 +332,16 @@ func test_body_widths_from_collision():
 					if pts[a].distance_to(pts[b]) < 2.0 * bw: return "%s pile of %d: %.1f px apart" % [k, c, pts[a].distance_to(pts[b])]
 	return ""
 
-## 200 seeds over every room (e0's four sets each): how many placements fall back to the built homes.
-func test_200_seeds_fallbacks():
+## Live placement (MonsterPiles.place, the path a stale bank falls back to) over 20 seeds x every room (e0's
+## four sets each): no placement falls back to the built homes and every one passes _check. Follow-up 3: the
+## 200-seed run moved to the baked bank (test_bank_entries_follow_the_rules, 64 placements per room and set,
+## all checked); the bake itself places live with seeds 0..63.
+func test_live_20_seeds_fallbacks():
 	var rooms := RoomSet.open()
 	var falls := {}
 	var bad := ""
 	var t0 := Time.get_ticks_msec()
-	for s in 200:
+	for s in 20:
 		for id in rooms.ids():
 			var lists := _lists(rooms, id)
 			for li in lists.size():
@@ -344,11 +349,171 @@ func test_200_seeds_fallbacks():
 				if MonsterPiles.fell_back(piles):
 					var key: String = id if lists.size() == 1 else "%s set %d" % [id, li]
 					falls[key] = int(falls.get(key, 0)) + 1
-				elif bad == "" and s % 20 == 0:
+				elif bad == "":
 					bad = _check(rooms, id, lists[li], piles, MonsterPiles.room_seed(s, id))
-	print("    piles: 200 seeds, fallbacks %s (%d ms)" % [falls if not falls.is_empty() else "none", Time.get_ticks_msec() - t0])
+	print("    piles live: 20 seeds, fallbacks %s (%d ms)" % [falls if not falls.is_empty() else "none", Time.get_ticks_msec() - t0])
 	if bad != "": return bad
 	return "" if falls.is_empty() else "rooms fell back to built homes: %s" % falls
+
+## Follow-up 3: the bank set of room id with these groups, or why it is missing ("" key "err").
+func _bank_set(rooms: RoomSet, id: String, groups: Array, label: String) -> Dictionary:
+	var bank := PileBank.find(id, rooms.pile_hash(id, groups))
+	if bank.is_empty(): return {"err": "piles bank stale or missing for %s (room data, groups or rules changed): run tools/bake_piles.gd" % label}
+	return bank
+
+func _label(id: String, lists: Array, li: int) -> String:
+	return id if lists.size() == 1 else "%s set %d" % [id, li]
+
+## Follow-up 3: data/piles_bank.json has, for every room and every e0 set, a set whose input hash matches
+## today's room data, groups and rules, with PileBank.SIZE (64) placements and their seeds.
+func test_bank_matches_current_data():
+	PileBank.reload()
+	var rooms := RoomSet.open()
+	var n := 0
+	for id in rooms.ids():
+		var lists := _lists(rooms, id)
+		for li in lists.size():
+			var bank := _bank_set(rooms, id, lists[li], _label(id, lists, li))
+			if bank.has("err"): return bank.err
+			if PileBank.SIZE != 64: return "bank size %d (want 64)" % PileBank.SIZE
+			if bank.p.size() != 64 or bank.seeds.size() != 64: return "%s: %d placements, %d seeds (want 64)" % [_label(id, lists, li), bank.p.size(), bank.seeds.size()]
+			n += 1
+	if n != rooms.ids().size() + 3: return "%d banked sets (want one per room + e0's 3 more)" % n
+	return ""
+
+## Follow-up 3: every banked placement, read back as the game reads it, passes the same _check as live
+## placement with the seed it was made with (kinds/counts/levels, half in piles, open ground, arrival floors,
+## in-pile spacing, 80 px between piles, 60 px from singles to everyone), none is a fallback, and the 64 of a
+## set all differ.
+func test_bank_entries_follow_the_rules():
+	PileBank.reload()
+	var rooms := RoomSet.open()
+	var t0 := Time.get_ticks_msec()
+	var checked := 0
+	for id in rooms.ids():
+		var lists := _lists(rooms, id)
+		for li in lists.size():
+			var groups: Array = lists[li]
+			var bank := _bank_set(rooms, id, groups, _label(id, lists, li))
+			if bank.has("err"): return bank.err
+			var seen := {}
+			for i in bank.p.size():
+				var piles := PileBank.decode(bank.p[i], groups)
+				if MonsterPiles.fell_back(piles): return "%s entry %d is a fallback" % [_label(id, lists, li), i]
+				var e := _check(rooms, id, groups, piles, int(bank.seeds[i]))
+				if e != "": return "%s bank entry %d (seed %d): %s" % [_label(id, lists, li), i, int(bank.seeds[i]), e]
+				seen[str(piles)] = true
+				checked += 1
+			if seen.size() != bank.p.size(): return "%s: only %d different placements of %d" % [_label(id, lists, li), seen.size(), bank.p.size()]
+	print("    piles bank: %d placements checked (%d ms)" % [checked, Time.get_ticks_msec() - t0])
+	return ""
+
+## Follow-up 3: with a matching hash RoomSet.piles() returns bank entry room_seed % 64 (levels from the
+## groups: forest rooms at the layout's level, e0 at the arena level), the same each call, without preparing
+## the room's open ground, in under 5 ms (first entry of a fresh RoomSet, hash included; the bank file is
+## already loaded); other pile seeds pick other entries.
+func test_bank_pick_is_the_entry_and_fast():
+	PileBank.reload()
+	PileBank.data()                  # loaded once per run (about 6 ms headless desktop), not per room
+	var r := ""
+	var cases := [["c1r2", -1], ["e0", 1], ["e0", 3], ["c1r1", -1], ["x2", -1]]
+	var times := []
+	for c in cases:
+		var rooms := RoomSet.open()
+		var id: String = c[0]
+		var groups: Array = RoomLevels.groups(rooms.room(id).monsters, 6) if int(c[1]) < 0 else RoomLevels.arena_groups(rooms.room(id).monster_sets[int(c[1])], 7)
+		var seed := MonsterPiles.room_seed(7, id)
+		var t0 := Time.get_ticks_usec()
+		var got := rooms.piles(id, groups, seed)
+		var us := Time.get_ticks_usec() - t0
+		times.append("%s%s %.2f ms" % [id, "" if int(c[1]) < 0 else " set %d" % c[1], us / 1000.0])
+		var bank := PileBank.find(id, rooms.pile_hash(id, groups))
+		if bank.is_empty(): return "%s: no bank set (run tools/bake_piles.gd)" % id
+		var want := PileBank.decode(bank.p[posmod(seed, 64)], groups)
+		if str(got) != str(want): r = "%s: piles() is not bank entry %d" % [id, posmod(seed, 64)]
+		elif us > 5000: r = "%s: bank pick took %.1f ms (want < 5)" % [id, us / 1000.0]
+		elif not rooms._pile_rooms.is_empty(): r = "%s: a bank hit prepared the room's open ground" % id
+		elif str(rooms.piles(id, groups, seed)) != str(got): r = "%s: same seed, different piles" % id
+		for p in got:
+			if r == "" and int(p.level) != int(groups[int(p.group)].level): r = "%s: a pile at Lv%d, its group Lv%d" % [id, p.level, groups[int(p.group)].level]
+		if r == "":
+			var picks := {}
+			for s in 8: picks[str(rooms.piles(id, groups, MonsterPiles.room_seed(s, id)))] = true
+			if picks.size() < 5: r = "%s: 8 pile seeds gave only %d placements" % [id, picks.size()]
+		if r != "": break
+	print("    bank pick: %s" % ", ".join(times))
+	return r
+
+## Follow-up 3: the input hash follows what a placement depends on: picture size, blocked grid, exits, spawn,
+## near_arrival_ok, the groups' kind / count / home / boss; not the groups' levels or the session's warps.
+func test_bank_hash_follows_the_inputs():
+	var rooms := RoomSet.open()
+	var id := "c1r1"
+	var groups: Array = rooms.room(id).monsters
+	var base := rooms.pile_hash(id, groups)
+	if rooms.pile_hash(id, RoomLevels.groups(groups, 9)) != base: return "a level change changed the hash"
+	rooms.use_layout(RoomLayout.generate(5, rooms.exit_table()))
+	if rooms.pile_hash(id, groups) != base: return "the session layout (warps) changed the hash"
+	var edits := {
+		"blocked": func(d): _open_lone_cell(d),
+		"exits": func(d): d.exits[0].at = [float(d.exits[0].at[0]) + 8.0, d.exits[0].at[1]],
+		"size": func(d): d.size = [520, 512],
+		"spawn": func(d): d.spawn = [float(d.spawn[0]) + 8.0, d.spawn[1]],
+		"near_arrival_ok": func(d): d.near_arrival_ok = true}
+	for k in edits:
+		var rs := RoomSet.open()
+		var d: Dictionary = rs._rooms[id].duplicate(true)
+		edits[k].call(d)
+		rs._rooms[id] = d
+		if rs.pile_hash(id, groups) == base: return "a %s change kept the hash" % k
+	var g_edits := {
+		"count": func(g): g[0].count = int(g[0].count) + 1,
+		"kind": func(g): g[0].kind = "viper" if String(g[0].kind) != "viper" else "boar",
+		"home": func(g): g[0].at = [float(g[0].at[0]) + 1.0, g[0].at[1]],
+		"boss": func(g): g[0]["boss"] = true}
+	for k in g_edits:
+		var g2: Array = groups.duplicate(true)
+		g_edits[k].call(g2)
+		if rooms.pile_hash(id, g2) == base: return "a group %s change kept the hash" % k
+	return ""
+
+## A room data edit that leaves its open ground as it was: one rock cell walled in by rock on all 8 sides
+## turns walkable (too small for a body, so not open ground). false when the room has no such cell.
+func _open_lone_cell(d: Dictionary) -> bool:
+	var rows: Array = d.blocked
+	for y in range(1, rows.size() - 1):
+		for x in range(1, String(rows[y]).length() - 1):
+			var lone := true
+			for dy in [-1, 0, 1]:
+				for dx in [-1, 0, 1]:
+					if String(rows[y + dy])[x + dx] != "#": lone = false
+			if lone:
+				var row := String(rows[y])
+				rows[y] = row.substr(0, x) + "." + row.substr(x + 1)
+				return true
+	return false
+
+## Follow-up 3: a stale bank (the room's data changed without a rebake: one walled-in rock cell opened; or
+## groups that were never baked) gives live placement, which still follows every rule.
+func test_stale_bank_places_live():
+	var id := "c1r1"
+	var rooms := RoomSet.open()
+	var d: Dictionary = rooms._rooms[id].duplicate(true)
+	if not _open_lone_cell(d): return "no rock cell to open in %s" % id
+	rooms._rooms[id] = d
+	var groups: Array = rooms.room(id).monsters
+	var seed := MonsterPiles.room_seed(7, id)
+	if not PileBank.find(id, rooms.pile_hash(id, groups)).is_empty(): return "an edited room still matches the bank"
+	var got := rooms.piles(id, groups, seed)
+	var want := MonsterPiles.place(rooms.pile_room(id), groups, seed)
+	if str(got) != str(want): return "stale bank: piles() is not the live placement"
+	var e := _check(rooms, id, groups, got, seed)
+	if e != "": return "stale bank live placement: %s" % e
+	var fresh := RoomSet.open()
+	var g2: Array = groups.duplicate(true)
+	g2[0].at = [float(g2[0].at[0]) + 8.0, g2[0].at[1]]
+	if str(fresh.piles(id, g2, seed)) != str(MonsterPiles.place(fresh.pile_room(id), g2, seed)): return "unbaked groups: piles() is not the live placement"
+	return ""
 
 ## In the real test ground: each group is one pack holding its piles (spawn points and homes from
 ## MonsterPiles), same piles on walking out and back, new pile seed gives new piles.
@@ -364,7 +529,12 @@ func test_ground_spawns_piles_and_keeps_them():
 	var first := _spots(g)
 	var src: Array = g.rooms.room(id).monsters
 	if g.packs.size() != src.size(): r = "%d packs for %d groups" % [g.packs.size(), src.size()]
-	var want := MonsterPiles.place(g.rooms.pile_room(id), RoomLevels.groups(src, int(g.rooms.room_levels()[id])), MonsterPiles.room_seed(g.pile_seed, id))
+	var groups := RoomLevels.groups(src, int(g.rooms.room_levels()[id]))
+	var want: Array = g.rooms.piles(id, groups, MonsterPiles.room_seed(g.pile_seed, id))
+	# follow-up 3: the game's piles are the baked bank's entry room_seed % 64
+	var bank := PileBank.find(id, g.rooms.pile_hash(id, groups))
+	if r == "" and bank.is_empty(): r = "no bank set for %s (run tools/bake_piles.gd)" % id
+	elif r == "" and str(want) != str(PileBank.decode(bank.p[posmod(MonsterPiles.room_seed(g.pile_seed, id), 64)], groups)): r = "the game's piles are not the bank entry"
 	var want_pts := []
 	for p in want:
 		for q in p.points: want_pts.append(q)

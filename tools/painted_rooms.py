@@ -332,6 +332,9 @@ def main():
         sheet.paste(im.resize((im.width // 2, im.height // 2), Image.NEAREST), ((gx - c0) * tw, (gy - r0) * th))
     sheet.save(f"{ROOT}/docs/preview/m3c_rooms_debug.png")
     print("rooms %d, exits %d" % (len(rooms), sum(len(r["exits"]) for r in rooms.values())))
+    # M4d follow-up 3: the monster-pile bank is keyed to this data (room picture, blocked grid, exits, groups)
+    print("reminder: if any room's data changed, rebake the monster piles: "
+          "godot --headless --script tools/bake_piles.gd (tests/test_monster_piles.gd fails on a stale bank)")
 
 
 if __name__ == "__main__":

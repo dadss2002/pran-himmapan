@@ -24,7 +24,7 @@ var session_seed := 0             # the seed this session's layout was made from
 ## the layout seed at the start of a session, so walking out and back shows the same piles; Task 4's re-roll
 ## (waypoint travel / new game) sets a new one with reroll_piles().
 var pile_seed := 0
-var _piles := {}                  # "room|seed|groups hash" -> MonsterPiles.place() result (this session)
+var _piles := {}                  # "room|seed|groups hash" -> RoomSet.piles() result (this session)
 ## M4d addendum 2: e0's monster set this session (index into its monster_sets; -1 = not chosen yet). Chosen
 ## on the first entry each session (a new game is a new session); Task 4 re-chooses it on every re-roll.
 var arena_set := -1
@@ -34,6 +34,15 @@ var fade: ColorRect
 const FADE_OUT := 0.25           # M4c §1 approved: screen goes dark, then the new room
 const FADE_IN := 0.25
 const CALM := 1.0                # the new room's monsters ignore the hero this long after arrival
+## M4d follow-up 3 (owner): the fade-in always plays its full FADE_IN. A slow room build makes the next frame's
+## delta long, and a tween stepped by it would clear the screen at once; so the fade-in tween waits (paused)
+## for the first frame after go_to shorter than FADE_GATE, or at most FADE_GATE_FRAMES frames (a device that is
+## slow every frame still sees the room).
+const FADE_GATE := 0.05
+const FADE_GATE_FRAMES := 3
+var _fade_gate: FadeGate
+var _fade_frame := -1            # the process frame go_to ran in (its own frame never starts the fade-in)
+var _fade_waited := 0
 var warping := false             # between touching a ring and the new room appearing
 var _hero_was_on := true
 var _fade_tween: Tween
@@ -139,6 +148,12 @@ func build() -> void:
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	fade_layer.add_child(fade)
+	_fade_gate = FadeGate.new()
+	_fade_gate.name = "FadeGate"
+	_fade_gate.process_mode = Node.PROCESS_MODE_ALWAYS    # as the fade tween: a paused tree never stays dark
+	_fade_gate.on_frame = _on_fade_gate
+	_fade_gate.set_process(false)
+	add_child(_fade_gate)
 	# M4d: the map is new every session, so the saved room is not used: always start in c1r1.
 	go_to(rooms.start, "", false)
 
@@ -148,6 +163,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	# Any fade still running belongs to the old room: stop it, so its callback cannot move us again.
 	if _fade_tween and _fade_tween.is_valid(): _fade_tween.kill()
 	_fade_tween = null
+	if _fade_gate: _fade_gate.set_process(false)
 	if fade: fade.color.a = 0.0
 	Sfx.stop_world()                     # sound spec: the old room's hits and cries stop (the warp gong goes on)
 	if warping:                          # the fade out ended (or anything else moved the hero on)
@@ -216,15 +232,20 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	if with_fade and is_inside_tree():
 		fade.color.a = 1.0
 		_new_fade().tween_property(fade, "color:a", 0.0, FADE_IN)
+		_fade_tween.pause()                  # follow-up 3: started by _on_fade_gate on a short frame
+		_fade_frame = Engine.get_process_frames()
+		_fade_waited = 0
+		_fade_gate.set_process(true)
 		for p in packs: p.calm = CALM        # nobody notices the hero during the fade and just after
 	save_now()
 	room_changed.emit(id)
 
-## The piles for room id's groups this session (MonsterPiles.place, seed from pile_seed and the room id).
+## The piles for room id's groups this session (seed from pile_seed and the room id): follow-up 3, the baked
+## bank's entry, or live placement when the bank is stale (RoomSet.piles).
 func piles_for(id: String, groups: Array) -> Array:
 	var key := "%s|%d|%d" % [id, pile_seed, hash(groups)]
 	if not _piles.has(key):
-		_piles[key] = MonsterPiles.place(rooms.pile_room(id), groups, MonsterPiles.room_seed(pile_seed, id))
+		_piles[key] = rooms.piles(id, groups, MonsterPiles.room_seed(pile_seed, id))
 	return _piles[key]
 
 ## Task 4 hook: new piles everywhere from a new seed (the next room entered uses them).
@@ -257,7 +278,27 @@ func warp_through(w: Warp) -> void:
 	_new_fade().tween_property(fade, "color:a", 1.0, FADE_OUT)
 	_fade_tween.tween_callback(func(): go_to(to_room, to_warp))
 
+## Follow-up 3: each frame while the fade-in waits: start it on the first frame after go_to's own frame whose
+## delta is under FADE_GATE (tweens are stepped later in that same frame by that delta), or after
+## FADE_GATE_FRAMES slower frames.
+func _on_fade_gate(delta: float) -> void:
+	if _fade_tween == null or not _fade_tween.is_valid():
+		_fade_gate.set_process(false)
+		return
+	if Engine.get_process_frames() == _fade_frame: return
+	_fade_waited += 1
+	if delta < FADE_GATE or _fade_waited > FADE_GATE_FRAMES:
+		_fade_gate.set_process(false)
+		_fade_tween.play()
+
+## Calls on_frame(delta) every process frame while processing (PROCESS_MODE_ALWAYS; see _on_fade_gate).
+class FadeGate extends Node:
+	var on_frame: Callable
+	func _process(delta: float) -> void:
+		on_frame.call(delta)
+
 func _new_fade() -> Tween:
+	if _fade_gate: _fade_gate.set_process(false)    # a waiting fade-in is replaced
 	if _fade_tween and _fade_tween.is_valid(): _fade_tween.kill()
 	_fade_tween = create_tween()
 	_fade_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)   # a paused tree never leaves the screen half dark

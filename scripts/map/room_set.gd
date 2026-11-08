@@ -20,6 +20,7 @@ var _rooms: Dictionary = {}
 var _layouts: Dictionary = {}
 var _levels = null            # RoomLevels.for_layout(active), worked out once per layout (room_levels())
 var _pile_rooms: Dictionary = {}   # id -> MonsterPiles.prepare() data (never depends on the session layout)
+var _pile_texts: Dictionary = {}   # id -> PileBank.room_text (the room's placement inputs, for the bank hash)
 
 static func open(path := PATH) -> RoomSet:
 	var f := FileAccess.open(path, FileAccess.READ)
@@ -151,6 +152,20 @@ func pile_room(id: String) -> Dictionary:
 		_pile_rooms[id] = MonsterPiles.prepare(_rooms[id], l, arrivals)
 		_pile_rooms[id]["id"] = id
 	return _pile_rooms[id]
+
+## M4d follow-up 3: the piles for room id's groups with placement seed `seed` (MonsterPiles.room_seed): the
+## baked bank's entry (PileBank) when its input hash matches today's room data and groups, else live
+## placement (MonsterPiles.place on pile_room; the bank says once that it is stale). A bank hit never prepares
+## pile_room (its flood and arrivals cost 20-46 ms the first time).
+func piles(id: String, groups: Array, seed: int) -> Array:
+	var hit = PileBank.pick(id, pile_hash(id, groups), groups, seed)
+	if hit != null: return hit
+	return MonsterPiles.place(pile_room(id), groups, seed)
+
+## The bank input hash of room id with these groups (PileBank.input_hash).
+func pile_hash(id: String, groups: Array) -> String:
+	if not _pile_texts.has(id): _pile_texts[id] = PileBank.room_text(_rooms[id], cell)
+	return PileBank.input_hash(_pile_texts[id], bool(_rooms[id].get("near_arrival_ok", false)), groups)
 
 ## Every problem with the rooms; empty means playable.
 func validate() -> Array[String]:
