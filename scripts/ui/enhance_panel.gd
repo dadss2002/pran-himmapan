@@ -49,6 +49,7 @@ func open(h: Hero, item_ref: Dictionary) -> void:
 
 func close() -> void:
 	visible = false
+	_taps.reset()
 	closed.emit()
 
 func is_open() -> bool:

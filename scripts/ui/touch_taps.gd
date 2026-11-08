@@ -7,6 +7,7 @@ extends RefCounted
 ## - the finger Godot turns into the mouse is left to the GUI (its emulated mouse press, device
 ##   InputEvent.DEVICE_ID_EMULATION, comes just before its touch press), so a one-finger tap fires once;
 ## - any other finger that goes down on a button and comes up on the same button presses it (pressed.emit());
+##   a cancelled touch (iOS touchcancel) never presses, and a panel that shuts forgets its held fingers;
 ## - feed() returns true for a touch of such a finger on a button or inside `area` (the panel): the panel marks
 ##   it handled so it does not reach the rest of the game.
 
@@ -26,6 +27,7 @@ func feed(e: InputEvent, root: Control, area: Rect2, active := true) -> bool:
 		return false
 	if not (e is InputEventScreenTouch): return false
 	var st := e as InputEventScreenTouch
+	if not active: _held.clear()   # shut or covered: a finger held from before must not press on reopen (review M2)
 	if st.pressed:
 		if _emu_next:
 			_emu_next = false
@@ -42,6 +44,7 @@ func feed(e: InputEvent, root: Control, area: Rect2, active := true) -> bool:
 	var held = _held.get(st.index)
 	_held.erase(st.index)
 	if not active or root == null: return false
+	if st.canceled: return held != null or area.has_point(st.position)   # iOS touchcancel (call, system gesture) is not a tap (review I1)
 	if held != null and is_instance_valid(held) and _tappable(held) and (held as Control).get_global_rect().has_point(st.position):
 		(held as BaseButton).pressed.emit()
 		return true

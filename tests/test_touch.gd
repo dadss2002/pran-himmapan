@@ -278,3 +278,51 @@ func test_second_finger_on_bag_and_skill_panels():
 	hero.queue_free()
 	for i in 2: await tree.process_frame
 	return r
+
+## Review I1/M2 (2026-11-09): an iOS touchcancel (a call, a system gesture) over a button is not a tap, and a finger
+## held on a button while the panel shut (or was covered) does not press it after the panel opens again.
+func test_touch_taps_cancel_and_shut_panel():
+	var root := Control.new()
+	tree.root.add_child(root)
+	var b := Button.new()
+	b.position = Vector2(100, 100)
+	b.size = Vector2(80, 44)
+	root.add_child(b)
+	await tree.process_frame
+	var presses := [0]
+	b.pressed.connect(func(): presses[0] += 1)
+	var t := TouchTaps.new()
+	var at := b.get_global_rect().get_center()
+	var mk := func(i: int, p: Vector2, down: bool, cancel := false) -> InputEventScreenTouch:
+		var st := InputEventScreenTouch.new()
+		st.index = i
+		st.position = p
+		st.pressed = down
+		st.canceled = cancel
+		return st
+	var emu := InputEventMouseButton.new()
+	emu.device = InputEvent.DEVICE_ID_EMULATION
+	emu.pressed = true
+	var r := ""
+	t.feed(emu, root, TouchTaps.EVERYWHERE)                       # the thumb is Godot's mouse finger
+	t.feed(mk.call(0, Vector2(5, 5), true), root, TouchTaps.EVERYWHERE)
+	t.feed(mk.call(1, at, true), root, TouchTaps.EVERYWHERE)
+	t.feed(mk.call(1, at, false, true), root, TouchTaps.EVERYWHERE)  # touchcancel over the button
+	if presses[0] != 0: r = "a cancelled touch pressed the button %d times" % presses[0]
+	if r == "":
+		t.feed(mk.call(1, at, true), root, TouchTaps.EVERYWHERE)
+		t.feed(mk.call(2, Vector2(300, 300), true), root, TouchTaps.EVERYWHERE, false)   # panel shut meanwhile
+		t.feed(mk.call(1, at, false), root, TouchTaps.EVERYWHERE)    # reopened, finger 1 lifts
+		if presses[0] != 0: r = "a finger held across a shut panel pressed the button on reopen"
+	if r == "":
+		t.feed(mk.call(1, at, true), root, TouchTaps.EVERYWHERE)
+		t.reset()                                                      # close() forgets fingers
+		t.feed(mk.call(1, at, false), root, TouchTaps.EVERYWHERE)
+		if presses[0] != 0: r = "a finger held across close() pressed the button"
+	if r == "":
+		t.feed(mk.call(1, at, true), root, TouchTaps.EVERYWHERE)
+		t.feed(mk.call(1, at, false), root, TouchTaps.EVERYWHERE)    # a real second-finger tap still works
+		if presses[0] != 1: r = "a normal second-finger tap pressed %d times (want 1)" % presses[0]
+	root.queue_free()
+	await tree.process_frame
+	return r

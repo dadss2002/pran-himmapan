@@ -57,6 +57,7 @@ func open(h: Hero) -> void:
 
 func close() -> void:
 	visible = false
+	_taps.reset()
 	if is_inside_tree(): get_tree().paused = false
 	closed.emit()
 

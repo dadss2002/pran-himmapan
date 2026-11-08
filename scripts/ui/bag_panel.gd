@@ -74,6 +74,7 @@ func close() -> void:
 	if enhance_panel and enhance_panel.is_open(): enhance_panel.close()
 	visible = false
 	if is_inside_tree(): get_tree().paused = false
+	_taps.reset()
 	closed.emit()
 
 func is_open() -> bool:
