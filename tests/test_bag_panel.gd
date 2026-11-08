@@ -175,3 +175,56 @@ func test_ring_compare_lists_worn_options():
 	var r := "" if not _find(p.selected_detail().lines, "ที่ใส่อยู่: คริ +1%").is_empty() else "no worn-ring line: %s" % [p.selected_detail().lines]
 	p.free(); h.free()
 	return r
+
+## Owner 2026-11-08 (iPhone, portrait): "กดสวมใส่ไม่ได้" — the panel was sized before the detail was filled,
+## so a selected item's lines pushed the action button off the bottom of the screen. The whole panel, and
+## the action button, must stay on screen in portrait and landscape after selecting a long item.
+func test_action_button_on_screen_after_select():
+	var w := tree.root
+	var size0 := w.size
+	var scale0 := w.content_scale_size
+	var h := _hero(5)
+	h.inventory.add_item(_horn())
+	var p := BagPanel.new()
+	p.build()
+	w.add_child(p)
+	await tree.process_frame
+	var fails := []
+	for o in [Vector2i(780, 1688), Vector2i(1688, 780)]:
+		DisplayServer.window_set_size(o)
+		w.size = o
+		w.content_scale_size = ScreenFit.base_for(o)
+		for i in 3: await tree.process_frame
+		p.open(h)
+		p.select(h.inventory.slots.size() - 1)
+		for i in 3: await tree.process_frame
+		var view := Rect2(Vector2.ZERO, w.get_visible_rect().size)
+		var tag := "portrait" if o.y > o.x else "landscape"
+		var a := p._d_action.get_global_rect()
+		var panel := p._panel.get_global_rect()
+		if not p._d_action.visible: fails.append("%s: action hidden" % tag)
+		if not view.encloses(a): fails.append("%s: action %s off screen %s" % [tag, a, view])
+		if not view.grow(0.5).encloses(panel): fails.append("%s: panel %s off screen %s" % [tag, panel, view])
+		var name_row := p._d_name.get_global_rect()
+		if tag == "portrait" and absf(a.get_center().y - name_row.get_center().y) > 24.0: fails.append("portrait: action %s not beside the name %s" % [a, name_row])
+		if a.position.y > name_row.end.y + 60.0: fails.append("%s: action %s far below the name %s" % [tag, a, name_row])
+		# iPhone Safari: the bottom bar area stays free in portrait
+		ScreenFit.ios_override = 1
+		ScreenFit.standalone_override = 0
+		p._layout()
+		await tree.process_frame
+		panel = p._panel.get_global_rect()
+		var free_y := view.size.y - (BagPanel.IOS_BOTTOM_INSET if tag == "portrait" else 0.0)
+		if panel.end.y > free_y + 0.5: fails.append("%s iPhone: panel bottom %.1f over Safari bar (free to %.1f)" % [tag, panel.end.y, free_y])
+		ScreenFit.ios_override = -1
+		ScreenFit.standalone_override = -1
+		p._layout()
+		p.close()
+	tree.paused = false
+	DisplayServer.window_set_size(size0)
+	w.size = size0
+	w.content_scale_size = scale0
+	p.queue_free()
+	h.free()
+	await tree.process_frame
+	return "; ".join(fails)

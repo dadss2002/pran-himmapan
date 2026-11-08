@@ -41,6 +41,12 @@ var _d_main: Label
 var _d_lines: VBoxContainer
 var _d_action: Button
 var _d_enhance: Button
+var _d_top: HBoxContainer       # icon + name row; in portrait the action buttons sit at its right
+var _d_box: VBoxContainer       # the detail column
+var _d_btns: HBoxContainer      # สวมใส่/ใช้/ถอด + ตีบวก
+## Owner 2026-11-08 ("กดสวมใส่ไม่ได้"): Safari's bottom bar on iPhone covered the action button, so the
+## buttons moved up beside the item name, and on iPhone web the portrait panel keeps clear of the bottom.
+const IOS_BOTTOM_INSET := 64.0
 var enhance_panel: EnhancePanel
 var _close_button: Button
 
@@ -398,6 +404,8 @@ func build() -> void:
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 8)
 	dv.add_child(top)
+	_d_top = top
+	_d_box = dv
 	_d_frame = PanelContainer.new()
 	_d_frame.custom_minimum_size = Vector2(42, 42)
 	top.add_child(_d_frame)
@@ -405,6 +413,7 @@ func build() -> void:
 	_d_frame.add_child(_d_icon)
 	var names := VBoxContainer.new()
 	names.add_theme_constant_override("separation", 0)
+	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(names)
 	_d_name = _label("", 13, TEXT)
 	names.add_child(_d_name)
@@ -415,9 +424,6 @@ func build() -> void:
 	_d_lines = VBoxContainer.new()
 	_d_lines.add_theme_constant_override("separation", 0)
 	dv.add_child(_d_lines)
-	var fill := Control.new()
-	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dv.add_child(fill)
 	_d_action = Button.new()
 	_d_action.custom_minimum_size = Vector2(0, 32)
 	_d_action.focus_mode = Control.FOCUS_NONE
@@ -426,6 +432,8 @@ func build() -> void:
 	var btns := HBoxContainer.new()
 	btns.add_theme_constant_override("separation", 6)
 	dv.add_child(btns)
+	dv.move_child(btns, 1)          # right under the name row (landscape); _place_buttons moves it in portrait
+	_d_btns = btns
 	_d_action.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btns.add_child(_d_action)
 	_d_enhance = Button.new()
@@ -521,6 +529,7 @@ func refresh() -> void:
 	_d_action.add_theme_color_override("font_color", Color("#1a2a12") if d.action_ok else Color("#a59c86"))
 	_d_action.add_theme_stylebox_override("normal", _box(GOLD if d.action_ok else Color(1, 1, 1, 0.06), GOLD if d.action_ok else Color("#6b6450"), 8, 4))
 	_d_action.add_theme_stylebox_override("disabled", _box(Color(1, 1, 1, 0.06), Color("#6b6450"), 8, 4))
+	_layout.call_deferred()          # the detail changed size: fit the panel to the screen again
 
 func _style_cell(b: Button, border: Color, filled: bool, selected: bool) -> void:
 	var sb := _box(Color(0, 0, 0, 0.35 if filled else 0.15), Color("#fde39a") if selected else border, 7, 2)
@@ -533,6 +542,7 @@ func _layout() -> void:
 	if _panel == null or not is_inside_tree(): return
 	var size := get_viewport().get_visible_rect().size
 	var portrait := ScreenFit.is_portrait(size)
+	_place_buttons(portrait)
 	if _body.vertical != portrait:
 		_body.vertical = portrait
 		_panel.size = Vector2.ZERO
@@ -541,10 +551,31 @@ func _layout() -> void:
 		_panel.size = Vector2(size.x - 12, _panel.get_combined_minimum_size().y)
 	else:
 		_panel.size = Vector2(624, 344)
-	var fit := minf(1.0, minf((size.x - 8) / _panel.size.x, (size.y - 8) / _panel.size.y))
+		_panel.size = Vector2(624, maxf(344.0, _panel.get_combined_minimum_size().y))
+	var bottom := bottom_inset(portrait)
+	var room := Vector2(size.x - 8, size.y - 8 - bottom)
+	var fit := minf(1.0, minf(room.x / _panel.size.x, room.y / _panel.size.y))
 	_panel.scale = Vector2(fit, fit)
 	var shown := _panel.size * fit
-	_panel.position = Vector2(floorf((size.x - shown.x) / 2.0), floorf((size.y - shown.y) / 2.0))
+	_panel.position = Vector2(floorf((size.x - shown.x) / 2.0), floorf((size.y - bottom - shown.y) / 2.0))
+
+## Space kept free at the bottom of the screen: Safari's floating bar on iPhone (portrait, not opened
+## from the home screen). 0 elsewhere.
+static func bottom_inset(portrait: bool) -> float:
+	if not portrait or not ScreenFit.is_ios_web() or ScreenFit.is_standalone_web(): return 0.0
+	return IOS_BOTTOM_INSET
+
+## Portrait: the action buttons sit at the right of the icon + name row. Landscape (narrow detail
+## column): right under that row.
+func _place_buttons(portrait: bool) -> void:
+	if _d_btns == null: return
+	var want: Node = _d_top if portrait else _d_box
+	if _d_btns.get_parent() != want:
+		_d_btns.get_parent().remove_child(_d_btns)
+		want.add_child(_d_btns)
+		if want == _d_box: _d_box.move_child(_d_btns, 1)
+	_d_action.custom_minimum_size = Vector2(72, 32) if portrait else Vector2(0, 32)
+	_d_btns.size_flags_horizontal = Control.SIZE_SHRINK_END if portrait else Control.SIZE_EXPAND_FILL
 
 func _label(t: String, font_size: int, c: Color) -> Label:
 	var l := Label.new()
