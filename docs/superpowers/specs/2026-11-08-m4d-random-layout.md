@@ -42,3 +42,11 @@ Each picture has paths that reach the middle of some sides. Those sides are the 
 
 ## Budget
 The 3 new 4-way rooms: 75 gen (logged). No other art.
+
+## Addendum 2026-11-08 — monster levels follow the layout (draft numbers, need approval)
+Owner: "ตามระยะจากห้องเริ่มในผังนั้น"; x1 "หมาป่า+หมูป่า", x2 "ลิง+กองกอย", x3 "เห็ด+งู"; keep the "no room farther than e0" check ("คงไว้").
+- d = rooms walked from c1r1 in the current layout (c1r1 d = 0); D = the largest d of any forest room.
+- ⚙ Room level L = 1 when d = 0, otherwise round(1 + (d − 1) × 8 / max(D − 1, 1)) + 1, clamped to 2…10. So the rooms next to the start are Lv2 and the farthest forest room is Lv10.
+- Each room keeps its monster kinds and counts; every group in the room uses L, except a group that was 1 level above the room's first group before (e.g. c2r2 macaque) keeps that +1 (cap 10).
+- ⚙ x1: wolf 10 + boar 8; x2: macaque 10 + kongkoi 8; x3: shroom 10 + viper 8.
+- e0 keeps its level-by-hero set choice (unchanged).
