@@ -782,7 +782,7 @@ const MONSTER_KINDS := ["wolf", "boar", "deer", "kongkoi", "macaque", "shroom", 
 ## Owner 2026-11-09 (B23 fixed, true colours): frozen reads as ice on EVERY monster, the dark ones (boar) included:
 ## bluer ice, not grey stone ("ให้มอนสีเข้มออกฟ้ามากขึ้น"). Every monster's frozen mean colour is ice-blue (hue
 ## 190-210 degrees, saturation >= 0.28: a grey-stone frost (sat ~0.1) fails) and lighter than the plain monster
-## (luma up >= 0.15). The already-blue ice wolf (assets/wolf) still clearly changes: mean colour distance >= 0.25 and
+## (luma up >= 0.15). The already-blue ice wolf (assets/wolf) still clearly changes: mean colour distance >= 0.28 and
 ## luma up >= 0.15 (was 0.3 + "whiter" before B23: its plain true colours are much lighter, luma 0.67 vs 0.49 squared,
 ## and the owner now wants ice bluer, not whiter). Outlines stay dark: no outline pixel changes under either tint.
 func test_frost_tint_reads_as_ice_on_every_monster():
@@ -795,7 +795,7 @@ func test_frost_tint_reads_as_ice_on_every_monster():
 		if _luma(b) - _luma(a) < 0.15: return "frozen %s only %.2f lighter than plain %s" % [k, _luma(b) - _luma(a), a.to_html(false)]
 		if k == "wolf":
 			var d := Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
-			if d < 0.25: return "frozen ice wolf mean %s vs plain %s: distance %.2f (want >= 0.25)" % [b.to_html(false), a.to_html(false), d]
+			if d < 0.28: return "frozen ice wolf mean %s vs plain %s: distance %.2f (want >= 0.28)" % [b.to_html(false), a.to_html(false), d]
 	for k in MONSTER_KINDS:
 		for pair in [[Wolf.FROST_TINT, Wolf.FROST_AMOUNT], [Wolf.BURN_TINT, Wolf.BURN_AMOUNT]]:
 			var o := _tint_stats(_pose(k), pair[0], pair[1])
