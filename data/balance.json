@@ -545,6 +545,465 @@
       "mult": 0.8
     }
   },
+  "gem_combos": {
+    "_doc": "M5b gem combos. Numbers: docs/superpowers/specs/2026-11-08-gem-combos.md §1 (2 gems) and §2 (3 gems) at gem Lv1, owner-approved 2026-11-08 ('อนุมัติตามนี้'). Owner 2026-11-09: values stay flat at any gem level; 3-gem rows read literally (a tier-3 row replaces its bases); one combo per skill: higher tier first, then this order (recipe book order). Gem keys are gem types, element gems as fire/ice/lightning. fx: reused manifest effects recoloured by modulate (0 PixelLab gen); tints chosen by Claude for the spec's colour words, #ffffff = no recolour. Change numbers only with owner approval.",
+    "recipes": [
+      {
+        "id": "fire_fan",
+        "tier": 2,
+        "name": "ศรพัดเพลิง",
+        "gems": [
+          "split",
+          "fire"
+        ],
+        "trail_secs": 2.0,
+        "trail_frac": 0.2,
+        "fx": {
+          "trail": [
+            {
+              "fx": "piercing_trail",
+              "tint": "#ff8a3d"
+            },
+            {
+              "fx": "status_burn",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "thunder_hop",
+        "tier": 2,
+        "name": "ศรอสนีกระโดด",
+        "gems": [
+          "ricochet",
+          "lightning"
+        ],
+        "extra_bounces": 1,
+        "bolts": 1,
+        "bolt_frac": 0.5,
+        "fx": {
+          "bounce": [
+            {
+              "fx": "hit_spark",
+              "tint": "#7fd4ff"
+            }
+          ],
+          "bolt": [
+            {
+              "fx": "chain_zap",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "hawk_eye",
+        "tier": 2,
+        "name": "ศรตาเหยี่ยว",
+        "gems": [
+          "homing",
+          "execute"
+        ],
+        "homing_full": 1,
+        "crit_bonus": 0.15,
+        "mark_secs": 4.0,
+        "mark_taken": 0.2,
+        "fx": {
+          "mark": [
+            {
+              "fx": "lock_on",
+              "tint": "#ffffff"
+            }
+          ],
+          "crit": [
+            {
+              "fx": "crit_hit",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "bloodthirst",
+        "tier": 2,
+        "name": "ศรกระหายเลือด",
+        "gems": [
+          "leech",
+          "multiply"
+        ],
+        "leech_mult": 2.0,
+        "kill_heal_frac": 0.03,
+        "kill_mp": 2,
+        "kill_mp_cap": 6,
+        "fx": {
+          "hit": [
+            {
+              "fx": "hit_spark",
+              "tint": "#ff4a4a"
+            }
+          ],
+          "kill": [
+            {
+              "fx": "pickup_pop",
+              "tint": "#ff4a4a"
+            }
+          ]
+        }
+      },
+      {
+        "id": "frost_shard",
+        "tier": 2,
+        "name": "ศรเกล็ดน้ำแข็ง",
+        "gems": [
+          "ice",
+          "split"
+        ],
+        "freeze_hits": 3,
+        "freeze_secs": 1.0,
+        "freeze_lock_secs": 5.0,
+        "bonus_vs_chilled": 0.25,
+        "fx": {
+          "trail": [
+            {
+              "fx": "piercing_trail",
+              "tint": "#7fd4ff"
+            }
+          ],
+          "freeze": [
+            {
+              "fx": "status_frost",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "brahmastra",
+        "tier": 3,
+        "name": "พัดเพลิงพรหมาสตร์",
+        "gems": [
+          "split",
+          "fire",
+          "multiply"
+        ],
+        "bases": [
+          "fire_fan"
+        ],
+        "trail_secs": 3.0,
+        "trail_frac": 0.3,
+        "blast_on_line_end": 1,
+        "blast_radius": 32,
+        "blast_frac": 0.5,
+        "fx": {
+          "trail": [
+            {
+              "fx": "piercing_trail",
+              "tint": "#ff8a3d"
+            },
+            {
+              "fx": "status_burn",
+              "tint": "#ffffff"
+            }
+          ],
+          "line_end": [
+            {
+              "fx": "spread_burst",
+              "tint": "#ff8a3d"
+            }
+          ]
+        }
+      },
+      {
+        "id": "thousand_bolts",
+        "tier": 3,
+        "name": "ศรอสนีพันสาย",
+        "gems": [
+          "ricochet",
+          "lightning",
+          "split"
+        ],
+        "bases": [
+          "thunder_hop"
+        ],
+        "bolts": 2,
+        "bolt_frac": 0.5,
+        "fx": {
+          "bounce": [
+            {
+              "fx": "hit_spark",
+              "tint": "#7fd4ff"
+            }
+          ],
+          "bolt": [
+            {
+              "fx": "chain_zap",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "garuda",
+        "tier": 3,
+        "name": "ศรเนตรพญาครุฑ",
+        "gems": [
+          "homing",
+          "execute",
+          "multiply"
+        ],
+        "bases": [
+          "hawk_eye"
+        ],
+        "homing_full": 1,
+        "crit_bonus": 0.15,
+        "mark_secs": 4.0,
+        "mark_taken": 0.3,
+        "sure_crit_marked": 1,
+        "fx": {
+          "mark": [
+            {
+              "fx": "lock_on",
+              "tint": "#edbb55"
+            }
+          ],
+          "crit": [
+            {
+              "fx": "crit_hit",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "anodard",
+        "tier": 3,
+        "name": "ศรผลึกอโนดาต",
+        "gems": [
+          "ice",
+          "split",
+          "execute"
+        ],
+        "bases": [
+          "frost_shard"
+        ],
+        "freeze_hits": 3,
+        "freeze_secs": 1.0,
+        "freeze_lock_secs": 5.0,
+        "sure_crit_chilled": 1,
+        "blast_on_chilled": 1,
+        "blast_radius": 32,
+        "blast_frac": 0.5,
+        "fx": {
+          "trail": [
+            {
+              "fx": "piercing_trail",
+              "tint": "#7fd4ff"
+            }
+          ],
+          "freeze": [
+            {
+              "fx": "status_frost",
+              "tint": "#ffffff"
+            }
+          ],
+          "shatter": [
+            {
+              "fx": "spread_burst",
+              "tint": "#7fd4ff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rahu",
+        "tier": 3,
+        "name": "ศรราหูอมจันทร์",
+        "gems": [
+          "leech",
+          "multiply",
+          "execute"
+        ],
+        "bases": [
+          "bloodthirst"
+        ],
+        "hp_min": 0.7,
+        "hp_bonus": 0.3,
+        "leech_mult": 2.0,
+        "crit_heal_frac": 0.01,
+        "kill_mp": 3,
+        "kill_mp_cap": 9,
+        "fx": {
+          "hit": [
+            {
+              "fx": "hit_spark",
+              "tint": "#6a2a8a"
+            }
+          ],
+          "kill": [
+            {
+              "fx": "pickup_pop",
+              "tint": "#6a2a8a"
+            }
+          ]
+        }
+      },
+      {
+        "id": "shockwave",
+        "tier": 2,
+        "name": "ศรคลื่นกระแทก",
+        "gems": [
+          "pierce",
+          "expand"
+        ],
+        "blast_on_pierce": 1,
+        "blast_radius": 32,
+        "blast_frac": 0.8,
+        "fx": {
+          "blast": [
+            {
+              "fx": "water_ripple",
+              "tint": "#fff1e0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "hunter_zone",
+        "tier": 2,
+        "name": "อาณาเขตพราน",
+        "gems": [
+          "expand",
+          "extend"
+        ],
+        "zone_slow": 0.3,
+        "zone_taken": 0.1,
+        "fx": {
+          "zone": [
+            {
+              "fx": "warp_ring",
+              "tint": "#6ccf62"
+            }
+          ]
+        }
+      },
+      {
+        "id": "fire_burst",
+        "tier": 2,
+        "name": "ศรเพลิงระเบิด",
+        "gems": [
+          "fire",
+          "expand"
+        ],
+        "area_radius_bonus": 0.2,
+        "burn_all": 1,
+        "fx": {
+          "blast": [
+            {
+              "fx": "spread_burst",
+              "tint": "#ff8a3d"
+            },
+            {
+              "fx": "status_burn",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "hellfield",
+        "tier": 3,
+        "name": "ทุ่งเพลิงบรรลัยกัลป์",
+        "gems": [
+          "expand",
+          "extend",
+          "fire"
+        ],
+        "bases": [
+          "hunter_zone",
+          "fire_burst"
+        ],
+        "zone_slow": 0.3,
+        "zone_taken": 0.2,
+        "burn_all": 1,
+        "fx": {
+          "zone": [
+            {
+              "fx": "warp_ring",
+              "tint": "#ff8a3d"
+            },
+            {
+              "fx": "status_burn",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "earth_piercer",
+        "tier": 3,
+        "name": "ศรอัคนีทะลวงพิภพ",
+        "gems": [
+          "pierce",
+          "expand",
+          "fire"
+        ],
+        "bases": [
+          "shockwave",
+          "fire_burst"
+        ],
+        "blast_on_pierce": 1,
+        "blast_radius": 40,
+        "blast_frac": 1.0,
+        "blast_burn": 1,
+        "fx": {
+          "blast": [
+            {
+              "fx": "water_ripple",
+              "tint": "#fff1e0"
+            },
+            {
+              "fx": "spread_burst",
+              "tint": "#ff8a3d"
+            },
+            {
+              "fx": "status_burn",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      },
+      {
+        "id": "meteor_rain",
+        "tier": 3,
+        "name": "ฝนดาวไฟ",
+        "gems": [
+          "split",
+          "fire",
+          "expand"
+        ],
+        "bases": [
+          "fire_fan",
+          "fire_burst"
+        ],
+        "blast_on_hit": 1,
+        "blast_radius": 40,
+        "blast_frac": 0.8,
+        "fx": {
+          "blast": [
+            {
+              "fx": "spread_burst",
+              "tint": "#ff8a3d"
+            },
+            {
+              "fx": "status_burn",
+              "tint": "#ffffff"
+            }
+          ]
+        }
+      }
+    ]
+  },
   "enhance": {
     "chance": [
       1.0,

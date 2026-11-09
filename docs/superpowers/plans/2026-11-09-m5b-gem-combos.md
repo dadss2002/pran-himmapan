@@ -170,7 +170,7 @@ Recipe row shape (`gem_combos.recipes[i]`):
 
 Data order (phase-1 usable first): `fire_fan, thunder_hop, hawk_eye, bloodthirst, frost_shard, brahmastra, thousand_bolts, garuda, anodard, rahu, shockwave, hunter_zone, fire_burst, hellfield, earth_piercer, meteor_rain`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```gdscript
 # tests/test_gem_combo.gd
@@ -208,13 +208,15 @@ func test_describe_has_numbers()          # describe("fire_fan") contains "2 ว
 
 For area recipes, the tests add `Balance.data()["skill_labels"]["test_fire_arrow"] = ["arrow", "area"]`, call `Balance.clear_cache()`, and remove the key at the end.
 
-- [ ] **Step 2: Run and check it fails.** `TEST_ONLY=test_gem_combo ...` → FAIL, "GemCombo" not declared.
+- [x] **Step 2: Run and check it fails.** `TEST_ONLY=test_gem_combo ...` → FAIL, "GemCombo" not declared.
 
-- [ ] **Step 3: Implement.** Add the `gem_combos` block with exactly the SPEC values and the fx rows from Task 5's table. Write `GemCombo` with the signatures above. `resolve` keeps only Dictionary gems that fit, maps them to keys, and picks the first tier-3 recipe in data order whose keys ⊆ the set. If there is none, it picks the first tier-2 recipe the same way. `slots` = indices of the gems whose keys are in the recipe. `describe` builds its text from the row's numbers: one `match` on id, with the sentences taken from the spec's ผลพิเศษ/ผล columns.
+- [x] **Step 3: Implement.** Add the `gem_combos` block with exactly the SPEC values and the fx rows from Task 5's table. Write `GemCombo` with the signatures above. `resolve` keeps only Dictionary gems that fit, maps them to keys, and picks the first tier-3 recipe in data order whose keys ⊆ the set. If there is none, it picks the first tier-2 recipe the same way. `slots` = indices of the gems whose keys are in the recipe. `describe` builds its text from the row's numbers: one `match` on id, with the sentences taken from the spec's ผลพิเศษ/ผล columns.
 
-- [ ] **Step 4: Run and check it passes.** `TEST_ONLY=test_gem_combo` → `failed=0`. Also run `TEST_ONLY=test_balance` so the JSON still parses.
+- [x] **Step 4: Run and check it passes.** `TEST_ONLY=test_gem_combo` → `failed=0`. Also run `TEST_ONLY=test_balance` so the JSON still parses.
 
-- [ ] **Step 5: Commit** `git commit -m "M5b Task 2: gem combo recipes (16) in balance.json + GemCombo resolver"`
+- [x] **Step 5: Commit** `git commit -m "M5b Task 2: gem combo recipes (16) in balance.json + GemCombo resolver"`
+
+**Done (2026-11-09):** `balance.json gem_combos` (`_doc` + 16 `recipes` in book order; every number = spec §1/§2 at gem Lv1; tier-3 rows carry only their own row's numbers, owner ②; `fx` rows from the Task 5 table, all ids checked against `assets/fx/manifest.json`, `#ffffff` = no recolour; the lightning rows use `bounce` → hit_spark and `bolt` → chain_zap so พันสาย plays chain_zap once per bolt). `scripts/rules/gem_combo.gd` (`GemCombo`, static, no scene access): `recipes`, `ids`, `recipe`, `p`, `gem_key`, `key_type` (added: "fire" → "element", for `Gem.fits`), `key_name` (drops the item name's "เจม" prefix so the book reads "แยกศร + ธาตุไฟ"), `resolve(skill_id, gems) -> {} | {id, tier, name, slots}` (ignores non-Dictionaries, unfit gems, element gems with no element and repeated keys; ignores gem level; highest tier, then book order), `describe` (no boss-slow clause on the frost rows). Callers pass `hero.open_gems(id)`. `tests/test_gem_combo.gd` (15, all new): the plan's 12 plus `test_spot_check_against_spec_text`, `test_combo_flat_at_any_gem_level`, `test_closed_slot_gem_never_forms_a_combo`; 4-gem cases: homing+execute+multiply+leech → garuda; split+fire+expand+pierce on an arrow+area skill → earth_piercer; two tier-2 candidates → the earlier book row. `test_no_three_gem_collision` counts only sets some label set can hold (pierce+expand+extend holds shockwave + hunter_zone but fits no skill). Seen failing first ("GemCombo" not declared); mutation check (one number changed, tie-break flipped) failed 2 tests as expected. No existing assertion changed. Full suite: `RESULT passed=509 failed=0`.
 
 ---
 
