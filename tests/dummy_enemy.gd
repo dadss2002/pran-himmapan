@@ -51,10 +51,14 @@ func is_chilled() -> bool:
 func is_marked() -> bool:
 	return alive and status.is_marked()
 
-## Advances the statuses; burn / trail damage comes off hp (dies at 0). Returns the damage dealt.
+## Advances the statuses; burn / trail damage comes off hp (dies at 0). Returns the damage dealt. Leeches like
+## Wolf.tick_burn (Task 4 review): each DoT part with its own fraction to its own source, parts under 1 HP included.
 func tick_status(delta: float) -> int:
 	var dmg := status.tick(delta)
-	if alive and dmg > 0:
+	if not alive: return dmg
+	Wolf.leech_to(status.last_burn_source, status.last_burn_dmg * status.last_burn_leech)
+	Wolf.leech_to(status.last_trail_source, status.last_trail_dmg * status.last_trail_leech)
+	if dmg > 0:
 		hp -= dmg
 		if hp <= 0: alive = false
 	return dmg

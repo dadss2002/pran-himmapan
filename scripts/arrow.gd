@@ -26,7 +26,17 @@ func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier :
 	pierce = pierce_all
 	rotation = dir.angle()  # art points east
 
-## Gem behaviour from SkillBuild: pierce_extra, bounces/bounce_mult, homing, leech, element.
+## M5b combos (plan Task 5): a primary arrow is one the hero's skill press fired (Hero._fire with a build); bounce
+## arrows and basic shots are not. Per-line combo effects belong to primary arrows only: the fire trail (FireTrail,
+## ศรพัดเพลิง / พรหมาสตร์) and the line-end blast (พรหมาสตร์). Secondary hits (blast) never trigger combo or gem
+## on-hit effects: no trail, bounce, element status, bolt, mark or freeze count (Global Constraints).
+var primary := false
+var trail: FireTrail = null
+var _trail_checked := false
+var _line_ended := false
+
+## Gem behaviour from SkillBuild: pierce_extra, bounces/bounce_mult, homing, leech, element; combo / combo_p / cast
+## (the press's ComboCast, Hero._release).
 var build := {}
 var shooter: Node = null
 var _pierce_left := 0
@@ -41,12 +51,14 @@ func configure(b: Dictionary, from: Node = null) -> void:
 
 func advance(delta: float) -> void:
 	if spent: return
+	if primary and not _trail_checked: _lay_trail()
 	var range_px := max_range if max_range > 0.0 else Balance.num("shot.range")
 	var radius := Balance.num("shot.arrow_hit_radius")
 	if build.get("homing", false): _steer(delta)
 	var stepd := minf(Balance.num("shot.arrow_speed") * delta, range_px - travelled)
 	position += dir * stepd
 	travelled += stepd
+	if trail != null: trail.extend_to(_pos())
 	for t in targets:
 		if is_instance_valid(t) and t.is_alive() and not _hit.has(t) and _pos().distance_to(t.hurt_point()) <= (t.hurt_radius() if t.has_method("hurt_radius") else radius):
 			_hit[t] = true
@@ -82,6 +94,61 @@ func _after_hit(t: Node2D, amount: int) -> void:
 		var next := _nearest(t.hurt_point(), Balance.num("ricochet.range"), _hit.keys())
 		_bounced = pierce              # a piercing arrow tries once, from its first target only
 		if next: _spawn_bounce(t.hurt_point(), next)
+
+## The press's combo id ("" for none).
+func combo_id() -> String:
+	var c = build.get("combo", {})
+	return String(c.get("id", "")) if typeof(c) == TYPE_DICTIONARY else ""
+
+## The press's combo number `key` (build.combo_p, copied once per press); 0 when absent.
+func _cp(key: String) -> float:
+	var cp = build.get("combo_p", {})
+	return float(cp.get(key, 0.0)) if typeof(cp) == TYPE_DICTIONARY else 0.0
+
+## A primary arrow of a trail recipe lays one FireTrail from where it starts (once, on its first step).
+func _lay_trail() -> void:
+	_trail_checked = true
+	var secs := _cp("trail_secs")
+	if secs <= 0.0: return
+	trail = FireTrail.new()
+	trail.setup(_pos(), atk, mult, _cp("trail_frac"), secs, targets, shooter, build.get("cast"), float(build.get("leech", 0.0)), combo_id())
+	if is_inside_tree(): get_parent().add_child(trail)
+
+## The line ends (spent by range or by its last hit): the trail burns on for its time, พรหมาสตร์ blasts once at the
+## end. Primary arrows only; once per arrow.
+func _end_line() -> void:
+	if _line_ended or not primary: return
+	_line_ended = true
+	if trail != null: trail.finish()
+	if _cp("blast_on_line_end") > 0.0:
+		var r := _cp("blast_radius")
+		blast(_pos(), r, _cp("blast_frac"), false)
+		if is_inside_tree():
+			for s in ComboFx.play(get_parent(), combo_id(), "line_end", position):
+				s.scale = Vector2.ONE * (2.0 * r / maxf(1.0, s._cell.x))   # the burst as wide as the blast (r32 → 64 px)
+
+## Secondary hits of this press at `at`: every live target whose hurt point is within `radius`, plus `include` (hit
+## even outside the radius: meteor_rain's own target), minus `skip`; each takes frac of this arrow's hit
+## (_secondary_hit), and with `burn` the fire burn (elements.fire.burn_frac of that hit, the press's leech / ledger).
+## Returns how many were hit. Never spawns arrows, trails or further blasts, never applies the arrow's element.
+func blast(at: Vector2, radius: float, frac: float, burn: bool, include: Node2D = null, skip: Array = []) -> int:
+	var n := 0
+	var r2 := radius * radius
+	for t in targets:
+		if not is_instance_valid(t) or not t.is_alive() or t in skip: continue
+		if t != include and at.distance_squared_to(t.hurt_point()) > r2: continue
+		var amount := _secondary_hit(t, frac)
+		n += 1
+		if burn and t.has_method("apply_status"):
+			t.apply_status("burn", amount * Balance.num("elements.fire.burn_frac"), float(build.get("leech", 0.0)), shooter, build.get("cast"))
+	return n
+
+## One secondary hit: frac of this arrow's hit, with its crit chance; leeches. Never _after_hit (no element, no bounce,
+## no combo on-hit). Task 8: the kill hook (MP / heal on kill through build.cast) goes here too.
+func _secondary_hit(t: Node2D, frac: float) -> int:
+	var amount: int = t.receive_hit(atk, mult * frac, _pos(), crit_chance, crit_mult)
+	_leech(amount)
+	return amount
 
 func _leech(amount: int) -> void:
 	var frac := float(build.get("leech", 0.0))
@@ -139,9 +206,12 @@ func _pos() -> Vector2:
 func halt() -> void:
 	spent = true
 	targets = []
+	_line_ended = true                  # no line-end blast after the warp
+	if trail != null and is_instance_valid(trail): trail.halt()   # its fire stops at once (B20)
 
 func _finish() -> void:
 	spent = true
+	_end_line()
 	if is_inside_tree():
 		queue_free()
 

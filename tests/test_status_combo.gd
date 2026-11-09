@@ -138,11 +138,25 @@ func test_trail_ticks_once_a_second_on_reentry():
 		total += r.tick(DT)
 	return "" if total == 0 else "stepping out and back in dealt %d (each stay < 1 s, want 0)" % total
 
+## The longest flight of any arrow skill: the largest range of shot.range and every skill that flies arrows (no
+## `kind`, or kind "arrows"; Task 4 review: not shot.range alone, a skill may set its own range), over the speed.
+func _longest_flight() -> float:
+	var rng := Balance.num("shot.range")
+	var skills: Dictionary = Balance.data().get("skills", {})
+	for id in skills:
+		var row = skills[id]
+		if typeof(row) != TYPE_DICTIONARY or not row.has("range"): continue
+		if String(row.get("kind", "arrows")) != "arrows": continue
+		rng = maxf(rng, float(row.range))
+	return rng / Balance.num("shot.arrow_speed")
+
 ## The approved numbers are the sim's: a target standing in one trail gets exactly round(secs / tick) ticks: fire_fan
 ## 2 s → 2, brahmastra 3 s → 3, counted from the arrow passing it to the trail's end (+ the last hold), with the
-## arrow's flight (0 .. range / speed = 0.61 s) still inside the line.
+## arrow's flight (0 .. the longest arrow skill's range / speed) still inside the line. The margin: hold + that
+## flight must stay under one tick, or a stationary target would get one tick more than simulated.
 func test_trail_ticks_match_the_sim():
-	var flight := Balance.num("shot.range") / Balance.num("shot.arrow_speed")
+	var flight := _longest_flight()
+	if HOLD + flight >= Balance.num("elements.fire.tick"): return "hold %s + longest arrow flight %.2f s ≥ one tick: trails would tick more than the sim" % [HOLD, flight]
 	for secs in [2.0, 3.0]:
 		for extra in [0.0, flight]:
 			var s := StatusEffects.new()
@@ -292,6 +306,15 @@ func test_wolf_leeches_each_dot_part_only():
 			w.apply_trail(40.0, HOLD, trailer)
 			w.tick_burn(DT)
 		if not is_equal_approx(burner.got, 15.0): r = "after the burn ended its leech still healed (%s, want 15)" % burner.got
+	if r == "":                                     # Task 4 review: past 4.0 s, a trail-only tick after the burn ended
+		var hp0 := w.health.hp
+		for i in int(round(1.0 / DT)):
+			w.apply_trail(40.0, HOLD, trailer)
+			w.tick_burn(DT)
+		if w.health.hp >= hp0: r = "setup: no trail-only tick between 3.5 and 4.5 s"
+		elif w.status.is_burning(): r = "setup: still burning at 4.5 s"
+		elif not is_equal_approx(burner.got, 15.0): r = "a trail-only tick after the burn healed the burn's source (%s, want 15)" % burner.got
+		elif trailer.got != 0.0: r = "a trail-only tick without leech healed %s" % trailer.got
 	if r == "":
 		var v := _wolf()
 		v.health.setup(100000)
@@ -304,6 +327,38 @@ func test_wolf_leeches_each_dot_part_only():
 		if not is_equal_approx(own.got, want): r = "trail with leech 0.25 healed %s, want %s" % [own.got, want]
 		v.free()
 	w.free()
+	return r
+
+## Task 4 review: a DoT part under one whole HP (the carry keeps it for a later tick) still leeches its share: over
+## 2 s of a 0.55 / tick trail with leech 1.0 the source gets 2 × 0.55, not only the share of the tick that rounded up.
+func test_wolf_leeches_fractional_dot_parts():
+	var w := _wolf()
+	w.health.setup(100000)
+	var own := Sink.new()
+	var def := float(w.stats().def)
+	var raw := 0.55 / (1.0 - def / (def + 100.0))       # 0.55 per tick after DEF
+	for i in int(round(2.0 / DT)):
+		w.apply_trail(raw, HOLD, own, null, 1.0)
+		w.tick_burn(DT)
+	var r := "" if is_equal_approx(own.got, 1.1) else "2 ticks of 0.55 with leech 1.0 healed %s, want 1.1" % own.got
+	w.free()
+	return r
+
+## The test dummy's tick_status leeches like Wolf.tick_burn (each DoT part with its own fraction, to its own source),
+## so the Task 5 / 8 trail-leech tests can see it.
+func test_dummy_tick_leeches_like_wolf():
+	var d: Node2D = load("res://tests/dummy_enemy.gd").new()
+	d.hp = 100000
+	var burner := Sink.new()
+	var trailer := Sink.new()
+	d.apply_status("burn", 10.0, 0.5, burner)
+	for i in int(round(1.0 / DT)):
+		d.apply_trail(0.55, HOLD, trailer, null, 1.0)
+		d.tick_status(DT)
+	var r := ""
+	if not is_equal_approx(burner.got, 5.0): r = "dummy burn leech %s, want 5" % burner.got
+	elif not is_equal_approx(trailer.got, 0.55): r = "dummy trail leech %s, want 0.55 (a part under 1 HP included)" % trailer.got
+	d.free()
 	return r
 
 ## clear() (death, revive, kept room) ends every status including the freeze lock.
@@ -420,14 +475,24 @@ func _scripts(dir := "res://scripts") -> Array:
 	for sub in d.get_directories(): out.append_array(_scripts(dir + "/" + sub))
 	return out
 
-## Monster scripts: everything under scripts/monsters (any depth), plus any script elsewhere that extends a monster.
+## Monster scripts: everything under scripts/monsters (any depth), plus any script anywhere under res://scripts whose
+## base-script chain (get_base_script, so `extends Boss` with Boss → Monster → Wolf by class_name is covered, Task 4
+## review) reaches wolf.gd.
 func _monster_scripts() -> Array:
 	var out: Array = []
-	var ext := RegEx.create_from_string("(?m)^extends\\s+(Wolf|Monster|\"res://scripts/monsters/)")
 	for path in _scripts():
-		if path.begins_with("res://scripts/monsters/") or ext.search(FileAccess.get_file_as_string(path)) != null:
-			out.append(path)
+		if path.begins_with("res://scripts/monsters/") or _extends_wolf(path): out.append(path)
 	return out
+
+func _extends_wolf(path: String) -> bool:
+	if not "extends" in FileAccess.get_file_as_string(path): return false
+	var s = load(path)
+	if not (s is Script): return false
+	var b: Script = (s as Script).get_base_script()
+	while b != null:
+		if b.resource_path == "res://scripts/monsters/wolf.gd": return true
+		b = b.get_base_script()
+	return false
 
 ## Owner 2026-11-09 (Task 4 review M1): a frozen monster is not knocked back and does not slide ("ไม่กระเด็น
 ## ติดอยู่กับที่"). Control: the same hit knocks an unfrozen wolf back (so this check can fail).
@@ -484,8 +549,11 @@ func test_no_monster_opts_out_of_freeze():
 		if path.get_file() in ["wolf.gd", "status_effects.gd"] and path.get_base_dir() == "res://scripts/monsters": continue
 		found += 1
 		var text := FileAccess.get_file_as_string(path)
-		for f in ["func apply_freeze", "func is_frozen", "func _hold_frozen", "func _push", "func push("]:
+		for f in ["func apply_freeze", "func is_frozen", "func _hold_frozen", "func _push", "func push(", "func tick_burn"]:
 			if f in text: return "%s has its own %s (owner: bosses freeze and stay put like others)" % [path, f]
+		# Task 4 review: Wolf.step holds a frozen monster; an override must go through it (monster.gd ticks its own
+		# cooldowns, then super.step), never replace it.
+		if _extends_wolf(path) and "func step(" in text and not "super.step(" in text: return "%s overrides step() without super.step(): a frozen monster would not hold" % path
 	return "" if found >= 2 else "scan found only %d monster scripts (monster.gd, ...): the scan is broken" % found
 
 ## Review M2: every state a monster script enters, other than the resting / moving-away ones, is one of its

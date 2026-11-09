@@ -173,3 +173,6 @@
 | 2026-11-09 | ไอคอนศรเพลิง | create_image_pro 48×48 | 10 | 5688d785-c11e-4213-aaf5-19874e376d2c |
 | 2026-11-09 | กับดักบนพื้น (พื้นโปร่ง) | create_image_pro 48×48 | 10 | 8a67f583-f061-45ac-8080-fc1a5e54ceba |
 | | **รวมจริง** | | **30** | ตรงกับที่ประเมิน · ภาพตรวจ docs/preview/m5b/area_skill_art_review.png (8 ตัวเลือกจาก 25 ต่องาน) |
+
+## เอฟเฟกต์ท่าผสม M5b Task 5 (ศรพัดเพลิง / พัดเพลิงพรหมาสตร์): **0 gen**
+ใช้เอฟเฟกต์เดิมใน assets/fx/manifest.json ปรับสีด้วย modulate เท่านั้น (ComboFx): ทางไฟ = piercing_trail สีส้ม #ff8a3d + status_burn (PixelFX ④) · ปลายแนวพรหมาสตร์ = spread_burst สีส้ม ขยายเท่าวงระเบิด r32 · ภาพ docs/preview/m5b/fire_fan_ingame.png, brahmastra_ingame.png

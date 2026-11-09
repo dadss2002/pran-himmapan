@@ -387,17 +387,26 @@ func _on_died() -> void:
 ## Status timers and the burn / fire-trail damage (a DoT tick: dot_tick is set while it goes through health, so the
 ## test ground shows its number without a hit spark). Leech (review I1): the burn's part with the burn's leech to the
 ## burn's source, the trail's part with the trail's own leech to its source; read before the damage, as a killing
-## tick clears the statuses. status.tick_cast is the ledger a kill by this tick belongs to (M5b Task 8 hook).
+## tick clears the statuses. A part under one whole HP (kept in the status's carry for a later tick) still leeches
+## its share (Task 4 review), so the heal is leech × the damage the DoT deals over time, not only the ticks that
+## round up. status.tick_cast is the ledger a kill by this tick belongs to (M5b Task 8 hook). Nothing is allocated.
 func tick_burn(delta: float) -> void:
 	var burn := status.tick(delta)
-	if burn <= 0: return
-	var heals := [[status.last_burn_source, status.last_burn_dmg * status.last_burn_leech],
-		[status.last_trail_source, status.last_trail_dmg * status.last_trail_leech]]
-	dot_tick = true
-	health.take_hit(burn, false)
-	dot_tick = false
-	for h in heals:
-		if h[1] > 0.0 and is_instance_valid(h[0]) and h[0].has_method("leech_heal"): h[0].leech_heal(h[1])
+	if status.last_burn_dmg <= 0.0 and status.last_trail_dmg <= 0.0: return
+	var bs: Object = status.last_burn_source
+	var bh := status.last_burn_dmg * status.last_burn_leech
+	var ts: Object = status.last_trail_source
+	var th := status.last_trail_dmg * status.last_trail_leech
+	if burn > 0:
+		dot_tick = true
+		health.take_hit(burn, false)
+		dot_tick = false
+	leech_to(bs, bh)
+	leech_to(ts, th)
+
+## Heals `source` (the hero) by `amount` through its leech_heal (fractions carried there); nothing for none / 0.
+static func leech_to(source: Object, amount: float) -> void:
+	if amount > 0.0 and is_instance_valid(source) and source.has_method("leech_heal"): source.leech_heal(amount)
 
 func step(delta: float, hero: Hero) -> void:
 	if hero != null: _hero = hero

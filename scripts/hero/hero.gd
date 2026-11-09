@@ -581,12 +581,17 @@ func _release() -> void:
 		mp -= b.mp
 		_skill_cd[id] = b.cooldown
 		skill_released.emit(id, start)
+		# M5b (plan Task 5): ONE ledger per press, shared by every hit of it (b.cast: its arrows, their bounces,
+		# blasts, trails and burns; risks.md B25); rahu's +30 % (HP ≥ 70 % at the press) multiplies the arrow mult.
+		var cast := ComboCast.from_build(b, float(health.hp) / maxf(1.0, float(health.max_hp)))
+		b["cast"] = cast
+		var mult := float(b.arrow_mult) * (1.0 + cast.dmg_bonus())
 		var range_px := Balance.num("skills.%s.range" % id) if Balance.has("skills.%s.range" % id) else -1.0
 		var n := int(b.arrows)
 		var fan := deg_to_rad(b.fan_deg)
 		for i in n:
 			var dir := v if n == 1 else v.rotated(-fan / 2.0 + fan * i / (n - 1))
-			_fire(start, dir, b.arrow_mult, b.pierce_all, range_px, b)
+			_fire(start, dir, mult, b.pierce_all, range_px, b)
 	else:
 		_fire(start, v, 1.0, false)
 	Sfx.play("bow_shot", start)                # one twang per release, also for the arrow skills' fans
@@ -600,6 +605,7 @@ func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1
 	a.crit_chance = float(b.get("crit", st.crit))
 	a.crit_mult = st.crit_mult
 	if not b.is_empty():
+		a.primary = true                 # a skill press's own arrow (its bounces are not): per-line combo effects
 		a.configure(b, self)
 		a.spawned.connect(_on_arrow_spawned)
 	if is_inside_tree():
