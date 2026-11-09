@@ -28,9 +28,9 @@ var _kept := {}                   # room id -> {groups, piles, packs}
 var _shown := {}                  # room id -> {seed, size, entry}: the layout it was last built with (kept across reroll_all)
 
 ## Which rooms a waypoint re-roll keeps off their last-shown layout (reroll_seed): false = only the trip's
-## destination (the room the hero sees next; owner 2026-11-09); true = every room shown this session, the room being
-## left too (the owner is being asked; flip this one line to switch).
-const GUARD_ALL_ROOMS := false
+## destination; true = every room shown this session, the room being left too. Owner 2026-11-09: true ("กันทุกห้อง");
+## within one game only (the memory is not saved: "ไม่ต้อง กันแค่ในเกมเดียว").
+const GUARD_ALL_ROOMS := true
 
 ## A new pile seed for a waypoint re-roll (31 bits, like the session layout seed).
 static func new_seed() -> int:

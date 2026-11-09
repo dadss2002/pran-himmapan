@@ -124,17 +124,17 @@ func test_a_b_a_trip_never_repeats_the_last_shown_layout():
 				c0 = b + 1
 				while posmod(MonsterPiles.room_seed(c0, "c1r1"), n) != e_a: c0 += 1
 			if RoomReset.distinct_seed(b, c0, "c1r1", n) == c0: old_guard_missed += 1
-			var c := r.reroll_seed(c0, "c1r1")
+			var c := r.reroll_seed(c0, "c1r1", false)   # the destination's own rule; every-room guard: test_guard_all_rooms_*
 			if n > 1 and posmod(MonsterPiles.room_seed(c, "c1r1"), n) == e_a: return "bank %d seed %d: c1r1 shows entry %d again" % [n, a, e_a]
 			if c == a or c == b or c < 0 or c > 0x7fffffff: return "bank %d: roll C seed %d (A %d, B %d)" % [n, c, a, b]
-			if r.reroll_seed(c0, "c1r1") != c: return "bank %d: not deterministic" % n
+			if r.reroll_seed(c0, "c1r1", false) != c: return "bank %d: not deterministic" % n
 	if old_guard_missed == 0: return "setup: no case the old guard (current seed only) would have let repeat"
 	return ""
 
-## RoomReset.GUARD_ALL_ROOMS (the owner is asked whether the room being left must never repeat either): false = only
+## RoomReset.GUARD_ALL_ROOMS (owner 2026-11-09 "กันทุกห้อง": the room being left never repeats either): false = only
 ## the trip's destination is guarded; true = every room shown this session. Both settings, many seeds.
 func test_guard_all_rooms_switch():
-	if RoomReset.GUARD_ALL_ROOMS: return "GUARD_ALL_ROOMS is on: the owner's rule today is the destination only"
+	if not RoomReset.GUARD_ALL_ROOMS: return "GUARD_ALL_ROOMS is off: the owner's rule is every room (กันทุกห้อง)"
 	var n := 64
 	var left_repeats := 0
 	for k in 200:
@@ -461,3 +461,26 @@ func test_new_game_rerolls():
 	_free(b)
 	_clean()
 	return r
+
+## Owner 2026-11-09 "กันทุกห้อง": with every room guarded the rule must still be met in the real game. String.hash is
+## djb2, so for a bank of 2^k entries every room's entry moves by the same step with the seed: a guard can only fail
+## when the guarded rooms rule out every step (a bank of 2 with two rooms can). Real banks hold 64 entries and there
+## are fewer rooms than that, so a seed that repeats no room always exists: every room shown, many re-rolls in a row.
+func test_guard_all_rooms_never_repeats_any_room():
+	var ids := ["c0r0", "c0r1", "c0r2", "c1r0", "c1r1", "c1r2", "c2r0", "c2r1", "c2r2", "e0", "c3r0", "c3r1", "c3r2", "c0r3", "c1r3", "c2r3", "c3r3", "x0"]
+	var n := 64
+	var r := RoomReset.new()
+	var s := 4242
+	r.reroll_all(s)
+	for id in ids: r.mark_shown(id, s, n)
+	for k in 300:
+		var dest: String = ids[k % ids.size()]
+		var before := {}
+		for id in ids: before[id] = r.last_shown(id).entry
+		var c := r.reroll_seed((s * 31 + k * 7919) & 0x7fffffff, dest, true)
+		for id in ids:
+			if posmod(MonsterPiles.room_seed(c, id), n) == int(before[id]): return "re-roll %d: %s shows entry %d again" % [k, id, before[id]]
+		r.reroll_all(c)
+		s = c
+		for id in ids: r.mark_shown(id, c, n)
+	return ""
