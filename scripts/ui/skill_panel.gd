@@ -16,6 +16,8 @@ const DOWN := Color("#ff9d8a")
 const PANEL_BG := Color(0.05, 0.137, 0.102, 0.96)
 const CELL := 34
 const SKILLS := ["piercing", "spread"]
+## Owner 2026-11-08 (combos spec): 2 slots from unlock, slot 3 / 4 at skill level gem_slots[2] / [3].
+const SLOT_HELP := "ช่องเจม: 2 ช่องตั้งแต่ปลดสกิล · ช่องที่ 3 ที่เลเวลสกิล %d · ช่องที่ 4 ที่เลเวลสกิล %d · ถอดเจมฟรี เจมเก็บ EXP ไว้"
 const SKILL_NAMES := {"piercing": "ศรทะลวง", "spread": "ศรกระจาย"}
 const SKILL_ICONS := {"piercing": "res://assets/skills/piercing.png", "spread": "res://assets/skills/spread.png"}
 
@@ -48,6 +50,7 @@ func _ready() -> void:
 
 func open(h: Hero) -> void:
 	hero = h
+	hero.return_closed_gems()      # owner 2026-11-09: a gem left in a closed slot comes back once the bag has room
 	if _root == null: build()
 	visible = true
 	_notice = ""
@@ -188,7 +191,7 @@ func _previews(d: Dictionary, g: Dictionary) -> void:
 		if hero.level < Skills.unlock_level(id):
 			d.lines.append({"text": "%s: ปลดที่ Lv%d" % [SKILL_NAMES[id], Skills.unlock_level(id)], "color": DIM_TEXT})
 			continue
-		var now: Array = hero.skill_gems.get(id, []).duplicate()
+		var now: Array = hero.open_gems(id)      # a closed slot's gem has no effect (M5b Task 1)
 		var after := now.duplicate()
 		var free := after.find(null)
 		if free == -1 and after.size() < hero.gem_slots(id): after.append(g)
@@ -276,7 +279,9 @@ func build() -> void:
 	rain.add_child(UiKit.label("ห่าศร · มาในรอบถัดไป (ป้ายพื้นที่·ต่อเนื่อง)", 9, DIM_TEXT))
 	left.add_child(rain)
 	var slot_lv: Array = Balance.data()["gem_slots"]
-	left.add_child(UiKit.label("ช่องเจมเพิ่มเป็น 2 ช่องที่เลเวลสกิล %d · ถอดเจมฟรี เจมเก็บ EXP ไว้" % int(slot_lv[1]), 8, DIM_TEXT))
+	var slot_help := UiKit.label(SLOT_HELP % [int(slot_lv[2]), int(slot_lv[3])], 8, DIM_TEXT)
+	slot_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART    # longer than the 232 px column
+	left.add_child(slot_help)
 
 	var mid := VBoxContainer.new()
 	mid.add_theme_constant_override("separation", 5)

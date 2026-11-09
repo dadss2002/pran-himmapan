@@ -156,3 +156,28 @@ func test_action_button_on_screen_after_select():
 	h.free()
 	await tree.process_frame
 	return "; ".join(fails)
+
+func _labels(n: Node, out: Array) -> Array:
+	if n is Label: out.append(n.text)
+	for c in n.get_children(): _labels(c, out)
+	return out
+
+## M5b Task 1 (owner 2026-11-08): the slot help reads the new rule from balance.json gem_slots; opening the screen
+## moves a gem left in a closed slot to the bag (owner 2026-11-09), and each open skill shows 2 slots at Lv3.
+func test_slot_help_and_closed_gems_on_open():
+	var h := _hero(3)
+	h.set_skill_gems({"piercing": [_g("split"), _g("multiply"), _g("execute")]})
+	var p := _panel(h)
+	var r := ""
+	var texts := _labels(p, [])
+	var want := SkillPanel.SLOT_HELP % [10, 50]
+	if not texts.has(want): r = "slot help missing; want '%s'" % want
+	elif h.skill_gems.piercing.size() > 2 and h.skill_gems.piercing[2] != null: r = "opening the screen did not return the slot-3 gem"
+	elif h.inventory.slots.size() != 1 or h.inventory.slots[0].get("gem", {}).get("type", "") != "execute": r = "bag %s" % [h.inventory.slots]
+	else:
+		for id in ["piercing", "spread"]:
+			var n: int = p._rows[id].slots.get_child_count()
+			if n != 2: r = "%s shows %d slots, want 2" % [id, n]
+	p.free()
+	h.free()
+	return r

@@ -166,3 +166,30 @@ func test_load_with_hp_gear_starts_full():
 	g.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
 	return r
+
+## M5b Task 1 (owner 2026-11-09): loading keeps socketed gems where they are; a gem in a slot that is not open goes
+## to the bag, and the game saves that right away (go_to on start).
+func test_load_returns_closed_slot_gems_to_bag():
+	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	var gem := func(t): return {"type": t, "level": 2, "exp": 7, "rarity": "good", "opts": [{"k": "crit", "v": 0.02}]}
+	var sk := {"piercing": [gem.call("split"), gem.call("multiply"), gem.call("execute")]}
+	if not SaveGame.save({"level": 1, "exp": 0, "inventory": Inventory.new().to_dict(), "skills": sk}, TMP_SAVE): return "save refused"
+	var g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = TMP_SAVE
+	g.build()
+	var h: Hero = g.hero
+	var r := ""
+	if h.skill_gems.piercing[0].type != "split" or h.skill_gems.piercing[1].type != "multiply": r = "open-slot gems moved: %s" % [h.skill_gems.piercing]
+	elif h.skill_gems.piercing.size() > 2 and h.skill_gems.piercing[2] != null: r = "slot-3 gem still socketed"
+	else:
+		var found := false
+		for s in h.inventory.slots: if s.get("gem", {}).get("type", "") == "execute" and int(s.gem.level) == 2: found = true
+		if not found: r = "execute not in the bag: %s" % [h.inventory.slots]
+	if r == "":
+		var back := SaveGame.load_or_new(TMP_SAVE)
+		var in_bag := false
+		for s in back.inventory.slots: if s.get("gem", {}).get("type", "") == "execute": in_bag = true
+		if not in_bag: r = "the move was not saved"
+	g.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	return r

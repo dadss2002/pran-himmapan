@@ -149,6 +149,9 @@ func build() -> void:
 	hero.set_skill_gems(state.get("skills", {}))
 	hero.set_progress(int(state.level), int(state.exp))
 	hero.inventory.from_dict(state.inventory)
+	# M5b Task 1 (owner 2026-11-09): gems stay where they are; one in a slot that is not open goes to the bag (a full
+	# bag keeps it socketed and inert until there is room). go_to() below saves the result.
+	hero.return_closed_gems()
 	waypoints = Waypoints.from_rooms(rooms, state.get("waypoints"))   # Task 5: c1r1's stone is always unlocked
 	waypoints.traveller = travel_to_waypoint
 	fog = FogGrid.from_rooms(rooms)          # owner 2026-11-08: a new game = all fog (never loaded from the save)

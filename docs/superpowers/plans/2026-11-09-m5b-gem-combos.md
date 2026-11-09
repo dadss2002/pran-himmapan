@@ -84,7 +84,7 @@ Task order puts what phase 1 can use first (piercing/spread recipes). Area recip
 - Consumes: `Gem.slots_for(skill_level: int) -> int` (unchanged code, new data)
 - Produces: `Skills.exists(id: String) -> bool`; `Hero.open_gems(skill_id: String) -> Array` (sockets sliced to `gem_slots(skill_id)`, padded with nulls); `Hero.build(skill_id)` now uses `open_gems`; `Hero.return_closed_gems() -> int` (gems moved to the bag); `Hero.gem_slots(id)` returns 0 for a skill where `not Skills.exists(id)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```gdscript
 # tests/test_gem.gd: replace test_slots_by_level
@@ -126,23 +126,25 @@ func test_duplicate_gem_type_in_skill_refuses_save():
 	# signed save, "skills": {"piercing": [element fire, element ice]} → load_or_new() == new_state(); same for [split, split]
 ```
 
-- [ ] **Step 2: Run them and check they fail**
+- [x] **Step 2: Run them and check they fail**
 
 Run: `TEST_ONLY=test_gem godot --headless --path . --script tests/run_tests.gd` and `TEST_ONLY=test_hero_gems ...`
 Expected: FAIL `slots_for(1) = 1, want 2`; `return_closed_gems` not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `gem_slots: [1, 1, 10, 50]`. Add `Skills.exists(id) -> bool` (= `Balance.has("skills.%s.unlock" % id)`). In `Hero.gem_slots`, return 0 when the skill does not exist. Add `Hero.open_gems`, and have `build()` use it. `return_closed_gems()` walks every skill in `skill_gems` from the highest index down. For each gem at an index ≥ `gem_slots(id)` it calls `inventory.add_gem(g)`. On success it sets that socket to null; on failure it leaves the gem there. It emits `gems_changed` if anything moved. `_skills_ok` keeps a per-skill set of gem types and returns false on a repeat. The game can't produce one, so no real save is lost (B14). The panel text becomes `"ช่องเจม: 2 ช่องตั้งแต่ปลดสกิล · ช่องที่ 3 ที่เลเวลสกิล %d · ช่องที่ 4 ที่เลเวลสกิล %d · ถอดเจมฟรี เจมเก็บ EXP ไว้"`, filled from `gem_slots[2]` and `gem_slots[3]`. Update docs/gems.md §3 to the 1/1/10/50 table, and replace its phase-1 note with "ศรทะลวงได้ 3 ช่องที่ตัวละคร Lv10 · สกิลอื่น 2 ช่อง". In the sim, `slots(L, s)` becomes `0 if sl < 1 else 2 + (sl >= 10) + (sl >= 50)`.
 
-- [ ] **Step 4: Run them and check they pass.** The same commands give `failed=0`. Then run the full suite to catch any other test that assumed 1 slot at Lv1 (`test_skill_panel`, `touch_check`). Fix those assertions to the new rule only.
+- [x] **Step 4: Run them and check they pass.** The same commands give `failed=0`. Then run the full suite to catch any other test that assumed 1 slot at Lv1 (`test_skill_panel`, `touch_check`). Fix those assertions to the new rule only.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add data/balance.json scripts/hero/skills.gd scripts/hero/hero.gd scripts/ui/skill_panel.gd scripts/rules/save_game.gd tests/test_gem.gd tests/test_hero_gems.gd tests/test_save_hardening.gd docs/gems.md docs/superpowers/specs/2026-11-06-m3a-gems-enhance-design.md tools/gem_combo_sim.py
 git commit -m "M5b Task 1: 2 gem slots from unlock (slot 3 at skill Lv10), closed-slot gems back to the bag"
 ```
+
+**Done (2026-11-09):** `gem_slots [1,1,10,50]`; `Skills.exists`; `Hero.open_gems` / `return_closed_gems` (build and gem EXP read open slots only; called after load in test_ground and when the skill screen opens); `socket` guards skills with no numbers; save `_skills_ok(sk, level)` refuses two gems of one type in a skill and gems on a skill that does not exist or is locked at the save's level (read from balance.json, so the M5b area skills need no code change); closed-slot gems in a save are kept (owner: never lost). Panel help = `SkillPanel.SLOT_HELP` (wraps), previews use open slots. Changed assertions (owner 2026-11-08 slot rule): test_gem `test_slots_by_level`, test_hero_gems line 36 (slot 3 instead of slot 2 closed at Lv1); test_save_hardening `_rich()` now fills distinct fitting types on existing skills only (it held 4 same-type gems per skill and gems on ห่าศร, which the game cannot make). New: test_gem 1, test_hero_gems 5, test_save_hardening 3, test_skill_panel 1, test_ground 1. Sim: 2-gem rows change (Lv5 ×1.44→×1.54 single target; Lv10 pack ×1.73→×1.77), 3-gem rows unchanged. Full suite: `RESULT passed=494 failed=0`. Risk B24 added.
 
 ---
 

@@ -150,14 +150,23 @@ static func _gem_ok(g) -> bool:
 		seen[o.k] = true
 	return true
 
-## Sockets: known skill → up to 4 slots of null or a fitting gem.
-static func _skills_ok(sk) -> bool:
+## Sockets: known skill → up to 4 slots of null or a fitting gem. A gem needs a skill that exists (has numbers in
+## balance.json "skills", so skills added later work with no list here) and is unlocked at the save's level, and no
+## skill holds two gems of one type (every element gem is type "element": one element per skill). The game can make
+## none of these (Hero.socket), so only a hand-made save is refused (M5b Task 1). A gem in a slot that is not open
+## yet is kept: Hero.return_closed_gems moves it to the bag (owner 2026-11-09: never lost).
+static func _skills_ok(sk, level: int) -> bool:
 	if typeof(sk) != TYPE_DICTIONARY: return false
 	for id in sk:
 		if not Balance.data()["skill_labels"].has(String(id)): return false
 		if typeof(sk[id]) != TYPE_ARRAY or sk[id].size() > Balance.data()["gem_slots"].size(): return false
+		var types := {}
 		for g in sk[id]:
-			if g != null and (not _gem_ok(g) or not Gem.fits(String(g.type), String(id))): return false
+			if g == null: continue
+			if not _gem_ok(g) or not Gem.fits(String(g.type), String(id)): return false
+			if not Skills.exists(String(id)) or level < Skills.unlock_level(String(id)): return false
+			if types.has(String(g.type)): return false
+			types[String(g.type)] = true
 	return true
 
 ## Equipment the game can load: known base (in the right slot), known rarity, level 1..option_ref_level (the highest
@@ -299,7 +308,7 @@ static func _state_ok(d: Dictionary) -> bool:
 	if not _int_in(d.get("version"), VERSION, VERSION): return false
 	if not _int_in(d.get("level"), 1, Progression.cap()): return false
 	if not _int_in(d.get("exp"), 0, maxi(0, Progression.exp_to_next(int(d.level)) - 1)): return false
-	return _inventory_ok(d.get("inventory")) and _equipped_ok(d.get("equipped")) and _skills_ok(d.get("skills", {})) \
+	return _inventory_ok(d.get("inventory")) and _equipped_ok(d.get("equipped")) and _skills_ok(d.get("skills", {}), int(d.level)) \
 		and _waypoints_ok(d.get("waypoints", []))
 
 ## Unlocked stones: a list of room ids that have a waypoint stone. Unknown ids fail the save (Q3 a).

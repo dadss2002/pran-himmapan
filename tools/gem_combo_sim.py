@@ -130,7 +130,7 @@ def sustain(L, build):
         _, _, mp, cdv, *_ = cast(s, build.get(s, []), L, 0.08, 0.0); need += mp / cdv
     return None if need <= REGEN else (50 + 5 * (L - 1)) / (need - REGEN)
 
-def slots(L, s): sl = L - SK[s]['u'] + 1; return 0 if sl < 1 else 1 + (sl >= 5) + (sl >= 10)
+def slots(L, s): sl = L - SK[s]['u'] + 1; return 0 if sl < 1 else 2 + (sl >= 10) + (sl >= 50)   # gem_slots [1,1,10,50], owner 2026-11-08
 
 def options(L, s, n):
     """every legal gem set of size n for a skill (one element gem max)."""

@@ -61,10 +61,11 @@ func _top_item(base: String, plus := 0) -> Dictionary:
 func _stones() -> Array:
 	return Array(RoomSet.open().waypoint_ids())
 
-func _fitting(skill: String) -> String:
+func _fitting_all(skill: String) -> Array:
+	var out := []
 	for t in Gem.types():
-		if Gem.fits(String(t), skill): return String(t)
-	return ""
+		if Gem.fits(String(t), skill): out.append(String(t))
+	return out
 
 ## A state with everything at its top: max level, gold cap, a full bag (+max legend gear, legend gems at the cap,
 ## full stacks), every socket filled, every stone unlocked.
@@ -88,10 +89,14 @@ func _rich() -> Dictionary:
 	eq.ring = _top_item("ring")
 	eq.necklace = _top_item("necklace")
 	st.equipped = eq
+	# M5b Task 1: every slot filled with a different fitting type (the game never puts two of one type in a skill)
+	# on every skill that exists (gems on a skill with no numbers / not unlocked are refused, owner 2026-11-09).
 	var sk := {}
 	for id in Balance.data()["skill_labels"]:
+		if not Skills.exists(String(id)): continue
 		sk[id] = []
-		for i in Balance.data()["gem_slots"].size(): sk[id].append(_cap_gem(_fitting(String(id)), 1 + i * 6, i))
+		var fit := _fitting_all(String(id))
+		for i in Balance.data()["gem_slots"].size(): sk[id].append(_cap_gem(fit[i], 1 + i * 6, i))
 	st.skills = sk
 	st.waypoints = _stones()
 	st["room"] = "c2r1"
@@ -565,4 +570,88 @@ func test_save_refuses_out_of_range_and_keeps_last_good():
 		var s := SaveGame.load_or_new(TMP)
 		if int(s.level) != 5 or FileAccess.file_exists(BAD): r = "the last good save did not stay (level %d)" % int(s.level)
 	_clean()
+	return r
+
+# ---------- M5b Task 1: sockets (owner 2026-11-08 slots, 2026-11-09 gems stay where they are) ----------
+
+## Writes `st` signed with the key but without save()'s range check: the file a key holder could hand-make (S9).
+func _write_signed(st: Dictionary) -> void:
+	var d = JSON.parse_string(JSON.stringify(st))
+	d["version"] = SaveGame.VERSION
+	d["sig"] = SaveGame.signature(d)
+	_clean()
+	_write_text(JSON.stringify(d))
+
+func _sock_state(level: int, skills: Dictionary) -> Dictionary:
+	var st := SaveGame.new_state()
+	st.level = level
+	st.skills = skills
+	return st
+
+func _sg(type: String, element := "") -> Dictionary:
+	var g := {"type": type, "level": 2, "exp": 5, "rarity": "good", "opts": [{"k": "crit", "v": 0.02}]}
+	if element != "": g["element"] = element
+	return g
+
+## true when a signed file holding `st` loads as written (not thrown away).
+func _signed_loads(st: Dictionary) -> bool:
+	_write_signed(st)
+	var s := SaveGame.load_or_new(TMP)
+	var ok := not _broken(s) and int(s.level) == int(st.level)
+	_clean()
+	return ok
+
+## The game never puts two gems of one type in a skill (hero.gd socket: "เจมชนิดนี้ใส่ในสกิลนี้แล้ว", since M3a
+## b4e683d, before M3a reached main), and every element gem has type "element" (one element per skill, combos spec).
+## A save that holds such a pair is hand-made: refused whole (Q3 a).
+func test_duplicate_gem_type_in_skill_refuses_save():
+	var cap := Progression.cap()
+	if _signed_loads(_sock_state(cap, {"piercing": [_sg("element", "fire"), _sg("element", "ice")]})): return "two element gems on one skill loaded"
+	if _signed_loads(_sock_state(cap, {"piercing": [_sg("split"), _sg("split")]})): return "two split gems on one skill loaded"
+	if _signed_loads(_sock_state(cap, {"piercing": [_sg("split"), null, _sg("split")]})): return "split, null, split loaded"
+	if not _signed_loads(_sock_state(cap, {"piercing": [_sg("element", "fire"), _sg("split"), _sg("multiply")], "spread": [_sg("split"), _sg("element", "ice")]})):
+		return "one gem of each type per skill must load (the same type on two skills is fine)"
+	return ""
+
+## Gems only on skills that exist (have numbers in balance.json "skills") and are unlocked at the save's level: the
+## game refuses to socket anything else (socket: "ยังไม่ปลด"), and the character level never goes down. Empty or
+## null sockets are fine anywhere a skill has labels (a Lv1 save holds "spread": []).
+func test_gems_on_missing_or_locked_skill_refuse_save():
+	var refused := {
+		"arrow_rain has no numbers yet": _sock_state(Progression.cap(), {"arrow_rain": [_sg("expand")]}),
+		"spread locked at Lv2": _sock_state(2, {"spread": [_sg("split")]}),
+		"spread locked at Lv1, gem in slot 2": _sock_state(1, {"spread": [null, _sg("multiply")]}),
+		"unknown skill id": _sock_state(3, {"sword": []}),
+	}
+	var good := {
+		"Lv1 default sockets": _sock_state(1, {"piercing": [], "spread": []}),
+		"null sockets on a locked skill": _sock_state(1, {"spread": [null, null], "arrow_rain": [null]}),
+		"spread at its unlock level": _sock_state(3, {"spread": [_sg("split"), _sg("multiply")]}),
+		# hand-made (slot 3 is closed at skill Lv1) but kept: owner 2026-11-09 "never lost"; the hero returns it to the bag
+		"gem in a closed slot": _sock_state(1, {"piercing": [_sg("split"), _sg("multiply"), _sg("execute")]}),
+	}
+	for name in refused:
+		if _signed_loads(refused[name]): return "should be refused: %s" % name
+	for name in good:
+		if not _signed_loads(good[name]): return "should load: %s" % name
+		if not _cycle(good[name]).saved: _clean(); return "save() refused: %s" % name
+		_clean()
+	return ""
+
+## The "unlocked" check reads balance.json, so the area skills built later in M5b (ห่าศร, กับดักหนาม, ศรเพลิง)
+## work once their numbers are in: nothing is a hard-coded skill list.
+func test_unlock_check_follows_skill_data():
+	var skills: Dictionary = Balance.data()["skills"]
+	var added := not skills.has("arrow_rain")
+	if added: skills["arrow_rain"] = {"unlock": 5, "mult": 1.0, "cooldown": 8, "mp": 18}
+	Balance.clear_cache()
+	var r := ""
+	var u := Skills.unlock_level("arrow_rain") if Skills.exists("arrow_rain") else -1
+	if u < 2: r = "Skills.exists / unlock_level ignore the skill data (unlock %d)" % u
+	elif not _signed_loads(_sock_state(u, {"arrow_rain": [_sg("expand"), _sg("multiply")]})): r = "arrow_rain gems at its unlock level should load"
+	elif _signed_loads(_sock_state(u - 1, {"arrow_rain": [_sg("expand")]})): r = "arrow_rain gems before its unlock level should be refused"
+	if added:
+		skills.erase("arrow_rain")
+		Balance.clear_cache()
+		if r == "" and Skills.exists("arrow_rain"): r = "test data not restored"
 	return r

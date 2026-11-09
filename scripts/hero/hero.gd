@@ -100,7 +100,7 @@ func on_kill(monster_exp: int, monster_level: int) -> void:
 	_exp_carry = raw - whole
 	gain_exp(whole)
 	for id in skill_gems:
-		for g in skill_gems[id]:
+		for g in open_gems(id):      # a gem left in a closed slot is inert: no EXP either (M5b Task 1)
 			if g == null: continue
 			var amount := int(round(whole * (1.0 + Gem.option(g, "gem_exp"))))
 			if Gem.add_exp(g, amount) > 0: gem_leveled.emit(g)
@@ -134,20 +134,44 @@ func gain_exp(amount: int) -> void:
 
 # ---------- gems ----------
 
-## What a skill does now (level, gear and its gems).
+## What a skill does now (level, gear and the gems in its open slots).
 func build(skill_id: String) -> Dictionary:
-	return SkillBuild.of(skill_id, level, skill_gems.get(skill_id, []), stats())
+	return SkillBuild.of(skill_id, level, open_gems(skill_id), stats())
 
 func skill_mp(skill_id: String) -> float:
 	return build(skill_id).mp
 
+## Open slots (balance.json gem_slots by skill level); 0 for a skill with no numbers yet (labels only).
 func gem_slots(skill_id: String) -> int:
+	if not Skills.exists(skill_id): return 0
 	return Gem.slots_for(Skills.skill_level(skill_id, level))
+
+## The sockets that count: the first gem_slots(skill_id) entries, padded with nulls to that many.
+func open_gems(skill_id: String) -> Array:
+	var sockets: Array = skill_gems.get(skill_id, [])
+	var out: Array = []
+	for i in gem_slots(skill_id): out.append(sockets[i] if i < sockets.size() else null)
+	return out
+
+## Moves every gem in a slot that is not open (an unknown or locked skill, or a slot past gem_slots) to the bag.
+## Owner 2026-11-09: never lost: a gem with no room in the bag stays socketed (inert) and moves on a later call.
+## Called after load and when the skill screen opens. Returns how many gems moved.
+func return_closed_gems() -> int:
+	var moved := 0
+	for id in skill_gems:
+		var sockets: Array = skill_gems[id]
+		var open := gem_slots(String(id))
+		for i in range(sockets.size() - 1, open - 1, -1):
+			if sockets[i] != null and inventory.add_gem(sockets[i]):
+				sockets[i] = null
+				moved += 1
+	if moved > 0: gems_changed.emit()
+	return moved
 
 ## Puts the gem in bag slot bag_index into a skill slot; a gem already there goes back to the bag.
 ## Returns "" or the reason shown to the player.
 func socket(skill_id: String, slot: int, bag_index: int) -> String:
-	if level < Skills.unlock_level(skill_id): return "ยังไม่ปลด"
+	if not Skills.exists(skill_id) or level < Skills.unlock_level(skill_id): return "ยังไม่ปลด"
 	if slot < 0 or slot >= gem_slots(skill_id): return "ช่องยังไม่เปิด"
 	if bag_index < 0 or bag_index >= inventory.slots.size(): return "ไม่มีเจม"
 	var entry: Dictionary = inventory.slots[bag_index]

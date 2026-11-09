@@ -67,10 +67,22 @@ func test_fits_by_label():
 		if not (Gem.fits(t, "piercing") and Gem.fits(t, "spread")): r = "%s should fit both arrow skills" % t
 	return r
 
+## Owner 2026-11-08 (combos spec approval line): every skill has 2 slots from unlock, slot 3 at skill Lv10, slot 4
+## at skill Lv50 (was 1/10/30/50).
 func test_slots_by_level():
-	var want := {0: 0, 1: 1, 9: 1, 10: 2, 29: 2, 30: 3, 50: 4}
+	var want := {0: 0, 1: 2, 9: 2, 10: 3, 49: 3, 50: 4}
 	for lv in want:
 		if Gem.slots_for(lv) != want[lv]: return "slots_for(%d) = %d, want %d" % [lv, Gem.slots_for(lv), want[lv]]
+	return ""
+
+## Owner 2026-11-09: socketed gems stay where they are. The rule change only opens slots, so no gem a player put in
+## under the old rule [1, 10, 30, 50] is ever in a slot that is now closed.
+func test_new_slot_rule_never_closes_a_slot():
+	var old := [1, 10, 30, 50]
+	for lv in range(0, 61):
+		var n_old := 0
+		for t in old: if lv >= t: n_old += 1
+		if Gem.slots_for(lv) < n_old: return "skill Lv%d: %d < old %d" % [lv, Gem.slots_for(lv), n_old]
 	return ""
 
 func test_plain_gem():
