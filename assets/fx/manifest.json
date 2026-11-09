@@ -1,5 +1,5 @@
 {
-  "_doc": "PixelLab vfx_workbench exports (effects saved in My effects). anchor = pixel in a cell that sits on the node origin.",
+  "_doc": "PixelLab vfx_workbench exports (effects saved in My effects) and PixelFX exports (\"pixelfx\": tools/pixelfx_export.py, MIT, assets/fx/PIXELFX_LICENSE.txt). anchor = pixel in a cell that sits on the node origin; sheet = file in assets/fx (default <id>.png); columns = frames per row (default all).",
   "lunge_warning": {
     "cell": [
       98,
@@ -16,17 +16,47 @@
   },
   "hit_spark": {
     "cell": [
-      45,
-      43
+      60,
+      50
     ],
-    "frames": 6,
+    "frames": 8,
     "fps": 16,
     "anchor": [
-      21,
-      22
+      28,
+      34
     ],
     "loop": false,
-    "pixellab": "a9fdd80b-cbe0-4a5c-9fdf-b5c5ec1487cb"
+    "columns": 8,
+    "sheet": "pfx_hit_spark.png",
+    "pixelfx": {
+      "id": "impacts/hit-spark",
+      "commit": "a841596",
+      "options": {
+        "height": 12,
+        "palette": [
+          "#1a0802",
+          "#7a2a0c",
+          "#c2501a",
+          "#f08a24",
+          "#ffc23d",
+          "#ffe98a",
+          "#fffbe3",
+          "#ffffff"
+        ]
+      },
+      "palette_from": "hit_spark.png",
+      "trim_s": [
+        0.0,
+        0.4375
+      ],
+      "body_cut": false,
+      "crop": [
+        -28,
+        -34,
+        32,
+        16
+      ]
+    }
   },
   "roll_dust": {
     "cell": [
@@ -58,17 +88,44 @@
   },
   "pickup_pop": {
     "cell": [
-      43,
-      49
+      70,
+      70
     ],
-    "frames": 10,
+    "frames": 17,
     "fps": 15,
     "anchor": [
-      21,
-      32
+      34,
+      36
     ],
     "loop": false,
-    "pixellab": "da056813-71dc-4e27-a9e0-8f720fa39c66"
+    "columns": 17,
+    "sheet": "pfx_pickup_pop.png",
+    "pixelfx": {
+      "id": "pickups/collect-burst",
+      "commit": "a841596",
+      "options": {
+        "palette": [
+          "#4f2d0b",
+          "#b0661a",
+          "#f0b82a",
+          "#ffe066",
+          "#fff6c0",
+          "#ffffff"
+        ]
+      },
+      "palette_from": "pickup_pop.png",
+      "trim_s": [
+        0.0,
+        1.0666666666666667
+      ],
+      "body_cut": false,
+      "crop": [
+        -34,
+        -36,
+        36,
+        34
+      ]
+    }
   },
   "piercing_trail": {
     "cell": [
@@ -142,31 +199,81 @@
   },
   "status_burn": {
     "cell": [
-      36,
-      37
+      47,
+      54
     ],
-    "frames": 12,
-    "fps": 12,
+    "frames": 18,
+    "fps": 15,
     "anchor": [
-      18,
-      29
+      23,
+      50
     ],
     "loop": true,
-    "pixellab": "1f023a02-2a59-4f6f-b159-fcd39d421afc"
+    "columns": 18,
+    "sheet": "pfx_status_burn.png",
+    "pixelfx": {
+      "id": "status/burning",
+      "commit": "a841596",
+      "options": {
+        "palette": [
+          "#1b0404",
+          "#7a1410",
+          "#c22a14",
+          "#f05a1c",
+          "#ff9a2a",
+          "#ffd04a",
+          "#fff3a8"
+        ],
+        "actor": "average monster silhouette (assets/monsters + assets/wolf poses)"
+      },
+      "palette_from": "status_burn.png",
+      "trim_s": null,
+      "body_cut": true,
+      "crop": [
+        -23,
+        -50,
+        24,
+        4
+      ]
+    }
   },
   "status_frost": {
     "cell": [
-      26,
-      30
+      56,
+      47
     ],
-    "frames": 12,
-    "fps": 10,
+    "frames": 28,
+    "fps": 14,
     "anchor": [
-      13,
-      22
+      28,
+      42
     ],
     "loop": true,
-    "pixellab": "3042db32-12ee-467b-a5e5-baa2242574c3"
+    "columns": 28,
+    "sheet": "pfx_status_frost.png",
+    "pixelfx": {
+      "id": "status/frozen",
+      "commit": "a841596",
+      "options": {
+        "palette": [
+          "#040d1a",
+          "#2f86c0",
+          "#5cc8f0",
+          "#a8ecff",
+          "#ffffff"
+        ],
+        "actor": "average monster silhouette (assets/monsters + assets/wolf poses)"
+      },
+      "palette_from": "status_frost.png",
+      "trim_s": null,
+      "body_cut": true,
+      "crop": [
+        -28,
+        -42,
+        28,
+        5
+      ]
+    }
   },
   "chain_zap": {
     "cell": [
@@ -212,6 +319,108 @@
   },
   "poison_mist": {
     "cell": [
+      88,
+      53
+    ],
+    "frames": 56,
+    "fps": 14,
+    "anchor": [
+      44,
+      43
+    ],
+    "loop": true,
+    "columns": 23,
+    "sheet": "pfx_poison_mist.png",
+    "pixelfx": {
+      "id": "nature/poison-cloud",
+      "commit": "a841596",
+      "options": {
+        "spread": 0.34,
+        "palette": [
+          "#2a1a2e",
+          "#3c2142",
+          "#552a5a",
+          "#6e3573",
+          "#8a4a86",
+          "#a8679a",
+          "#c58fb0",
+          "#e3bfa0",
+          "#f6e08a"
+        ]
+      },
+      "palette_from": "poison_mist.png",
+      "trim_s": null,
+      "body_cut": false,
+      "crop": [
+        -44,
+        -43,
+        44,
+        10
+      ]
+    }
+  },
+  "pixellab_hit_spark": {
+    "cell": [
+      45,
+      43
+    ],
+    "frames": 6,
+    "fps": 16,
+    "anchor": [
+      21,
+      22
+    ],
+    "loop": false,
+    "pixellab": "a9fdd80b-cbe0-4a5c-9fdf-b5c5ec1487cb",
+    "sheet": "hit_spark.png",
+    "replaced_by": "hit_spark"
+  },
+  "crit_hit": {
+    "cell": [
+      96,
+      56
+    ],
+    "frames": 13,
+    "fps": 16,
+    "anchor": [
+      48,
+      40
+    ],
+    "loop": false,
+    "columns": 13,
+    "sheet": "pfx_crit_hit.png",
+    "pixelfx": {
+      "id": "impacts/crit-hit",
+      "commit": "a841596",
+      "options": {
+        "height": 12,
+        "palette": [
+          "#1a0802",
+          "#7a2a0c",
+          "#c2501a",
+          "#f08a24",
+          "#ffc23d",
+          "#ffe98a",
+          "#fffbe3",
+          "#ffffff"
+        ]
+      },
+      "palette_from": "hit_spark.png",
+      "trim_s": [
+        0.0,
+        0.75
+      ],
+      "body_cut": false,
+      "crop": [
+        -48,
+        -40,
+        48,
+        16
+      ]
+    }
+  },
+  "pixellab_poison_mist": {
+    "cell": [
       82,
       29
     ],
@@ -222,6 +431,100 @@
       20
     ],
     "loop": true,
-    "pixellab": "f6917167-2fc7-4409-b1b4-7a94dd087c9f"
+    "pixellab": "f6917167-2fc7-4409-b1b4-7a94dd087c9f",
+    "sheet": "poison_mist.png",
+    "replaced_by": "poison_mist"
+  },
+  "pixellab_status_burn": {
+    "cell": [
+      36,
+      37
+    ],
+    "frames": 12,
+    "fps": 12,
+    "anchor": [
+      18,
+      29
+    ],
+    "loop": true,
+    "pixellab": "1f023a02-2a59-4f6f-b159-fcd39d421afc",
+    "sheet": "status_burn.png",
+    "replaced_by": "status_burn"
+  },
+  "pixellab_status_frost": {
+    "cell": [
+      26,
+      30
+    ],
+    "frames": 12,
+    "fps": 10,
+    "anchor": [
+      13,
+      22
+    ],
+    "loop": true,
+    "pixellab": "3042db32-12ee-467b-a5e5-baa2242574c3",
+    "sheet": "status_frost.png",
+    "replaced_by": "status_frost"
+  },
+  "pixellab_pickup_pop": {
+    "cell": [
+      43,
+      49
+    ],
+    "frames": 10,
+    "fps": 15,
+    "anchor": [
+      21,
+      32
+    ],
+    "loop": false,
+    "pixellab": "da056813-71dc-4e27-a9e0-8f720fa39c66",
+    "sheet": "pickup_pop.png",
+    "replaced_by": "pickup_pop"
+  },
+  "warp_blink": {
+    "cell": [
+      80,
+      84
+    ],
+    "frames": 16,
+    "fps": 14,
+    "anchor": [
+      40,
+      72
+    ],
+    "loop": false,
+    "columns": 16,
+    "sheet": "pfx_warp_blink.png",
+    "pixelfx": {
+      "id": "arcane/blink-out",
+      "commit": "a841596",
+      "options": {
+        "palette": [
+          "#02110b",
+          "#06261a",
+          "#0e4d2e",
+          "#1a8a45",
+          "#3cc85a",
+          "#86f07a",
+          "#d4ffc0",
+          "#ffffff"
+        ],
+        "actor": "hero idle_south frame 0"
+      },
+      "palette_from": "warp_ring.png",
+      "trim_s": [
+        0.13,
+        1.2014285714285715
+      ],
+      "body_cut": false,
+      "crop": [
+        -40,
+        -72,
+        40,
+        12
+      ]
+    }
   }
 }

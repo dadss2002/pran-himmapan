@@ -82,6 +82,7 @@ var loot_rng := RandomNumberGenerator.new()
 var _built := false
 var _bag_full_cd := 0.0
 var lock_ring: FxSprite
+var _warp_fx: FxSprite = null        # Task 3f: the hero's blink-out while the screen fades (freed by go_to)
 var save_path := SaveGame.PATH
 var settings_path := GameSettings.PATH   # the HUD's settings file (tests / screenshots set a scratch one)
 var _autosave_t := 0.0
@@ -196,6 +197,8 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	_fade_tween = null
 	if _fade_gate: _fade_gate.set_process(false)
 	if fade: fade.color.a = 0.0
+	if is_instance_valid(_warp_fx): _warp_fx.free()   # the blink belongs to the room being left
+	_warp_fx = null
 	Sfx.stop_world()                     # sound spec: the old room's hits and cries stop (the warp gong goes on)
 	if hud: hud.close_map()              # Task 8: a room change never leaves the full map open (or the game paused)
 	_keep_room()                         # Task 4: the room being left stays as it is (unless re-rolled since)
@@ -363,6 +366,7 @@ func _trip(to_room: String, to_warp: String) -> void:
 		go_to(to_room, to_warp)
 		return
 	warping = true
+	_warp_fx = _fx("warp_blink", hero.global_position)   # Task 3f ⑦: the hero blinks out as the screen fades
 	_hero_was_on = hero.is_physics_processing()
 	hero.set_physics_process(false)
 	hero.begin_warp()                    # no damage, poison or knockback while it is dark
@@ -561,9 +565,12 @@ func _on_level_up(lv: int) -> void:
 	_fx("level_up", hero.global_position)
 	_text(hero.global_position + Vector2(0, -60), "Lv ขึ้น! %d" % lv, Color("#ffd36a"))
 
+## Task 3f (PixelFX): a critical shows crit_hit instead of hit_spark (as crit_hit replaces arrow_hit in sound);
+## both fly along the blow, so they are mirrored when it goes left (the hero on the monster's right).
 func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30 * Wolf.size_scale()), amount, crit, false)
-	_fx("hit_spark", w.hurt_point())
+	var f := _fx("crit_hit" if crit else "hit_spark", w.hurt_point())
+	if f and hero: f.face(hero.global_position.x > w.global_position.x)
 
 func save_now() -> bool:
 	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.skill_gems, "room": room_id, "seed": session_seed,
@@ -689,11 +696,12 @@ func _number(at: Vector2, amount: int, crit: bool, hurt: bool) -> void:
 	d.position = at
 	overlay.add_child(d)
 
-func _fx(fx_name: String, at: Vector2) -> void:
-	if not is_inside_tree(): return
-	if saver.on and PerfSaver.decorative(fx_name): return
+func _fx(fx_name: String, at: Vector2) -> FxSprite:
+	if not is_inside_tree(): return null
+	if saver.on and PerfSaver.decorative(fx_name): return null
 	var f := FxSprite.make(fx_name)
 	f.position = at
 	f.z_index = 40
 	stage.add_child(f)
 	f.play(fx_name)
+	return f

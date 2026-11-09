@@ -253,7 +253,8 @@ func restore_kept(st: Dictionary) -> void:
 		_t = 0.0
 		_refresh(true)
 
-## Flames / ice crystals at the feet while burning / slowed (vfx_workbench strips).
+## Flames / frost round the body while burning / slowed (Task 3f: PixelFX burning / frozen with the body cut out,
+## drawn at STATUS_FX_SCALE like the PixelLab strips they replaced).
 func _update_status_fx() -> void:
 	if not is_inside_tree(): return
 	_burn_fx = _toggle_fx(_burn_fx, "status_burn", status.is_burning() and is_alive())
