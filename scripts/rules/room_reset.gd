@@ -80,7 +80,8 @@ func guarded(dest: String, all_rooms := GUARD_ALL_ROOMS) -> Array:
 ## The pile seed for a waypoint re-roll to dest: new_seed unless it equals the current pile seed or would give a
 ## guarded room (guarded()) its last-shown layout; then the next seed (31 bits, wrapping) until none does.
 ## Deterministic; reads only the memory (no groups, no RNG). Each step clashes with chance about guarded rooms /
-## bank size, so a few steps at most; after 4096 the last seed is returned (a guard only).
+## bank size, so a few steps at most; after 4096 the last seed is returned (a guard only) with a warning (review M1):
+## then some guarded room shows its last layout again (only possible when guarded rooms >= a bank's size, B28).
 func reroll_seed(new_seed: int, dest: String, all_rooms := GUARD_ALL_ROOMS) -> int:
 	var ids := guarded(dest, all_rooms)
 	var s := new_seed & 0x7fffffff
@@ -90,6 +91,7 @@ func reroll_seed(new_seed: int, dest: String, all_rooms := GUARD_ALL_ROOMS) -> i
 			if ok and repeats(id, s): ok = false
 		if ok: return s
 		s = (s + 1) & 0x7fffffff
+	push_warning("RoomReset.reroll_seed: no seed in 4096 tries keeps all %d guarded rooms off their last layout; a room may repeat (risks B28)" % ids.size())
 	return s
 
 ## Re-roll every room: new pile seed, no kept rooms (the last-shown memory stays).

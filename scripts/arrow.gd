@@ -94,7 +94,10 @@ func _after_hit(t: Node2D, amount: int) -> void:
 					z.play("chain_zap")
 	if _bounces_left > 0 and not _bounced:
 		var next := _nearest(t.hurt_point(), Balance.num("ricochet.range"), _hit.keys())
-		_bounced = pierce              # a piercing arrow tries once, from its first target only
+		# every arrow tries once, from the first monster it hits only: a piercing arrow (ศรทะลวง) and, owner 2026-11-09
+		# (Task 6 review, "เด้งจากตัวแรกที่โดนเท่านั้น"), an arrow piercing by the pierce gem (ศรกระจาย); a plain
+		# ricochet arrow stops at that hit anyway, its chain goes on through the bounce arrows
+		_bounced = true
 		if next:
 			_spawn_bounce(t.hurt_point(), next)
 			_bounce_event(t, next)
@@ -135,19 +138,26 @@ func _end_line(struck: Node2D = null) -> void:
 			for s in ComboFx.play(get_parent(), combo_id(), "line_end", position):
 				s.scale = Vector2.ONE * (2.0 * r / maxf(1.0, s._cell.x))   # as wide as the blast: fire_blast's 64 px cell at r32 = 1:1, as sampled
 
+## The multiplier of the hit that started this arrow's bounce chain: the press's primary arrow (build.root_mult, set
+## on every bounce arrow by _spawn_bounce), or this arrow's own when it is not a bounce arrow.
+func root_mult() -> float:
+	return float(build.get("root_mult", mult))
+
 ## One bounce, from `struck` to `next` (Task 6): the recipe's "bounce" effect at the bounce point, and the lightning
-## combos' bolts (ศรอสนีกระโดด 1, ศรอสนีพันสาย 2, each bolt_frac of the bouncing arrow's hit) at the nearest others,
-## never the struck monster or the bounce's own target. Every bounce event of the chain bolts (bounce arrows too).
+## combos' bolts (ศรอสนีกระโดด 1, ศรอสนีพันสาย 2) at the nearest others, never the struck monster or the bounce's own
+## target. Every bounce event of the chain bolts (bounce arrows too). Owner 2026-11-09 (Task 6 review, "50% ของนัดแรก
+## คงที่"): each bolt is bolt_frac of the press's FIRST hit (root_mult), flat at every bounce, not of the bouncing arrow.
 func _bounce_event(struck: Node2D, next: Node2D) -> void:
 	var at: Vector2 = struck.hurt_point()
 	if is_inside_tree(): ComboFx.play(get_parent(), combo_id(), "bounce", at)
 	var n := int(_cp("bolts"))
-	if n > 0: bolts(at, n, _cp("bolt_frac"), [struck, next])
+	if n > 0: bolts(at, n, _cp("bolt_frac"), [struck, next], root_mult())
 
 ## Lightning bolts of this press from `from`: the n nearest distinct live targets within elements.lightning.range,
-## skipping `skip`, each a secondary hit for frac of this arrow's hit (_secondary_hit: no bounce, no element, no combo
-## on-hit) with the recipe's "bolt" effect on it (พันสาย: one chain_zap per bolt). Returns how many were hit.
-func bolts(from: Vector2, n: int, frac: float, skip: Array) -> int:
+## skipping `skip`, each a secondary hit for frac of `base` (the chain's first-hit multiplier; < 0 = this arrow's own)
+## (_secondary_hit: no bounce, no element, no combo on-hit) with the recipe's "bolt" effect on it (พันสาย: one
+## chain_zap per bolt). Returns how many were hit.
+func bolts(from: Vector2, n: int, frac: float, skip: Array, base := -1.0) -> int:
 	if n <= 0: return 0
 	var reach := Balance.num("elements.lightning.range")
 	var done := skip.duplicate()
@@ -156,7 +166,7 @@ func bolts(from: Vector2, n: int, frac: float, skip: Array) -> int:
 		var t := _nearest(from, reach, done)
 		if t == null: break
 		done.append(t)
-		_secondary_hit(t, frac)
+		_secondary_hit(t, frac, base)
 		hit += 1
 		if is_inside_tree(): ComboFx.play(get_parent(), combo_id(), "bolt", t.hurt_point())
 	return hit
@@ -180,10 +190,11 @@ func blast(at: Vector2, radius: float, frac: float, burn: bool, include: Node2D 
 			t.apply_status("burn", amount * Balance.num("elements.fire.burn_frac"), float(build.get("leech", 0.0)), shooter, build.get("cast"))
 	return n
 
-## One secondary hit (blast, bolt): frac of this arrow's hit, with its crit chance; leeches. Never _after_hit (no element, no bounce,
-## no combo on-hit). Task 8: the kill hook (MP / heal on kill through build.cast) goes here too.
-func _secondary_hit(t: Node2D, frac: float) -> int:
-	var amount: int = t.receive_hit(atk, mult * frac, _pos(), crit_chance, crit_mult)
+## One secondary hit (blast, bolt): frac of this arrow's hit (of `base` when >= 0: a bolt's first-hit multiplier), with
+## its crit chance; leeches. Never _after_hit (no element, no bounce, no combo on-hit). Task 8: the kill hook (MP / heal
+## on kill through build.cast) goes here too.
+func _secondary_hit(t: Node2D, frac: float, base := -1.0) -> int:
+	var amount: int = t.receive_hit(atk, (base if base >= 0.0 else mult) * frac, _pos(), crit_chance, crit_mult)
 	_leech(amount)
 	return amount
 
@@ -216,12 +227,12 @@ func _spawn_bounce(from: Vector2, to: Node2D) -> void:
 	# bounce (ศรอสนีกระโดด +1), handed to the first bounce only: exactly +1 per chain, piercing lines included (Task 6)
 	b["bounces"] = (0 if pierce else _bounces_left - 1) + int(build.get("extra_bounces", 0))
 	b["extra_bounces"] = 0
+	b["root_mult"] = root_mult()       # the press's first hit, for the lightning combos' flat bolts (owner 2026-11-09)
 	b["pierce_extra"] = 0
 	b["homing"] = false
 	a.configure(b, shooter)
 	for k in _hit: a._hit[k] = true
 	if is_inside_tree(): get_parent().add_child(a)
-	_bounces_left = 0 if pierce else _bounces_left
 	spawned.emit(a)
 
 ## Ricochet arrows inherit the parent's spawned listeners through the hero (Hero._fire).

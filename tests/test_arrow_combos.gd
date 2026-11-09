@@ -891,8 +891,9 @@ func test_thunder_hop_two_bounces_on_piercing():
 	return r
 
 ## Every bounce of ศรอสนีกระโดด bolts the nearest other monster (not the struck one, not the next) for 50 % of the
-## bouncing arrow's hit: D1 by the bounce at A (k = 0), D2 by the bounce at B (k = 1, after one ×bounce_mult). One
-## bolt per bounce, and no chain lands on D1 / D2 (A is 100 px from B; D2 85 px; C 70 px).
+## press's FIRST hit, flat at every bounce (owner 2026-11-09, Task 6 review: "50% ของนัดแรก คงที่"): D1 by the bounce
+## at A (k = 0), D2 by the bounce at B (k = 1: still arrow_mult × 0.50, not × bounce_mult). One bolt per bounce, and
+## no chain lands on D1 / D2 (A is 100 px from B; D2 85 px; C 70 px).
 func test_thunder_hop_bolt_per_bounce():
 	var b := _build(["ricochet", "lightning"])
 	var am := float(b.arrow_mult)
@@ -905,7 +906,8 @@ func test_thunder_hop_bolt_per_bounce():
 	elif ds.D1.hits.size() != 1: r = "D1 (by the bounce at A) took %d hits, want 1 bolt" % ds.D1.hits.size()
 	elif ds.D2.hits.size() != 1: r = "D2 (by the bounce at B) took %d hits, want 1 bolt" % ds.D2.hits.size()
 	elif not is_equal_approx(float(ds.D1.hits[0][1]), am * 0.5): r = "bolt at the 1st bounce mult %s, want %s × 0.50" % [ds.D1.hits[0][1], am]
-	elif not is_equal_approx(float(ds.D2.hits[0][1]), am * bm * 0.5): r = "bolt at the 2nd bounce mult %s, want %s × %s × 0.50" % [ds.D2.hits[0][1], am, bm]
+	elif not is_equal_approx(float(ds.D2.hits[0][1]), am * 0.5): r = "bolt at the 2nd bounce mult %s, want %s × 0.50 (flat, not × bounce_mult %s)" % [ds.D2.hits[0][1], am, bm]
+	elif not is_equal_approx(float(_direct(ds.B)[0][1]), am * bm): r = "setup: the 1st bounce arrow's hit %s, want %s × %s" % [_direct(ds.B)[0][1], am, bm]
 	elif not ds.D1.statuses.is_empty() or not ds.D2.statuses.is_empty(): r = "a bolt applied a status"
 	_free(ds.values())
 	return r
@@ -1060,4 +1062,132 @@ func test_thunder_hop_on_spread_adds_one():
 		var order := _direct_order(b, ds)
 		if order != ["A", "B", "C"]: r = "spread thunder_hop direct hits %s, want [A, B, C] (1 + 1 bounces, not 3)" % [order]
 	_free(ds.values())
+	return r
+
+# ---------- Task 6 review fixes (owner 2026-11-09: flat bolts, pierce gem bounces from the first target only) ----------
+
+## A dummy that also records the crit chance / crit multiplier each hit was given (the bolt passes the arrow's).
+class CritDummy extends "res://tests/dummy_enemy.gd":
+	var crits: Array = []
+	func receive_hit(atk: float, mult: float, from: Vector2, c := -1.0, cm := -1.0) -> int:
+		crits.append([c, cm])
+		return super(atk, mult, from, c, cm)
+
+## The build of one press with gems at the given levels ({key: level}), char level `char_lv`, its ledger in b.cast.
+func _build_lv(gems_lv: Dictionary, skill: String, char_lv: int) -> Dictionary:
+	var gems: Array = []
+	for k in gems_lv:
+		var g := _g(k)
+		g.level = int(gems_lv[k])
+		gems.append(g)
+	var b := SkillBuild.of(skill, char_lv, gems, STATS)
+	b["cast"] = ComboCast.from_build(b)
+	return b
+
+## Owner 2026-11-09 (Task 6 review, "เด้งจากตัวแรกที่โดนเท่านั้น"): a pierce gem on ศรกระจาย (not a piercing skill)
+## starts a bounce chain only from the first monster the arrow hits, like ศรทะลวง. [ricochet, pierce] Lv1: the arrow
+## hits A, pierces on to P; only A bounces (to B). Q, 80 px from P and out of ricochet range of A, is never hit (the old
+## rule bounced again at P, to Q).
+func test_spread_pierce_gem_bounces_from_first_target_only():
+	var b := _build(["ricochet", "pierce"], "spread")
+	var r := "" if b.combo.is_empty() and int(b.pierce_extra) == 2 and int(b.bounces) == 1 and not bool(b.pierce_all) else "setup: combo %s pierce_extra %s bounces %s" % [b.combo, b.pierce_extra, b.bounces]
+	var ds := {"A": _dummy(Vector2(60, 0)), "P": _dummy(Vector2(150, 0)), "B": _dummy(Vector2(60, 80)), "Q": _dummy(Vector2(150, 80))}
+	if r == "":
+		var order := _direct_order(b, ds)
+		order.sort()
+		if order != ["A", "B", "P"]: r = "direct hits %s, want A, P (pierced) and B (A's bounce) only" % [order]
+		elif not ds.Q.hits.is_empty(): r = "Q took %d hits: the arrow bounced from the target it pierced" % ds.Q.hits.size()
+		elif _direct(ds.B).size() != 1: r = "B took %d bounce hits, want 1" % _direct(ds.B).size()
+	_free(ds.values())
+	return r
+
+## Dummies on the rays of build b's fan from the origin, at each distance in `dists`.
+func _ray_grid(b: Dictionary, dists: Array) -> Array:
+	var out: Array = []
+	var n := int(b.arrows)
+	var fan := deg_to_rad(float(b.fan_deg))
+	for i in n:
+		var dir := Vector2.RIGHT if n == 1 else Vector2.RIGHT.rotated(-fan / 2.0 + fan * i / (n - 1))
+		for d in dists: out.append(_dummy(dir * float(d)))
+	return out
+
+## One press of build b into a dense pack (dummies on every ray at `dists`): [bounce events, bolts]. A bounce event
+## spawns one bounce arrow; a bolt is the only hit at arrow_mult × bolt_frac (flat; owner 2026-11-09).
+func _press_counts(b: Dictionary, dists: Array) -> Array:
+	var all := _ray_grid(b, dists)
+	_spawned = []
+	var arrows := _fan(b, all)
+	for i in 150: _step(arrows, [])
+	var want := float(b.arrow_mult) * float(b.combo_p.get("bolt_frac", 0.0))
+	var bolted := 0
+	for d in all:
+		for h in d.hits:
+			if is_equal_approx(float(h[1]), want): bolted += 1
+	var out := [_spawned.size(), bolted]
+	_free(arrows + _spawned + all)
+	return out
+
+## The worst case of bolts per press (risks B29), gems at Lv10 (ricochet: 2 bounces; pierce: 3 more targets), every
+## bounce and bolt finding a monster. Phase 1 (char Lv10): ศรกระจาย has 2 slots (skill Lv8) → [ricochet, lightning]
+## = ศรอสนีกระโดด, 5 arrows × (2 + 1) = 15 bounces / 15 bolts; ศรทะลวง (skill Lv10, 3 slots) ศรอสนีพันสาย: 3 lines ×
+## 1 bounce (piercing) × 2 = 6. Char Lv12 (ศรกระจาย slot 3): + pierce gem → still 15 / 15 (the old rule bounced at
+## every pierced monster: 5 × 4 × 3 = 60); + split = ศรอสนีพันสาย: 7 arrows × 2 bounces × 2 bolts = 28.
+func test_lightning_worst_case_bolts_per_press():
+	var cases := [
+		["spread Lv10 thunder_hop", {"ricochet": 10, "lightning": 1}, "spread", 10, "thunder_hop", 15, 15],
+		["piercing Lv10 thousand_bolts", {"ricochet": 10, "lightning": 1, "split": 1}, "piercing", 10, "thousand_bolts", 3, 6],
+		["spread Lv12 thunder_hop + pierce", {"ricochet": 10, "lightning": 1, "pierce": 10}, "spread", 12, "thunder_hop", 15, 15],
+		["spread Lv12 thousand_bolts", {"ricochet": 10, "lightning": 1, "split": 1}, "spread", 12, "thousand_bolts", 14, 28],
+	]
+	for c in cases:
+		var b := _build_lv(c[1], c[2], c[3])
+		if String(b.combo.get("id", "")) != c[4]: return "%s: combo %s" % [c[0], b.combo]
+		var got := _press_counts(b, [60, 95, 130, 165])
+		if got != [c[5], c[6]]: return "%s: %d bounces / %d bolts per press, want %d / %d" % [c[0], got[0], got[1], c[5], c[6]]
+	return ""
+
+## Ricochet gem Lv10 (2 bounces) + ศรอสนีกระโดด on ศรกระจาย: 2 + 1 = 3 bounces (A → B → C → D, E never); on ศรทะลวง a
+## piercing arrow still bounces once from its first target, + 1 (A → B → C).
+func test_thunder_hop_ricochet_lv10_two_plus_one():
+	var r := ""
+	for c in [["spread", ["A", "B", "C", "D"]], ["piercing", ["A", "B", "C"]]]:
+		var b := _build_lv({"ricochet": 10, "lightning": 1}, c[0], 12)
+		if String(b.combo.get("id", "")) != "thunder_hop" or int(b.bounces) != 2: r = "setup %s: combo %s bounces %s" % [c[0], b.combo, b.bounces]
+		var ds := {"A": _dummy(Vector2(60, 0)), "B": _dummy(Vector2(60, 90)), "C": _dummy(Vector2(60, 180)), "D": _dummy(Vector2(60, 270)), "E": _dummy(Vector2(60, 360))}
+		if r == "":
+			var order := _direct_order(b, ds)
+			if order != c[1]: r = "%s ricochet Lv10 + thunder_hop: direct hits %s, want %s" % [c[0], order, c[1]]
+		_free(ds.values())
+		if r != "": break
+	return r
+
+## A bolt is a hit like any other: it gets the arrow's crit chance / crit multiplier (bounce arrows copy them, so the
+## 2nd bounce's bolt too) and leeches through the shooter (the press's leech, here the leech gem's 3 %).
+func test_bolt_can_crit_and_leeches():
+	var b := _build(["ricochet", "lightning", "leech"])
+	var r := "" if String(b.combo.get("id", "")) == "thunder_hop" and float(b.leech) > 0.0 else "setup: combo %s leech %s" % [b.combo, b.leech]
+	var sink := Sink.new()
+	var ds := {}
+	for k in ["A", "B", "C", "D1", "D2"]: ds[k] = CritDummy.new()
+	var at := {"A": Vector2(60, 0), "B": Vector2(60, 100), "C": Vector2(60, 170), "D1": Vector2(60, -110), "D2": Vector2(145, 100)}
+	for k in ds: ds[k].position = at[k] + Vector2(0, 14)
+	if r == "":
+		_spawned = []
+		var a := _arrow(Vector2.RIGHT, ds.values(), b, true, sink)
+		a.crit_chance = 1.0
+		a.crit_mult = 1.5
+		for i in 120: _step([a], [])
+		var am := float(b.arrow_mult)
+		var total := 0
+		for k in ds: total += ds[k].hits.size()
+		if ds.D1.hits.size() != 1 or ds.D2.hits.size() != 1: r = "setup: D1 / D2 took %d / %d bolts, want 1 / 1" % [ds.D1.hits.size(), ds.D2.hits.size()]
+		elif not is_equal_approx(float(ds.D2.hits[0][1]), am * 0.5): r = "the 2nd bounce's bolt mult %s, want %s × 0.50" % [ds.D2.hits[0][1], am]
+		elif ds.D1.crits[0] != [1.0, 1.5] or ds.D2.crits[0] != [1.0, 1.5]: r = "bolts got crit %s / %s, want the arrow's [1, 1.5]" % [ds.D1.crits[0], ds.D2.crits[0]]
+		elif not is_equal_approx(sink.got, total * float(b.leech)): r = "leech %s for %d hits, want %s (bolts leech too)" % [sink.got, total, total * float(b.leech)]
+		if r == "":
+			var before := sink.got
+			if a.bolts(ds.A.hurt_point(), 2, 0.5, [ds.A]) != 2: r = "bolts() hit fewer than 2"
+			elif not is_equal_approx(sink.got - before, 2 * float(b.leech)): r = "2 bolts leeched %s, want %s" % [sink.got - before, 2 * float(b.leech)]
+		_free([a] + _spawned)
+	_free(ds.values() + [sink])
 	return r

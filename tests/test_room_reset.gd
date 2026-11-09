@@ -463,24 +463,60 @@ func test_new_game_rerolls():
 	return r
 
 ## Owner 2026-11-09 "กันทุกห้อง": with every room guarded the rule must still be met in the real game. String.hash is
-## djb2, so for a bank of 2^k entries every room's entry moves by the same step with the seed: a guard can only fail
-## when the guarded rooms rule out every step (a bank of 2 with two rooms can). Real banks hold 64 entries and there
-## are fewer rooms than that, so a seed that repeats no room always exists: every room shown, many re-rolls in a row.
+## djb2 and room_seed hashes "<seed>:<id>", so a room's entry in a bank of 64 is (33^L × f(seed) + g(id)) mod 64, L the
+## length of ":<id>". Every real suffix is odd (":c0r0" 5, ":e0" / ":x1" 3) and 33² ≡ 1 (mod 64), so 33^L ≡ 33 for all:
+## every room's entry moves by the same step with the seed. Each guarded room rules out one value of f(seed) mod its
+## bank size, so a seed that repeats no room exists while (rooms with a bank) < the smallest bank (and a bank-less
+## room rules out one seed only). Review I3: the real rooms (data/rooms.json via RoomSet) and their real bank sizes
+## (PileBank, the smallest set of each room: e0 has one per monster set), every room shown, many re-rolls in a row.
 func test_guard_all_rooms_never_repeats_any_room():
-	var ids := ["c0r0", "c0r1", "c0r2", "c1r0", "c1r1", "c1r2", "c2r0", "c2r1", "c2r2", "e0", "c3r0", "c3r1", "c3r2", "c0r3", "c1r3", "c2r3", "c3r3", "x0"]
-	var n := 64
+	var ids: Array = Array(RoomSet.open().ids())
+	ids.sort()
+	if ids.size() < 2: return "setup: %d rooms in rooms.json" % ids.size()
+	var size := {}
+	var banked := 0
+	var smallest := 1 << 30
+	for id in ids:
+		var n := 0
+		for set in PileBank.data().get("rooms", {}).get(id, []):
+			var k: int = set["p"].size()
+			if k > 0: n = k if n == 0 else mini(n, k)
+		size[id] = n
+		if n > 1:
+			banked += 1
+			smallest = mini(smallest, n)
+	if banked == 0: return "setup: no room has a piles bank"
+	if banked >= smallest: return "%d rooms with a bank, smallest bank %d: re-roll guard can run out of seeds (B28)" % [banked, smallest]
 	var r := RoomReset.new()
 	var s := 4242
 	r.reroll_all(s)
-	for id in ids: r.mark_shown(id, s, n)
-	for k in 300:
+	for id in ids: r.mark_shown(id, s, size[id])
+	for k in 400:
 		var dest: String = ids[k % ids.size()]
 		var before := {}
-		for id in ids: before[id] = r.last_shown(id).entry
+		for id in ids: before[id] = r.last_shown(id)
 		var c := r.reroll_seed((s * 31 + k * 7919) & 0x7fffffff, dest, true)
+		if c == s: return "re-roll %d: the same pile seed %d" % [k, s]
 		for id in ids:
-			if posmod(MonsterPiles.room_seed(c, id), n) == int(before[id]): return "re-roll %d: %s shows entry %d again" % [k, id, before[id]]
+			var n: int = size[id]
+			if c == int(before[id].seed): return "re-roll %d: %s gets its last seed %d again" % [k, id, c]
+			if n > 1 and posmod(MonsterPiles.room_seed(c, id), n) == int(before[id].entry): return "re-roll %d: %s shows entry %d of %d again" % [k, id, before[id].entry, n]
 		r.reroll_all(c)
 		s = c
-		for id in ids: r.mark_shown(id, c, n)
+		for id in ids: r.mark_shown(id, c, size[id])
+	return ""
+
+## Review M1: when the guarded rooms rule out every seed (a bank of 2, two rooms last shown under seeds that pick
+## different entries for f(seed)), reroll_seed gives up after 4096 steps (with a warning) instead of looping on.
+func test_reroll_seed_gives_up_when_no_seed_is_free():
+	var r := RoomReset.new()
+	var s1 := 100
+	var s2 := 101
+	while posmod(MonsterPiles.room_seed(s2, "c1r1"), 2) == posmod(MonsterPiles.room_seed(s1, "c1r1"), 2): s2 += 1
+	r.mark_shown("c1r1", s1, 2)
+	r.mark_shown("c2r0", s2, 2)
+	r.reroll_all(s2)
+	var c := r.reroll_seed(500, "c1r1", true)
+	if c != (500 + 4096) & 0x7fffffff: return "gave seed %d, want the guard's last try %d" % [c, 500 + 4096]
+	if not (r.repeats("c1r1", c) or r.repeats("c2r0", c)): return "setup: seed %d repeats no room, so a free seed existed" % c
 	return ""
