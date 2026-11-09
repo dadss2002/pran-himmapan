@@ -97,6 +97,15 @@ var status := StatusEffects.new()
 const STATUS_FX_SCALE := 1.5
 var _burn_fx: FxSprite = null
 var _frost_fx: FxSprite = null
+## Owner 2026-11-09 (PixelFX decision B): the monster itself is tinted while burning (red-orange) or slowed
+## (ice-blue), as well as its PixelFX overlay; both at once: frost wins (one clear colour; the burn keeps its
+## flames and damage numbers). Visual only. TINT_AMOUNT = how far the body's colours go toward the tint (flash.gdshader).
+const BURN_TINT := Color("#ff5a1f")
+const FROST_TINT := Color("#6fd0ff")
+const TINT_AMOUNT := 0.6
+var _tint_shown := Color(0, 0, 0, 0)
+## true while a burn tick's damage goes through health (test_ground shows its number but no hit spark)
+var dot_tick := false
 
 func stats() -> Dictionary:
 	return with_elite(Balance.wolf(level))
@@ -255,10 +264,26 @@ func restore_kept(st: Dictionary) -> void:
 
 ## Flames / frost round the body while burning / slowed (Task 3f: PixelFX burning / frozen with the body cut out,
 ## drawn at STATUS_FX_SCALE like the PixelLab strips they replaced).
+## Task 3f review: under the PerfSaver (PerfSaver.active) the overlays are shed, the tint stays.
 func _update_status_fx() -> void:
+	_apply_tint(status_tint())
 	if not is_inside_tree(): return
-	_burn_fx = _toggle_fx(_burn_fx, "status_burn", status.is_burning() and is_alive())
-	_frost_fx = _toggle_fx(_frost_fx, "status_frost", status.is_slowed() and is_alive())
+	var shed := PerfSaver.active
+	_burn_fx = _toggle_fx(_burn_fx, "status_burn", status.is_burning() and is_alive() and not (shed and PerfSaver.decorative("status_burn")))
+	_frost_fx = _toggle_fx(_frost_fx, "status_frost", status.is_slowed() and is_alive() and not (shed and PerfSaver.decorative("status_frost")))
+
+## The body's status tint now: frost, else burn, else none (alpha 0). Dead monsters are never tinted.
+func status_tint() -> Color:
+	if not is_alive(): return Color(0, 0, 0, 0)
+	if status.is_slowed(): return FROST_TINT
+	if status.is_burning(): return BURN_TINT
+	return Color(0, 0, 0, 0)
+
+func _apply_tint(c: Color) -> void:
+	if c == _tint_shown or body == null or not (body.material is ShaderMaterial): return   # only when it changes
+	_tint_shown = c
+	body.material.set_shader_parameter("tint_color", Color(c.r, c.g, c.b))
+	body.material.set_shader_parameter("tint_amount", TINT_AMOUNT if c.a > 0.0 else 0.0)
 
 func _toggle_fx(fx: FxSprite, fx_name: String, on: bool) -> FxSprite:
 	if on and fx == null:
@@ -293,16 +318,23 @@ func _on_died() -> void:
 
 # ---------- simulation ----------
 
+## Status timers and the burn's damage (a DoT tick: dot_tick is set while it goes through health, so the test
+## ground shows its number without a hit spark), with the fire gem's leech.
+func tick_burn(delta: float) -> void:
+	var burn := status.tick(delta)
+	if burn <= 0: return
+	dot_tick = true
+	health.take_hit(burn, false)
+	dot_tick = false
+	if status.burn_leech > 0.0 and is_instance_valid(status.burn_source) and status.burn_source.has_method("leech_heal"):
+		status.burn_source.leech_heal(burn * status.burn_leech)
+
 func step(delta: float, hero: Hero) -> void:
 	if hero != null: _hero = hero
 	health.tick(delta)
 	if is_alive():
-		var burn := status.tick(delta)
-		if burn > 0:
-			health.take_hit(burn, false)
-			if status.burn_leech > 0.0 and is_instance_valid(status.burn_source) and status.burn_source.has_method("leech_heal"):
-				status.burn_source.leech_heal(burn * status.burn_leech)
-			if not is_alive(): return
+		tick_burn(delta)
+		if not is_alive(): return
 	_update_status_fx()
 	_flash = maxf(0.0, _flash - delta)
 	_bite_cd = maxf(0.0, _bite_cd - delta)

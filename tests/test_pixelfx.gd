@@ -33,7 +33,7 @@ func _frame(img: Image, e: Dictionary, i: int) -> Image:
 # ---------- manifest ----------
 
 ## Every entry: cell, frames, fps, anchor inside the cell, loop, its sheet file, and the sheet is exactly
-## columns x rows cells (PixelFX sheets <= 2048 px a side for phones; PixelLab's lunge_warning strip is 2058).
+## columns x rows cells, no side over 2048 px (phones' WebGL; review B19: lunge_warning was a 2058 px strip).
 func test_manifest_entries_are_valid():
 	var man := _man()
 	for id in man:
@@ -52,7 +52,7 @@ func test_manifest_entries_are_valid():
 		var rows := ceili(float(e.frames) / cols)
 		var want := Vector2i(cols * int(e.cell[0]), rows * int(e.cell[1]))
 		if Vector2i(tex.get_size()) != want: return "%s: sheet %s, want %s" % [id, tex.get_size(), want]
-		if e.has("pixelfx") and (want.x > 2048 or want.y > 2048): return "%s: sheet %s over 2048 px" % [id, want]
+		if want.x > 2048 or want.y > 2048: return "%s: sheet %s over 2048 px" % [id, want]
 	return ""
 
 ## The seven picks are PixelFX sheets with their metadata (id, commit a841596, the old sheet their palette came
@@ -88,20 +88,33 @@ func test_sheet_sizes_within_spec():
 		if float(e.cell[0]) * k > 2 * HERO_W or float(e.cell[1]) * k > 2 * HERO_W: return "%s cell %s too big" % [id, e.cell]
 	return ""
 
-## Recoloured from the old effect: the ramp handed to PixelFX is exactly the old sheet's colours (dark to light),
-## and the new sheet's mean hue (weighted by alpha x saturation; PixelFX's light brightens pixels past the ramp)
-## is within 35 degrees of the old one. Poison stays purple.
-func _hue(img: Image) -> float:
+## Recoloured from the old effect: the ramp handed to PixelFX is the old sheet's colours (dark to light), all of
+## them but the lightest post.ramp_drop (owner 2026-11-09: the hit spark less white). The new sheet's mean hue is
+## within 35 degrees of the old one and its colour strength is at least MIN_CHROMA[id]: both are taken from the
+## alpha-weighted colour wheel, every visible pixel weighted by its alpha, so white and pale pixels count (they
+## pull the strength down, as they wash the effect out on screen). Poison stays purple.
+## Strength (|sum of a x s x hue vector| / sum of a) measured on the shipped sheets: hit_spark 0.82 (c685661 0.32,
+## the "too white" one the owner sent back), crit 0.31 (owner: glare stays), mist 0.31, burn 0.73, frost 0.37,
+## pickup 0.16 (owner accepted ⑥ as it is; mostly white sparkles), warp 0.44 (c685661 0.29). The floors are those
+## less a margin: a guard against a re-export washing an effect out, and the owner's "less white" for ①.
+const MIN_CHROMA := {"hit_spark": 0.6, "crit_hit": 0.25, "poison_mist": 0.25, "status_burn": 0.6, "status_frost": 0.3,
+	"pickup_pop": 0.12, "warp_blink": 0.35}
+
+func _wheel(img: Image) -> Vector3:
 	var x := 0.0
 	var y := 0.0
+	var aw := 0.0
 	for py in img.get_height():
 		for px in img.get_width():
 			var c := img.get_pixel(px, py)
 			if c.a <= 0.0: continue
-			var w := c.a * c.s
-			x += w * cos(TAU * c.h)
-			y += w * sin(TAU * c.h)
-	return fposmod(rad_to_deg(atan2(y, x)), 360.0)
+			aw += c.a
+			x += c.a * c.s * cos(TAU * c.h)
+			y += c.a * c.s * sin(TAU * c.h)
+	return Vector3(fposmod(rad_to_deg(atan2(y, x)), 360.0), Vector2(x, y).length() / maxf(aw, 0.0001), aw)
+
+func _hue(img: Image) -> float:
+	return _wheel(img).x
 
 func test_palette_comes_from_the_old_effect():
 	var man := _man()
@@ -114,7 +127,9 @@ func test_palette_comes_from_the_old_effect():
 				var c := old.get_pixel(x, y)
 				if c.a >= 0.63: pal["#" + c.to_html(false)] = true
 		var ramp: Array = e.pixelfx.options.palette
-		if ramp.size() != pal.size(): return "%s: ramp %d colours, old sheet %d" % [id, ramp.size(), pal.size()]
+		var post = e.pixelfx.get("post")
+		var drop := int(post.get("ramp_drop", 0)) if post is Dictionary else 0
+		if ramp.size() != pal.size() - drop: return "%s: ramp %d colours, old sheet %d less %d" % [id, ramp.size(), pal.size(), drop]
 		var last := -1.0
 		for h in ramp:
 			if not pal.has(String(h)): return "%s: ramp colour %s not in %s" % [id, h, e.pixelfx.palette_from]
@@ -122,14 +137,19 @@ func test_palette_comes_from_the_old_effect():
 			if l < last: return "%s: ramp not dark to light" % id
 			last = l
 		var ho := _hue(old)
-		var hn := _hue(_img(e))
+		var wn := _wheel(_img(e))
+		var hn := wn.x
+		if wn.y < float(MIN_CHROMA[id]): return "%s: colour strength %.2f (min %.2f): too white / washed out" % [id, wn.y, MIN_CHROMA[id]]
 		var d := absf(fposmod(hn - ho + 180.0, 360.0) - 180.0)
 		if d > 35.0: return "%s: hue %.0f, old %.0f" % [id, hn, ho]
 		if id == "poison_mist" and (hn < 260.0 or hn > 340.0): return "poison mist hue %.0f is not purple" % hn
 	return ""
 
 ## ④ ⑤ sit on our monsters: the body is cut away. Round the feet (the middle of the body) every frame is empty,
-## and no frame has a solid upright figure: no column of 12+ opaque pixels in the middle third.
+## and no frame has a solid upright figure: no column of 12+ opaque pixels in the middle third. Review: an empty
+## sheet would pass that, so every frame must also show the effect: at least MIN_STATUS_PX pixels of alpha >= 0.5
+## (measured minimum: burn 24, frost 71).
+const MIN_STATUS_PX := 20
 func test_status_effects_have_no_body():
 	var man := _man()
 	for id in ["status_burn", "status_frost"]:
@@ -140,6 +160,8 @@ func test_status_effects_have_no_body():
 		var ay := int(e.anchor[1])
 		for i in int(e.frames):
 			var f := _frame(img, e, i)
+			var shown := _opaque(f)
+			if shown < MIN_STATUS_PX: return "%s frame %d: only %d visible pixels round the body (min %d)" % [id, i, shown, MIN_STATUS_PX]
 			for y in range(ay - 16, ay - 4):
 				for x in range(ax - 5, ax + 6):
 					if f.get_pixel(x, y).a > 0.0: return "%s frame %d: pixel at %d,%d on the body" % [id, i, x - ax, y - ay]
@@ -150,7 +172,119 @@ func test_status_effects_have_no_body():
 					if run >= 12: return "%s frame %d: a solid column at x %d" % [id, i, x]
 	return ""
 
+func _opaque(f: Image, a_min := 0.5) -> int:
+	var n := 0
+	for y in f.get_height():
+		for x in f.get_width():
+			if f.get_pixel(x, y).a >= a_min: n += 1
+	return n
+
+## ⑦ owner 2026-11-09: only the green sparkle, no hero ghost. The hero's idle silhouette (idle_south frame 0, his
+## feet on the warp's anchor) is laid over every frame; inside its box (+4 px) the frame's pixels of alpha >= 0.5
+## must not take his shape: overlap / union with the silhouette (IoU) at most MAX_HERO_IOU. A sparkle ball over his
+## chest covers part of him but spills past his outline and leaves the rest; a ghost matches it. Measured: the
+## c685661 sheet (blink-out on the hero's own silhouette) 0.79 at its frame 3 (0.61, 0.60 in others); the
+## sparkle-only sheet 0.31 at most (its first frame, the spray just after the burst).
+const MAX_HERO_IOU := 0.45
+
+func test_warp_sheet_has_no_hero_silhouette():
+	var e: Dictionary = _man().warp_blink
+	if String(e.pixelfx.options.get("actor", "")).contains("hero idle"): return "warp still rendered on the hero's silhouette"
+	var hm: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/hero/manifest.json"))
+	var hero: Image = (load("res://assets/hero/idle_south.png") as Texture2D).get_image()
+	var hc := Vector2i(int(hm.cell.idle[0]), int(hm.cell.idle[1]))
+	var ha := Vector2i(int(hm.anchor.idle[0]), int(hm.anchor.idle[1]))
+	var body := {}
+	var lo := Vector2i(9999, 9999)
+	var hi := Vector2i(-9999, -9999)
+	for y in hc.y:
+		for x in hc.x:
+			if hero.get_pixel(x, y).a <= 0.16: continue
+			var p := Vector2i(x, y) - ha
+			body[p] = true
+			lo = Vector2i(mini(lo.x, p.x), mini(lo.y, p.y))
+			hi = Vector2i(maxi(hi.x, p.x), maxi(hi.y, p.y))
+	var img := _img(e)
+	var anc := Vector2i(int(e.anchor[0]), int(e.anchor[1]))
+	var cell := Vector2i(int(e.cell[0]), int(e.cell[1]))
+	for i in int(e.frames):
+		var f := _frame(img, e, i)
+		var both := 0
+		var fx := 0
+		for y in range(lo.y - 4, hi.y + 5):
+			for x in range(lo.x - 4, hi.x + 5):
+				var q := Vector2i(x, y) + anc
+				if q.x < 0 or q.y < 0 or q.x >= cell.x or q.y >= cell.y or f.get_pixel(q.x, q.y).a < 0.5: continue
+				fx += 1
+				if body.has(Vector2i(x, y)): both += 1
+		var iou := float(both) / float(body.size() + fx - both)
+		if iou > MAX_HERO_IOU: return "warp frame %d takes the hero's shape (IoU %.2f, max %.2f)" % [i, iou, MAX_HERO_IOU]
+	return ""
+
+## Review: no frame is made that the game never shows. The poison mist lives cloud_time (balance, 2.0 s) and its
+## sheet holds that much (within a frame); the warp sparkle lasts the warp fade-out (FADE_OUT, 0.5 s); the hit
+## spark, crit and warp end on a frame with something to see (>= 24 pixels of alpha >= 0.5, not a few stray dots).
+func test_sheets_hold_only_what_is_shown():
+	var man := _man()
+	var mist: Dictionary = man.poison_mist
+	var ct := Balance.num("monsters.shroom.cloud_time")
+	var mt := float(mist.frames) / float(mist.fps)
+	if absf(mt - ct) > 1.0 / float(mist.fps) + 0.001: return "mist sheet %.2f s, the cloud lives %.2f s" % [mt, ct]
+	var tg = load("res://scripts/dev/test_ground.gd")
+	var fade_out: float = tg.FADE_OUT
+	var wb: Dictionary = man.warp_blink
+	var wt := float(wb.frames) / float(wb.fps)
+	if absf(wt - fade_out) > 1.0 / float(wb.fps) + 0.001: return "warp sparkle %.2f s, the fade-out %.2f s" % [wt, fade_out]
+	for id in ["hit_spark", "crit_hit", "warp_blink"]:        # ⑥ pickup left as the owner accepted it (fades out)
+		var e: Dictionary = man[id]
+		var n := _opaque(_frame(_img(e), e, int(e.frames) - 1))
+		if n < 24: return "%s: last frame only %d visible pixels (stray dots)" % [id, n]
+	return ""
+
+## ① owner 2026-11-09: stronger orange/gold, bigger, less white. Bigger than the c685661 spark (60x50) and still
+## smaller than the crit; at most 5 % of its visible pixels near-white (c685661: about 40 %, now 0); its colour is orange/gold
+## (alpha-weighted hue 25-50 degrees).
+func test_hit_spark_is_stronger_orange():
+	var man := _man()
+	var e: Dictionary = man.hit_spark
+	var c: Dictionary = man.crit_hit
+	if int(e.cell[0]) * int(e.cell[1]) <= 60 * 50: return "hit spark cell %s not bigger than the old 60x50" % [e.cell]
+	if int(e.cell[0]) > int(c.cell[0]): return "hit spark %d px wide, crit %d" % [e.cell[0], c.cell[0]]
+	var img := _img(e)
+	var white := 0.0
+	var all := 0.0
+	for y in img.get_height():
+		for x in img.get_width():
+			var p := img.get_pixel(x, y)
+			if p.a < 0.25: continue
+			all += p.a
+			if p.s < 0.2 and p.v > 0.88: white += p.a
+	if white / all > 0.05: return "hit spark %d %% near-white" % roundi(100 * white / all)
+	var h := _wheel(img).x
+	if h < 25.0 or h > 50.0: return "hit spark hue %.0f, want orange/gold 25-50" % h
+	return ""
+
 # ---------- FxSprite ----------
+
+## Review: a sheet is loaded once and its SpriteFrames made once per effect id; every sprite of that effect shares
+## them (the cache keeps the texture alive). Two spawns: same SpriteFrames, same atlas, no second load.
+func test_fx_frames_are_cached():
+	FxSprite.clear_cache()
+	var a := FxSprite.make("hit_spark")
+	var loads := FxSprite.sheet_loads
+	var b := FxSprite.make("hit_spark")
+	var c := FxSprite.make("crit_hit")
+	var r := ""
+	if a.sprite_frames != b.sprite_frames: r = "two hit sparks with their own SpriteFrames"
+	elif (a.sprite_frames.get_frame_texture("hit_spark", 0) as AtlasTexture).atlas != (b.sprite_frames.get_frame_texture("hit_spark", 0) as AtlasTexture).atlas: r = "atlas not shared"
+	elif FxSprite.sheet_loads != loads + 1: r = "%d sheet loads for a second hit spark and a crit (want 1, the crit)" % (FxSprite.sheet_loads - loads)
+	elif a.sprite_frames == c.sprite_frames: r = "crit shares the hit spark's frames"
+	a.free()
+	b.free()
+	c.free()
+	if r == "" and FxSprite.make_frames("hit_spark") == null: r = "cache dropped the frames when its sprites were freed"
+	return r
+
 
 ## FxSprite reads "sheet" and "columns": frame i is cell (i % columns, i / columns) of that file.
 func test_fx_sprite_reads_sheet_and_grid():
@@ -323,9 +457,162 @@ func test_warp_blinks_the_hero_out():
 	await tree.process_frame
 	return r
 
+## Review: every one-shot effect on the stage belongs to the room it played in: a room change (exit, waypoint,
+## new room) frees hit sparks, crits, pickups, level-ups and chain zaps; kept effects (the lock ring) stay.
+func test_room_change_frees_one_shots():
+	var g = await _ground()
+	var r := ""
+	for id in ["hit_spark", "crit_hit", "pickup_pop", "level_up", "warp_blink"]:
+		var f: FxSprite = g._fx(id, g.hero.global_position)
+		if f: f.speed_scale = 0.01           # still playing at the room change
+	var z := FxSprite.make("chain_zap")
+	g.world.add_child(z)
+	z.play("chain_zap")
+	var before := _one_shots(g)
+	if before < 6: r = "setup: %d one-shots" % before
+	g.go_to("c1r0", "", false)
+	if r == "" and _one_shots(g) != 0: r = "%d one-shot effects left after the room change" % _one_shots(g)
+	elif r == "" and not is_instance_valid(g.lock_ring): r = "the lock ring was freed"
+	g.queue_free()
+	await tree.process_frame
+	return r
+
+func _one_shots(g: Node2D) -> int:
+	var n := 0
+	for c in g.stage.get_children() + g.world.get_children():
+		if c is FxSprite and is_instance_valid(c) and not c.is_queued_for_deletion() and not c.keep: n += 1
+	return n
+
+## Review: a burn tick is not a blow: health.damaged fires for it (its number shows), but no directional hit spark
+## or crit flies off the monster as if an arrow had hit it.
+func test_burn_ticks_show_no_hit_spark():
+	var g = await _ground()
+	g.go_to("c1r0", "", false)
+	for p in g.packs: p.process_mode = Node.PROCESS_MODE_DISABLED
+	var w: Wolf = g.packs[0].wolves[0]
+	w.health.setup(100000)
+	var numbers := [0]
+	w.health.damaged.connect(func(_a, _c): numbers[0] += 1)
+	w.apply_status("burn", 5.0)
+	for i in 200:
+		w.tick_burn(1.0 / 60.0)                   # the burn part of Wolf.step (its pack is stopped)
+		if numbers[0] >= 2: break
+	var r := ""
+	if numbers[0] < 2: r = "setup: %d burn ticks" % numbers[0]
+	elif not _fx_in(g, "hit_spark").is_empty() or not _fx_in(g, "crit_hit").is_empty(): r = "a burn tick spawned %d hit sparks / %d crits" % [_fx_in(g, "hit_spark").size(), _fx_in(g, "crit_hit").size()]
+	if r == "":
+		g._on_wolf_hit(w, 5, false)               # a real blow still sparks
+		if _fx_in(g, "hit_spark").size() != 1: r = "a blow after the burn ticks: %d sparks" % _fx_in(g, "hit_spark").size()
+	g.queue_free()
+	await tree.process_frame
+	return r
+
+## Review: under load PerfSaver also sheds the decorative extras: status overlays (the tint stays, so the status is
+## still readable), the crit glare (a hit spark instead), the warp sparkle; never gameplay telegraphs (lunge
+## warning, the poison cloud hazard) nor the plain hit spark.
+func test_saver_sheds_extras_not_telegraphs():
+	for id in ["roll_dust", "pickup_pop", "status_burn", "status_frost", "crit_hit", "warp_blink"]:
+		if not PerfSaver.decorative(id): return "%s not shed by the saver" % id
+	for id in ["lunge_warning", "poison_mist", "hit_spark", "level_up", "warp_ring", "lock_on", "chain_zap"]:
+		if PerfSaver.decorative(id): return "the saver sheds %s" % id
+	if PerfSaver.fallback("crit_hit") != "hit_spark" or PerfSaver.fallback("pickup_pop") != "": return "fallbacks wrong"
+	var g = await _ground()
+	g.go_to("c1r0", "", false)
+	for p in g.packs: p.process_mode = Node.PROCESS_MODE_DISABLED
+	g.saver.on = true
+	g.apply_saver()
+	var w: Wolf = g.packs[0].wolves[0]
+	var r := ""
+	g.hero.global_position = w.global_position + Vector2(-60, 0)
+	g._on_wolf_hit(w, 9, true)
+	if _fx_in(g, "crit_hit").size() != 0 or _fx_in(g, "hit_spark").size() != 1: r = "saver crit: %d crits, %d sparks (want 0, 1)" % [_fx_in(g, "crit_hit").size(), _fx_in(g, "hit_spark").size()]
+	if r == "":
+		w.apply_status("burn", 1.0)
+		w._update_status_fx()
+		if w._burn_fx != null: r = "burning overlay shown with the saver on"
+		elif w.status_tint().a <= 0.0: r = "no tint with the saver on (status unreadable)"
+	if r == "":
+		g.saver.on = false
+		g.apply_saver()
+		w._update_status_fx()
+		if w._burn_fx == null: r = "burning overlay not back after the saver"
+	if r == "":
+		g.saver.on = true
+		g.apply_saver()
+		w._update_status_fx()
+		if w._burn_fx != null: r = "overlay kept when the saver came on mid-burn"
+	if r == "":
+		g.warp_through(g.warps[0])
+		if not _fx_in(g, "warp_blink").is_empty(): r = "warp sparkle shown with the saver on"
+		elif not g.warping: r = "saver stopped the warp itself"
+	g.queue_free()
+	await tree.process_frame
+	if PerfSaver.active: return "PerfSaver.active left on after the test ground went"
+	return r
+
+## Owner 2026-11-09 (B): a burning monster is tinted red-orange, a slowed one ice-blue, as long as the status lasts;
+## both at once: frost wins (one clear colour; the burn still shows its flames and numbers). Off when the status
+## ends, the monster dies or comes back.
+func test_status_tints_the_monster():
+	var w: Wolf = load("res://scenes/wolf.tscn").instantiate()
+	tree.root.add_child(w)
+	w.setup()
+	var mat: ShaderMaterial = w.body.material
+	var r := ""
+	if _amt(mat) != 0.0: r = "tinted with no status"
+	w.apply_status("burn", 1.0)
+	w._update_status_fx()
+	if r == "" and not _tint_is(mat, Wolf.BURN_TINT): r = "burning: tint %s" % _tint_of(mat)
+	w.apply_status("slow")
+	w._update_status_fx()
+	if r == "" and not _tint_is(mat, Wolf.FROST_TINT): r = "burning + slowed: tint %s (frost wins)" % _tint_of(mat)
+	w.status.slow_left = 0.0
+	w._update_status_fx()
+	if r == "" and (not w.status.is_burning() or not _tint_is(mat, Wolf.BURN_TINT)): r = "slow ended, burn left: tint %s" % _tint_of(mat)
+	w.status.clear()
+	w._update_status_fx()
+	if r == "" and _amt(mat) != 0.0: r = "tint left after the status ended"
+	w.apply_status("slow")
+	w._update_status_fx()
+	w.health.take_hit(999999, false)
+	if r == "" and _amt(mat) != 0.0: r = "tint left on a dead monster"
+	if r == "" and Color(Wolf.BURN_TINT).h > 0.12: r = "burn tint %s is not red-orange" % Wolf.BURN_TINT
+	if r == "" and (Color(Wolf.FROST_TINT).h < 0.5 or Color(Wolf.FROST_TINT).h > 0.6): r = "frost tint %s is not ice-blue" % Wolf.FROST_TINT
+	w.queue_free()
+	await tree.process_frame
+	return r
+
+func _amt(mat: ShaderMaterial) -> float:
+	var v = mat.get_shader_parameter("tint_amount")
+	return 0.0 if v == null else float(v)
+
+func _tint_of(mat: ShaderMaterial) -> String:
+	return "%s x %.2f" % [mat.get_shader_parameter("tint_color"), _amt(mat)]
+
+func _tint_is(mat: ShaderMaterial, c: Color) -> bool:
+	var t: Color = mat.get_shader_parameter("tint_color")
+	return _amt(mat) > 0.2 and Color(t.r, t.g, t.b).is_equal_approx(Color(c.r, c.g, c.b))
+
+## Review: the poison cloud no longer vanishes in one frame: its mist and disc fade out over the last
+## HazardCloud.FADE s (visual only: the hazard is the same size, time and dose).
+func test_mist_fades_out_at_the_end():
+	var c = load("res://scripts/monsters/hazard_cloud.gd").new()
+	c.setup(Vector2(100, 100), 32.0, 2.0, 1, 3.0, null)
+	var fade: float = c.FADE
+	var r := ""
+	if fade < 0.2 or fade > 0.4: r = "fade %.2f s (want ~0.3)" % fade
+	c.step(2.0 - fade - 0.05)
+	if r == "" and absf(c.modulate.a - 1.0) > 0.001: r = "faded %.2f before its last %.2f s" % [c.modulate.a, fade]
+	c.step(fade * 0.5 + 0.05)
+	if r == "" and (c.modulate.a < 0.3 or c.modulate.a > 0.7): r = "half way through the fade alpha %.2f" % c.modulate.a
+	if r == "" and (c.time <= 0.0 or c.is_queued_for_deletion()): r = "cloud gone early"
+	c.free()
+	return r
+
 # ---------- licence ----------
 
-## MIT notice kept (LICENSE + NOTICE), in the export, and a line in the game's credits; no Patch Pixel font.
+## MIT notice kept (LICENSE + NOTICE), in the export, and a line in the game's credits; no Patch Pixel font. The web
+## export ships the licence, CREDITS.md and the file it points to (assets/audio/CREDITS.md).
 func test_licence_and_credits():
 	if not FileAccess.file_exists(LICENCE): return "no " + LICENCE
 	var t := FileAccess.get_file_as_string(LICENCE)
@@ -337,7 +624,14 @@ func test_licence_and_credits():
 	for s in ["PixelFX", "MIT", "assets/fx/PIXELFX_LICENSE.txt", "Kenney"]:
 		if not c.contains(s): return "credits lack '%s'" % s
 	var cfg := FileAccess.get_file_as_string("res://export_presets.cfg")
-	if not cfg.contains("assets/fx/PIXELFX_LICENSE.txt"): return "licence not in the export include_filter"
+	var inc := ""
+	for line in cfg.split("\n"):
+		if line.begins_with("include_filter="): inc = line
+	if inc == "": return "no include_filter in export_presets.cfg"
+	var files := []
+	for f in inc.trim_prefix("include_filter=").trim_prefix("\"").trim_suffix("\"").split(","): files.append(f.strip_edges())
+	for f in ["assets/fx/PIXELFX_LICENSE.txt", "CREDITS.md", "assets/audio/CREDITS.md"]:
+		if not f in files: return "%s not in the export include_filter %s" % [f, files]
 	for d in ["res://assets/fonts", "res://assets/fx"]:
 		for f in DirAccess.get_files_at(d):
 			if f.to_lower().contains("patch"): return "Patch font file %s/%s" % [d, f]

@@ -9,15 +9,23 @@ and then post-processed here (no drawing by hand):
   - status effects (burning, frozen) get a monster-shaped actor (the feet-aligned average silhouette of every
     monster pose in assets/, instead of PixelFX's stock character) and every pixel on that body is cut away,
     so only flames / frost round the edges remain and our own monster sprite shows through;
-  - warp (blink-out) gets the hero's own silhouette (idle south) as its actor;
+  - warp (blink-out): owner 2026-11-09 wants only the green sparkle, no hero ghost, so its actor is an invisible
+    chest-high box (empty mask: no lit body, outline, squeezed figure or afterimage; the burst comes out of the
+    chest as a ball), trimmed to the 0.5 s the warp fade shows;
+  - owner 2026-11-09 for the hit spark: stronger orange/gold, bigger, less white: the ramp leaves out the old
+    sheet's lightest colours (ramp_drop), PixelFX's hard-coded white is recoloured (white_to / pale_to) and the
+    frames are enlarged (scale, nearest, about the anchor);
+  - one-shot tails that are only stray dots are dropped (tail_px), loops can be trimmed to what the game shows (t0/t1);
   - crop to a box round the anchor (crit <= 2x the 48 px hero, poison mist about the old mist's width), with the
     alpha eased out over the last EDGE px wherever the box cuts the effect, then a grid sheet <= 2048 px a side.
 Writes assets/fx/pfx_<name>.png and the manifest entry <name> (with "sheet" and "pixelfx" metadata). The old
 PixelLab entry is kept as "pixellab_<name>" (sheet <name>.png) when <name> was a PixelLab effect.
 
+The checkout must be at COMMIT (checked with git; the script stops otherwise).
+
 Usage: python3 -I tools/pixelfx_export.py --pixelfx /path/to/pixelfx-checkout [--only name,...] [--work DIR]
 """
-import argparse, json, os, subprocess, sys, tempfile
+import argparse, colorsys, json, os, subprocess, sys, tempfile
 from PIL import Image
 
 COMMIT = "a841596"
@@ -36,15 +44,34 @@ def old_palette(fx_dir, name):
 
 # name: what the game calls; old: the PixelLab effect whose palette / fps it takes; point: the PixelFX-space
 # point (from its origin) that sits on the node origin; box: crop box round that point (x0, y0, x1, y1).
+# Optional: ramp_drop (leave the old sheet's N lightest colours out of the ramp), white_to / pale_to (recolour
+# near-white / pale pixels, see recolour), scale (nearest enlargement about the anchor point, box in scaled px),
+# tail_px (drop trailing one-shot frames with fewer opaque pixels), t0 / t1 (keep frames in [t0, t1] s, loops too).
 EFFECTS = {
-    "hit_spark":    dict(id="impacts/hit-spark",    old="hit_spark",    fps=16, opts={"height": 12}, point=(0, -12), box=(-32, -34, 32, 16)),
-    "crit_hit":     dict(id="impacts/crit-hit",     old="hit_spark",    fps=16, opts={"height": 12}, point=(0, -12), box=(-48, -40, 48, 16), edge=16),
-    "poison_mist":  dict(id="nature/poison-cloud",  old="poison_mist",  fps=14, opts={"spread": 0.34}, point=(0, 0), box=(-44, -44, 44, 10)),
+    "hit_spark":    dict(id="impacts/hit-spark",    old="hit_spark",    fps=16, opts={"height": 12}, point=(0, -12), box=(-36, -44, 52, 20),
+                         ramp_drop=3, white_to="#ffc23d", pale_to="#f08a24", scale=1.5, tail_px=24),
+    "crit_hit":     dict(id="impacts/crit-hit",     old="hit_spark",    fps=16, opts={"height": 12}, point=(0, -12), box=(-48, -40, 48, 16), edge=16,
+                         tail_px=24),
+    # the hazard cloud lives balance monsters.<kind>.cloud_time = 2.0 s: only its first 2.0 s (28 frames) are shown
+    "poison_mist":  dict(id="nature/poison-cloud",  old="poison_mist",  fps=14, opts={"spread": 0.34}, point=(0, 0), box=(-44, -44, 44, 10),
+                         t1=27 / 14),
     "status_burn":  dict(id="status/burning",       old="status_burn",  fps=15, actor="monster", cut=True, point=(0, 0), box=(-36, -70, 36, 10)),
     "status_frost": dict(id="status/frozen",        old="status_frost", fps=14, actor="monster", cut=True, cut_dx=1, point=(0, 0), box=(-28, -60, 28, 10)),
     "pickup_pop":   dict(id="pickups/collect-burst", old="pickup_pop",  fps=15, point=(0, -30), box=(-36, -36, 36, 34)),
-    "warp_blink":   dict(id="arcane/blink-out",     old="warp_ring",    fps=14, actor="hero", point=(0, 0), box=(-40, -72, 40, 12), t0=0.13, t1=1.25),
+    # the warp fade-out (test_ground FADE_OUT) is 0.5 s: 7 frames at 14 fps from just after the burst (PixelFX POP
+    # = 0.52 s; its first frame at 0.57 s is a solid ball over the hero's head, so the sheet starts one frame later)
+    "warp_blink":   dict(id="arcane/blink-out",     old="warp_ring",    fps=14, actor="spark", point=(0, 0), box=(-48, -64, 48, 12),
+                         t0=9 / 14, t1=15 / 14, white_to="#86f07a"),
 }
+
+def check_commit(pfx_dir):
+    """The PixelFX checkout must be the commit the licence notice and manifest name."""
+    try:
+        head = subprocess.run(["git", "-C", pfx_dir, "rev-parse", "--short=%d" % len(COMMIT), "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        sys.exit("pixelfx_export: cannot read the PixelFX checkout's commit (%s)" % e)
+    if head != COMMIT:
+        sys.exit("pixelfx_export: PixelFX checkout is at %s, want %s (check out %s first)" % (head, COMMIT, COMMIT))
 
 def _packed(r, g, b):
     v = (255 << 24) | (b << 16) | (g << 8) | r
@@ -90,6 +117,35 @@ def monster_actor(root, thresh=0.7, k=1.0 / STATUS_FX_SCALE):
     return {"mask": {"w": w, "h": h, "data": data}, "pixels": [grey if v else 0 for v in data],
             "x": x0 - FX, "y": y0 - FY, "w": w, "h": h, "k": 2, "head": [0, y0 - FY], "chest": [0, y0 - FY + h // 2]}
 
+def spark_actor(w=8, h=8, chest=-26):
+    """An invisible actor for the warp sparkle: a box round the hero's chest with an empty mask and no pixels, so
+    blink-out draws no lit body, outline, squeezed figure or afterimage, and bursts out of the chest as a ball."""
+    y0 = chest - h // 2
+    return {"mask": {"w": w, "h": h, "data": [0] * (w * h)}, "pixels": [0] * (w * h), "x": -w // 2, "y": y0, "w": w, "h": h,
+            "k": 2, "head": [0, y0], "chest": [0, chest]}
+
+def recolour(f, white_to=None, pale_to=None):
+    """Owner 2026-11-09: less white. Near-white pixels (saturation < 0.2, value > 0.88; PixelFX draws cores, ray
+    roots and sparks in hard-coded white, and its light brightens pixels to white) take white_to; pale ones
+    (saturation < 0.45, value > 0.9) take pale_to. Alpha is kept."""
+    if not white_to and not pale_to: return f
+    hx = lambda c: tuple(int(c[i:i + 2], 16) for i in (1, 3, 5))
+    w = hx(white_to) if white_to else None
+    q = hx(pale_to) if pale_to else None
+    f = f.copy(); px = f.load()
+    for y in range(f.size[1]):
+        for x in range(f.size[0]):
+            r, g, b, a = px[x, y]
+            if a == 0: continue
+            _, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+            if w and s < 0.2 and v > 0.88: px[x, y] = w + (a,)
+            elif q and s < 0.45 and v > 0.9: px[x, y] = q + (a,)
+    return f
+
+def opaque_px(f, a_min=128):
+    a_ = f.getchannel("A")
+    return sum(1 for a in (a_.get_flattened_data() if hasattr(a_, "get_flattened_data") else a_.getdata()) if a >= a_min)
+
 def hero_actor(root):
     """The hero, idle facing south, frame 0, feet on his anchor: his own silhouette and colours."""
     m = json.load(open(os.path.join(root, "assets/hero/manifest.json")))
@@ -134,15 +190,15 @@ def render(pfx_dir, cfg, opts, work):
 def export(root, pfx_dir, name, cfg, work, actors):
     fx_dir = os.path.join(root, "assets/fx")
     pal = old_palette(fx_dir, cfg["old"])
+    if cfg.get("ramp_drop"): pal = pal[:-cfg["ramp_drop"]]
     opts = dict(cfg.get("opts", {})); opts["palette"] = pal
     if cfg.get("actor"): opts["actor"] = actors[cfg["actor"]]
     frames, pm = render(pfx_dir, cfg, opts, work)
     fw, fh = pm["frameSize"]; ox, oy = pm["pivot"]; fps = pm["fps"]; loop = pm["loop"]
     # trim (one-shots only)
     t0, t1 = cfg.get("t0", 0.0), cfg.get("t1", 1e9)
-    if not loop:
-        frames = [f for i, f in enumerate(frames) if t0 - 1e-6 <= i / fps <= t1 + 1e-6]
-    frames = [unpremultiply(f) for f in frames]
+    frames = [f for i, f in enumerate(frames) if t0 - 1e-6 <= i / fps <= t1 + 1e-6]
+    frames = [recolour(unpremultiply(f), cfg.get("white_to"), cfg.get("pale_to")) for f in frames]
     # cut the body (status effects): every pixel of the actor's mask, widened by cut_dx for a shivering body
     if cfg.get("cut"):
         A = actors[cfg["actor"]]; mw, mh, md = A["mask"]["w"], A["mask"]["h"], A["mask"]["data"]
@@ -162,6 +218,14 @@ def export(root, pfx_dir, name, cfg, work, actors):
                 if px[x, y][3] < ALPHA_FLOOR: px[x, y] = (0, 0, 0, 0)
     if not loop:
         while len(frames) > 1 and frames[-1].getbbox() is None: frames.pop()
+    k = cfg.get("scale", 1)
+    if k != 1:   # enlarge about the anchor point: it stays on a whole pixel, the rest is nearest-neighbour
+        ax, ay = ox + cfg["point"][0], oy + cfg["point"][1]
+        nw, nh = round(fw * k), round(fh * k)
+        nax, nay = round(ax * k), round(ay * k)
+        frames = [f.resize((nw, nh), Image.NEAREST) for f in frames]
+        ox, oy = nax - cfg["point"][0], nay - cfg["point"][1]
+        fw, fh = nw, nh
     # crop: union bbox of the frames, inside the box round the anchor point
     px0, py0 = ox + cfg["point"][0], oy + cfg["point"][1]
     bx0, by0, bx1, by1 = (px0 + cfg["box"][0], py0 + cfg["box"][1], px0 + cfg["box"][2], py0 + cfg["box"][3])
@@ -188,20 +252,25 @@ def export(root, pfx_dir, name, cfg, work, actors):
                         u = (d + 0.5) / E
                         px[x, y] = (r, g, b, int(round(a * u * u * (3 - 2 * u))))
         out.append(c)
+    if not loop:   # tail frames of only stray dots (counted in the cropped cell, as the game shows it)
+        while len(out) > 1 and opaque_px(out[-1]) < cfg.get("tail_px", 1): out.pop()
+        frames = frames[:len(out)]
     n = len(out)
-    cols = max(1, min(n, MAX_SIDE // cw))
-    rows = (n + cols - 1) // cols
+    rows = (n + max(1, MAX_SIDE // cw) - 1) // max(1, MAX_SIDE // cw)   # fewest rows that fit 2048 px across,
+    cols = (n + rows - 1) // rows                                        # then the frames spread evenly (no empty row tail)
     assert rows * ch <= MAX_SIDE, "%s: sheet too tall" % name
     sheet = Image.new("RGBA", (cols * cw, rows * ch), (0, 0, 0, 0))
     for i, c in enumerate(out): sheet.paste(c, ((i % cols) * cw, (i // cols) * ch))
     sheet_name = "pfx_%s.png" % name
     sheet.save(os.path.join(fx_dir, sheet_name), optimize=True)
     shown_opts = {k: v for k, v in opts.items() if k != "actor"}
-    if cfg.get("actor"): shown_opts["actor"] = {"monster": "average monster silhouette (assets/monsters + assets/wolf poses)", "hero": "hero idle_south frame 0"}[cfg["actor"]]
+    if cfg.get("actor"): shown_opts["actor"] = {"monster": "average monster silhouette (assets/monsters + assets/wolf poses)", "hero": "hero idle_south frame 0",
+                                                "spark": "invisible 8x8 box at the hero's chest (no figure drawn)"}[cfg["actor"]]
     entry = {"cell": [cw, ch], "frames": n, "fps": fps, "anchor": [px0 - cx0, py0 - cy0], "loop": loop, "columns": cols,
              "sheet": sheet_name,
              "pixelfx": {"id": cfg["id"], "commit": COMMIT, "options": shown_opts, "palette_from": cfg["old"] + ".png",
-                         "trim_s": [t0, min(t1, (len(frames) - 1) / fps + t0)] if not loop else None,
+                         "trim_s": [t0, min(t1, (len(frames) - 1) / fps + t0)] if (not loop or "t1" in cfg) else None,
+                         "post": {k_: cfg[k_] for k_ in ("ramp_drop", "white_to", "pale_to", "scale", "tail_px") if k_ in cfg} or None,
                          "body_cut": bool(cfg.get("cut")), "crop": [cx0 - px0, cy0 - py0, cx1 - px0, cy1 - py0]}}
     return entry
 
@@ -211,9 +280,10 @@ def main():
     ap.add_argument("--only", default="")
     ap.add_argument("--work", default="")
     a = ap.parse_args()
+    check_commit(a.pixelfx)
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     work = a.work or tempfile.mkdtemp(prefix="pixelfx_")
-    actors = {"monster": monster_actor(root), "hero": hero_actor(root)}
+    actors = {"monster": monster_actor(root), "hero": hero_actor(root), "spark": spark_actor()}
     mpath = os.path.join(root, "assets/fx/manifest.json")
     man = json.load(open(mpath))
     names = [n for n in EFFECTS if not a.only or n in a.only.split(",")]

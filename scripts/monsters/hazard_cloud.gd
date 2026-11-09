@@ -1,6 +1,9 @@
 extends Node2D
 ## Poison mist left where a poison mushroom died: for `time` seconds, a hero inside `radius` is
-## poisoned (once per cloud).
+## poisoned (once per cloud). Task 3f review: the mist and disc fade out over the last FADE s instead of
+## vanishing in one frame (visual only: radius, time and dose are unchanged).
+
+const FADE := 0.3
 
 var radius := 32.0
 var time := 2.0
@@ -35,6 +38,7 @@ func _physics_process(delta: float) -> void:
 
 func step(delta: float) -> void:
 	time -= delta
+	modulate.a = clampf(time / FADE, 0.0, 1.0)
 	if not _hit and hero and is_instance_valid(hero) and hero.global_position.distance_to(position) <= radius:
 		_hit = true
 		hero.apply_poison(per_tick, poison_time)

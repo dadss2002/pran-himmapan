@@ -53,7 +53,7 @@ const WAYPOINT_ARRIVAL := "@waypoint"     # go_to(id, WAYPOINT_ARRIVAL): land ne
 var fog: FogGrid
 var cam: Camera2D
 var fade: ColorRect
-const FADE_OUT := 0.25           # M4c §1 approved: screen goes dark, then the new room
+const FADE_OUT := 0.5            # M4c §1: screen goes dark, then the new room (owner 2026-11-09: 0.5 s, was 0.25, so the warp sparkle shows)
 const FADE_IN := 0.25
 const CALM := 1.0                # the new room's monsters ignore the hero this long after arrival
 ## M4d follow-up 3 (owner): the fade-in always plays its full FADE_IN. A slow room build makes the next frame's
@@ -82,7 +82,7 @@ var loot_rng := RandomNumberGenerator.new()
 var _built := false
 var _bag_full_cd := 0.0
 var lock_ring: FxSprite
-var _warp_fx: FxSprite = null        # Task 3f: the hero's blink-out while the screen fades (freed by go_to)
+var _warp_fx: FxSprite = null        # Task 3f: the warp sparkle while the screen fades (freed by go_to)
 var save_path := SaveGame.PATH
 var settings_path := GameSettings.PATH   # the HUD's settings file (tests / screenshots set a scratch one)
 var _autosave_t := 0.0
@@ -197,7 +197,7 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	_fade_tween = null
 	if _fade_gate: _fade_gate.set_process(false)
 	if fade: fade.color.a = 0.0
-	if is_instance_valid(_warp_fx): _warp_fx.free()   # the blink belongs to the room being left
+	free_one_shots()                     # Task 3f review: sparks, crits, pickups, the warp sparkle belong to the room left
 	_warp_fx = null
 	Sfx.stop_world()                     # sound spec: the old room's hits and cries stop (the warp gong goes on)
 	if hud: hud.close_map()              # Task 8: a room change never leaves the full map open (or the game paused)
@@ -359,6 +359,14 @@ func travel_to_waypoint(id: String) -> void:
 	reroll()
 	_trip(id, WAYPOINT_ARRIVAL)
 
+## Task 3f review: frees every one-shot effect playing on the stage or in the world (hit sparks, crits, pickups,
+## level-up, chain zaps, the warp sparkle); kept effects (the lock ring, exit rings, map ambience) stay.
+func free_one_shots() -> void:
+	for parent in [stage, world]:
+		if parent == null: continue
+		for c in parent.get_children():
+			if c is FxSprite and not c.keep: c.free()
+
 ## The fade out to room to_room (coming out of to_warp there), shared by exits and waypoints.
 func _trip(to_room: String, to_warp: String) -> void:
 	Sfx.play("warp")
@@ -366,7 +374,7 @@ func _trip(to_room: String, to_warp: String) -> void:
 		go_to(to_room, to_warp)
 		return
 	warping = true
-	_warp_fx = _fx("warp_blink", hero.global_position)   # Task 3f ⑦: the hero blinks out as the screen fades
+	_warp_fx = _fx("warp_blink", hero.global_position)   # Task 3f ⑦: green sparkle at his feet as the screen fades
 	_hero_was_on = hero.is_physics_processing()
 	hero.set_physics_process(false)
 	hero.begin_warp()                    # no damage, poison or knockback while it is dark
@@ -566,9 +574,11 @@ func _on_level_up(lv: int) -> void:
 	_text(hero.global_position + Vector2(0, -60), "Lv ขึ้น! %d" % lv, Color("#ffd36a"))
 
 ## Task 3f (PixelFX): a critical shows crit_hit instead of hit_spark (as crit_hit replaces arrow_hit in sound);
-## both fly along the blow, so they are mirrored when it goes left (the hero on the monster's right).
+## both fly along the blow, so they are mirrored when it goes left (the hero on the monster's right). A burn tick
+## (Wolf.dot_tick) is not a blow: its number shows, no spark.
 func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30 * Wolf.size_scale()), amount, crit, false)
+	if w.dot_tick: return
 	var f := _fx("crit_hit" if crit else "hit_spark", w.hurt_point())
 	if f and hero: f.face(hero.global_position.x > w.global_position.x)
 
@@ -581,6 +591,9 @@ func tick_autosave(delta: float) -> void:
 	if _autosave_t >= Balance.num("save.autosave_every"):
 		_autosave_t = 0.0
 		save_now()
+
+func _exit_tree() -> void:
+	PerfSaver.active = false             # the saver flag Wolf reads belongs to this test ground
 
 func _notification(what: int) -> void:
 	# Desktop sends WM_CLOSE_REQUEST; phones and browser tabs send PAUSED / FOCUS_OUT instead.
@@ -680,6 +693,7 @@ const HERO_BOX := Rect2(-12, -42, 24, 44)    # the hero's body round his feet (w
 
 ## Saver on: pond ripples hidden and stopped; dust and pickup puffs skipped (PerfSaver.decorative).
 func apply_saver() -> void:
+	PerfSaver.active = saver.on          # Task 3f review: monsters drop their status overlays (keep the tint)
 	if forest and is_instance_valid(forest): forest.set_ambient(not saver.on)
 	if hud: hud.saver_on = saver.on
 
@@ -698,7 +712,9 @@ func _number(at: Vector2, amount: int, crit: bool, hurt: bool) -> void:
 
 func _fx(fx_name: String, at: Vector2) -> FxSprite:
 	if not is_inside_tree(): return null
-	if saver.on and PerfSaver.decorative(fx_name): return null
+	if saver.on and PerfSaver.decorative(fx_name):
+		fx_name = PerfSaver.fallback(fx_name)   # a crit under load: the plain hit spark
+		if fx_name == "": return null
 	var f := FxSprite.make(fx_name)
 	f.position = at
 	f.z_index = 40

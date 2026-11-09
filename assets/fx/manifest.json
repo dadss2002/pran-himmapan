@@ -12,21 +12,22 @@
       80
     ],
     "loop": false,
-    "pixellab": "c8dc78a6-26a9-4267-bcc1-f2de9fb07367"
+    "pixellab": "c8dc78a6-26a9-4267-bcc1-f2de9fb07367",
+    "columns": 11
   },
   "hit_spark": {
     "cell": [
-      60,
-      50
+      88,
+      64
     ],
-    "frames": 8,
+    "frames": 4,
     "fps": 16,
     "anchor": [
-      28,
-      34
+      36,
+      44
     ],
     "loop": false,
-    "columns": 8,
+    "columns": 4,
     "sheet": "pfx_hit_spark.png",
     "pixelfx": {
       "id": "impacts/hit-spark",
@@ -38,23 +39,27 @@
           "#7a2a0c",
           "#c2501a",
           "#f08a24",
-          "#ffc23d",
-          "#ffe98a",
-          "#fffbe3",
-          "#ffffff"
+          "#ffc23d"
         ]
       },
       "palette_from": "hit_spark.png",
       "trim_s": [
         0.0,
-        0.4375
+        0.1875
       ],
+      "post": {
+        "ramp_drop": 3,
+        "white_to": "#ffc23d",
+        "pale_to": "#f08a24",
+        "scale": 1.5,
+        "tail_px": 24
+      },
       "body_cut": false,
       "crop": [
-        -28,
-        -34,
-        32,
-        16
+        -36,
+        -44,
+        52,
+        20
       ]
     }
   },
@@ -319,17 +324,17 @@
   },
   "poison_mist": {
     "cell": [
-      88,
-      53
+      87,
+      51
     ],
-    "frames": 56,
+    "frames": 28,
     "fps": 14,
     "anchor": [
       44,
-      43
+      41
     ],
     "loop": true,
-    "columns": 23,
+    "columns": 14,
     "sheet": "pfx_poison_mist.png",
     "pixelfx": {
       "id": "nature/poison-cloud",
@@ -349,12 +354,16 @@
         ]
       },
       "palette_from": "poison_mist.png",
-      "trim_s": null,
+      "trim_s": [
+        0.0,
+        1.9285714285714286
+      ],
+      "post": null,
       "body_cut": false,
       "crop": [
         -44,
-        -43,
-        44,
+        -41,
+        43,
         10
       ]
     }
@@ -380,14 +389,14 @@
       96,
       56
     ],
-    "frames": 13,
+    "frames": 7,
     "fps": 16,
     "anchor": [
       48,
       40
     ],
     "loop": false,
-    "columns": 13,
+    "columns": 7,
     "sheet": "pfx_crit_hit.png",
     "pixelfx": {
       "id": "impacts/crit-hit",
@@ -408,8 +417,11 @@
       "palette_from": "hit_spark.png",
       "trim_s": [
         0.0,
-        0.75
+        0.375
       ],
+      "post": {
+        "tail_px": 24
+      },
       "body_cut": false,
       "crop": [
         -48,
@@ -433,7 +445,8 @@
     "loop": true,
     "pixellab": "f6917167-2fc7-4409-b1b4-7a94dd087c9f",
     "sheet": "poison_mist.png",
-    "replaced_by": "poison_mist"
+    "replaced_by": "poison_mist",
+    "columns": 16
   },
   "pixellab_status_burn": {
     "cell": [
@@ -485,17 +498,17 @@
   },
   "warp_blink": {
     "cell": [
-      80,
-      84
+      96,
+      76
     ],
-    "frames": 16,
+    "frames": 7,
     "fps": 14,
     "anchor": [
-      40,
-      72
+      48,
+      64
     ],
     "loop": false,
-    "columns": 16,
+    "columns": 7,
     "sheet": "pfx_warp_blink.png",
     "pixelfx": {
       "id": "arcane/blink-out",
@@ -511,18 +524,21 @@
           "#d4ffc0",
           "#ffffff"
         ],
-        "actor": "hero idle_south frame 0"
+        "actor": "invisible 8x8 box at the hero's chest (no figure drawn)"
       },
       "palette_from": "warp_ring.png",
       "trim_s": [
-        0.13,
-        1.2014285714285715
+        0.6428571428571429,
+        1.0714285714285714
       ],
+      "post": {
+        "white_to": "#86f07a"
+      },
       "body_cut": false,
       "crop": [
-        -40,
-        -72,
-        40,
+        -48,
+        -64,
+        48,
         12
       ]
     }

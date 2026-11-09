@@ -16,23 +16,41 @@ static func _manifest() -> Dictionary:
 		_cache = JSON.parse_string(FileAccess.open(MANIFEST, FileAccess.READ).get_as_text())
 	return _cache
 
-static func make(fx_name: String, keep_after := false) -> FxSprite:
+## Review (Task 3f): one SpriteFrames per effect id, made on first use and shared by every sprite of that effect;
+## the cache holds it (and through its AtlasTextures the sheet), so a sheet is loaded once, not on every spawn.
+static var _frames := {}
+static var sheet_loads := 0          # sheets loaded by make_frames (tests: a second spawn loads nothing)
+
+static func make_frames(fx_name: String) -> SpriteFrames:
+	if _frames.has(fx_name): return _frames[fx_name]
 	var m: Dictionary = _manifest()[fx_name]
-	var s := FxSprite.new()
-	s.keep = keep_after
 	var sf := SpriteFrames.new()
 	sf.remove_animation("default")
 	sf.add_animation(fx_name)
 	sf.set_animation_speed(fx_name, float(m.fps))
 	sf.set_animation_loop(fx_name, bool(m.loop))
 	var tex: Texture2D = load("res://assets/fx/" + String(m.get("sheet", fx_name + ".png")))
+	sheet_loads += 1
 	var cols := int(m.get("columns", m.frames))
+	var cw := int(m.cell[0])
+	var ch := int(m.cell[1])
 	for i in int(m.frames):
 		var at := AtlasTexture.new()
 		at.atlas = tex
-		at.region = Rect2((i % cols) * m.cell[0], (i / cols) * m.cell[1], m.cell[0], m.cell[1])
+		at.region = Rect2((i % cols) * cw, floori(float(i) / cols) * ch, cw, ch)
 		sf.add_frame(fx_name, at)
-	s.sprite_frames = sf
+	_frames[fx_name] = sf
+	return sf
+
+## Drops the cached frames (tests; a re-exported sheet).
+static func clear_cache() -> void:
+	_frames.clear()
+
+static func make(fx_name: String, keep_after := false) -> FxSprite:
+	var m: Dictionary = _manifest()[fx_name]
+	var s := FxSprite.new()
+	s.keep = keep_after
+	s.sprite_frames = make_frames(fx_name)
 	s.centered = false
 	s._anchor = Vector2(m.anchor[0], m.anchor[1])
 	s._cell = Vector2(m.cell[0], m.cell[1])
@@ -54,3 +72,4 @@ func face(left: bool) -> void:
 func _on_done() -> void:
 	if not keep:
 		queue_free()
+

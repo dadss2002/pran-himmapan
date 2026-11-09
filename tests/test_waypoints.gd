@@ -333,7 +333,8 @@ func test_travel_rerolls_and_lands_by_the_stone():
 	return r
 
 func TestGround_fade() -> float:
-	return 0.25 + 0.25 + 0.2     # FADE_OUT + FADE_IN + slack
+	var tg = load("res://scripts/dev/test_ground.gd")
+	return tg.FADE_OUT + tg.FADE_IN + 0.2     # + slack
 
 ## The travel list upright (780x1688, 750x1334) and sideways (1688x780, 1334x750 = a 640 x 360 view) with touch on,
 ## 4 rows (one marked "ที่นี่") and the unlock toast showing, for heroes at several places on screen (the centred
