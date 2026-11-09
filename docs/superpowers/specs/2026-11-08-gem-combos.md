@@ -193,3 +193,13 @@
 - Kills by burn / fire trail also count as kills for the sustain combos (heal / MP on kill), still capped at 6 / 9 MP per press ("นับทุกแบบ").
 - Owner answers 2026-11-09 ("1.ก 2.ก 3.ก 4.ก"): ① กับดักหนาม / ศรเพลิง icons and the ground trap sprite are generated with PixelLab (~30 gen, owner picks); ② 3-gem rows are read literally, as simulated (no unlisted base effects); ③ green/red numbers compare against the current build while a gem is being selected (damage up green / down red, MP up red / down green); ④ undiscovered recipes hide both name and gems ("? + ?").
 - Owner restated 2026-11-09: a save may never hold two gems of the same type on one skill, nor gems on a skill that is not unlocked (anti save-editing).
+
+**Owner 2026-11-09 — area skills (ห่าศร / กับดักหนาม / ศรเพลิง) decisions, plan addendum D1–D8:**
+- D1 No job system yet: กับดักหนาม and ศรเพลิง both unlock at Lv10; the phone HUD has 4 skill buttons and the player picks which skill goes on each button from the skill screen ("เปิดทั้งสองที่ Lv10 ไปก่อน สลับใส่ปุ่มเอง"). Job choice comes later.
+- D2 Aiming on touch: auto-target the nearest monster — ห่าศร within 220 px, trap within 160 px; no monster → at the hero's feet ("ล็อกมอนใกล้สุดอัตโนมัติ").
+- D3 Root (ตรึง 2 วิ) stops movement only; a rooted monster in reach can still attack; bosses/elites are rooted too; roots don't stack and a trap ignores a monster that is already rooted ("หยุดเดินอย่างเดียว ยังตีได้ถ้าอยู่ใกล้").
+- D4 A trap stays until a monster steps on it, trigger radius 16 px (×1.3 with the expand gem), cleared on room change / warp / hero death; max 2 traps ("อยู่จนมอนเหยียบ รัศมี 16 px").
+- D5 ศรเพลิง blast r32 deals 100 % of that hit to the others and burns them; range 220 ("100% ของนัดนั้น + ติดไหม้ตัวอื่น").
+- D6 Extend gem: ห่าศร lasts 3 → 3.9 s; trap root 2 → 2.6 s; ห่าศร range 220.
+- D7 ศรเพลิง + an element gem: an ice or lightning gem REPLACES the fire arrow's own fire (no burn; that element's effect instead); a fire gem keeps the burn (×1.1, no double burn); the fire arrow's own fire never counts as a fire gem for recipes ("เจมธาตุอื่นแทนที่ไฟ").
+- D8 3-gem area recipes (need slot 3 = char Lv16–19, above the phase-1 cap Lv10) are built and fully tested and show ??? in the recipe book until usable.
