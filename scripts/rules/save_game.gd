@@ -1,6 +1,7 @@
 class_name SaveGame
 ## Local save (user://save.json; on the web user:// lives in the browser's IndexedDB). A missing, broken or
-## other-version file never crashes: the game starts fresh and a broken file is kept as <name>.bad.json.
+## other-version file never crashes: the game starts fresh and a broken file is kept as <name>.bad.json (or
+## <name>.bad.N.json — earlier refused files are never overwritten).
 ##
 ## Save hardening (docs/superpowers/specs/2026-11-09-save-hardening.md, owner-approved 2026-11-09):
 ## - Signed: "sig" = HMAC-SHA256 (key SIG_KEY) of canonical() of the save without "sig". A wrong or missing
@@ -200,7 +201,10 @@ static func save(state: Dictionary, path := PATH) -> bool:
 	plain["sig"] = signature(plain)
 	var text := JSON.stringify(plain)
 	var back = JSON.parse_string(text)
-	if text.to_utf8_buffer().size() > int(Balance.num("save.max_bytes")) or typeof(back) != TYPE_DICTIONARY or not _sig_ok(back):
+	# Review 3b8d147 #2: the ranges are checked too, so a future bug that puts one value out of range keeps the last
+	# good file instead of writing a save the next load would refuse whole (Q3 a).
+	if text.to_utf8_buffer().size() > int(Balance.num("save.max_bytes")) or typeof(back) != TYPE_DICTIONARY \
+			or not _sig_ok(back) or not _state_ok(back):
 		push_error("SaveGame: the save would not load back; not written")
 		return false
 	var tmp := path + ".tmp"
@@ -215,6 +219,23 @@ static func save(state: Dictionary, path := PATH) -> bool:
 			m.store_string("signed saves only")
 			m.close()
 	return true
+
+## Moves a refused save aside without ever overwriting an earlier refused one (review 3b8d147 #1: a stale old build
+## served from cache can refuse a v4 save into <name>.bad.json; the next refusal must not destroy that copy).
+## <name>.bad.json, then <name>.bad.1.json .. <name>.bad.<BAD_KEEP - 1>.json; when all are taken the newest refused
+## file is dropped (the earlier copies are the ones that hold progress).
+const BAD_KEEP := 10
+
+static func bad_path(path: String, n: int) -> String:
+	return path.get_basename() + (".bad.json" if n == 0 else ".bad.%d.json" % n)
+
+static func _keep_bad(path: String) -> void:
+	for n in BAD_KEEP:
+		var bad := bad_path(path, n)
+		if not FileAccess.file_exists(bad):
+			DirAccess.rename_absolute(ProjectSettings.globalize_path(path), ProjectSettings.globalize_path(bad))
+			return
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 ## The file's JSON, or null when it is too big (checked before reading it all), unreadable or not JSON.
 static func _read(path: String):
@@ -246,8 +267,7 @@ static func load_or_new(path := PATH) -> Dictionary:
 	if typeof(d) == TYPE_DICTIONARY and _int_in(d.get("version"), 3, 3):
 		d["version"] = VERSION                 # unsigned M3a..M4c save: same data, gets signed below
 	if not (typeof(d) == TYPE_DICTIONARY and _state_ok(d)):
-		var bad := path.get_basename() + ".bad.json"
-		DirAccess.rename_absolute(ProjectSettings.globalize_path(path), ProjectSettings.globalize_path(bad))
+		_keep_bad(path)
 		return new_state()
 	var eq := {}
 	for sl in Gear.SLOTS:

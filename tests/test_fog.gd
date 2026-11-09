@@ -14,7 +14,7 @@ func setup(t: SceneTree) -> void:
 	tree = t
 
 func _clean() -> void:
-	for f in [SAVE, SETTINGS, SAVE.get_basename() + ".bad.json", SaveGame.marker_path(SAVE)]:
+	for f in [SAVE, SETTINGS, SaveGame.marker_path(SAVE)] + _bads():
 		if FileAccess.file_exists(f): DirAccess.remove_absolute(ProjectSettings.globalize_path(f))
 
 func _ground() -> Node2D:
@@ -416,3 +416,9 @@ func test_reveal_per_frame_cost():
 	if still >= 0.02: return "standing still costs %.4f ms" % still
 	print("    fog reveal: %.4f ms per moving call, %.5f ms standing still" % [each, still])
 	return ""
+
+## Every refused-save copy (<name>.bad.json, <name>.bad.N.json).
+func _bads() -> Array:
+	var out := []
+	for n in SaveGame.BAD_KEEP: out.append(SaveGame.bad_path(SAVE, n))
+	return out

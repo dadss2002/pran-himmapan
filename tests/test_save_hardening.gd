@@ -9,7 +9,7 @@ const TMP := "user://test_save_h.json"
 const BAD := "user://test_save_h.bad.json"
 
 func _clean() -> void:
-	for p in [TMP, BAD, TMP + ".tmp", SaveGame.marker_path(TMP)]:
+	for p in [TMP, TMP + ".tmp", SaveGame.marker_path(TMP)] + _bads():
 		if FileAccess.file_exists(p): DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 
 func _raw() -> Dictionary:
@@ -512,3 +512,57 @@ func test_old_fog_key_still_dropped():
 		_clean()
 		if r != "": return r
 	return ""
+
+## Every refused-save copy (<name>.bad.json, <name>.bad.N.json).
+func _bads() -> Array:
+	var out := []
+	for n in SaveGame.BAD_KEEP: out.append(SaveGame.bad_path(TMP, n))
+	return out
+
+func _bad_level() -> int:
+	var d = JSON.parse_string(FileAccess.get_file_as_string(BAD))
+	return int(d.level) if typeof(d) == TYPE_DICTIONARY else -1
+
+## Review 3b8d147 #1: a second refused file never overwrites the first refused copy (a stale old build served from
+## cache can move a good v4 save to .bad.json; the next refusal must keep it). Up to BAD_KEEP copies are kept.
+func test_refused_saves_never_overwrite_each_other():
+	_clean()
+	var good := SaveGame.new_state()
+	good.level = 9
+	SaveGame.save(good, TMP)
+	var text := FileAccess.get_file_as_string(TMP)
+	var at := text.find("\"sig\":\"") + 7
+	_write_text(text.substr(0, at) + ("0" if text[at] != "0" else "1") + text.substr(at + 1))   # tampered: refused
+	SaveGame.load_or_new(TMP)
+	_write_text("{not json")                                            # refused again
+	SaveGame.load_or_new(TMP)
+	var r := ""
+	if not FileAccess.file_exists(BAD) or not FileAccess.file_exists(SaveGame.bad_path(TMP, 1)):
+		r = "two refusals should keep two copies (.bad.json and .bad.1.json)"
+	elif _bad_level() != 9:
+		r = "the first refused copy was overwritten"
+	if r == "":
+		for k in SaveGame.BAD_KEEP + 2:
+			_write_text("{junk %d" % k)
+			SaveGame.load_or_new(TMP)
+		if _bad_level() != 9: r = "the first copy was lost after many refusals"
+		elif FileAccess.file_exists(TMP): r = "the refused file is still in place"
+	_clean()
+	return r
+
+## Review 3b8d147 #2: save() checks the ranges too; a state with one value out of range is not written and the last
+## good file stays (instead of a save the next load refuses whole).
+func test_save_refuses_out_of_range_and_keeps_last_good():
+	_clean()
+	var good := SaveGame.new_state()
+	good.level = 5
+	var r := ""
+	if not SaveGame.save(good, TMP): r = "a good save was not written"
+	var bad := good.duplicate(true)
+	bad.inventory.gold = int(Balance.num("save.gold_cap")) + 1
+	if r == "" and SaveGame.save(bad, TMP): r = "a save with gold over the cap was written"
+	if r == "":
+		var s := SaveGame.load_or_new(TMP)
+		if int(s.level) != 5 or FileAccess.file_exists(BAD): r = "the last good save did not stay (level %d)" % int(s.level)
+	_clean()
+	return r
