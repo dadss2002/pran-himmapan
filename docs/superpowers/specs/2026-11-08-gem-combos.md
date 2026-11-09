@@ -191,4 +191,5 @@
 - When 4 gems form two recipes: one combo per skill — the higher tier first, then recipe-book order ("สกิลละ 1 ท่า: ขั้นสูงก่อน แล้วตามลำดับในสมุด").
 - Combo bonus values do not grow with gem level; each gem's own effect still does ("ไม่โต ใช้ค่าที่อนุมัติ").
 - Kills by burn / fire trail also count as kills for the sustain combos (heal / MP on kill), still capped at 6 / 9 MP per press ("นับทุกแบบ").
-- Still open: art for กับดักหนาม / ศรเพลิง icons and the trap sprite; whether 3-gem rows add their base's unlisted effects (recommended: read the table literally, as simulated); green/red number baseline (recommended: vs the current build while a gem is selected); recipe-book hiding (recommended: hide name and gems).
+- Owner answers 2026-11-09 ("1.ก 2.ก 3.ก 4.ก"): ① กับดักหนาม / ศรเพลิง icons and the ground trap sprite are generated with PixelLab (~30 gen, owner picks); ② 3-gem rows are read literally, as simulated (no unlisted base effects); ③ green/red numbers compare against the current build while a gem is being selected (damage up green / down red, MP up red / down green); ④ undiscovered recipes hide both name and gems ("? + ?").
+- Owner restated 2026-11-09: a save may never hold two gems of the same type on one skill, nor gems on a skill that is not unlocked (anti save-editing).
