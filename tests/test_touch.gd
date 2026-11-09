@@ -209,10 +209,24 @@ func test_second_finger_on_bag_and_skill_panels():
 	await tree.process_frame
 	var thumb := Vector2(60, 300)
 	var r := ""
-	# The bare HUD in the headless window lays the icon buttons out huge (the map button covers the thumb's spot);
-	# since Task 8 the thumb's emulated release would press it and open the full map (pausing the game). This test
-	# is about the bag and skill panels, so the icon row is kept out of the thumb's way.
-	hud.top_right.visible = false
+	# The headless window is 64 x 64 px stretched to the 640-wide base, so the icon buttons grow to 480 px to stay
+	# 44 px under a real finger and the map button lands under the thumb (since Task 8 its emulated release would
+	# open the full map). Give the test a real phone-sized window, lay the HUD out as the game does, and make sure
+	# the thumb is clear of every icon button (review M5 of Task 8). The window is put back at the end.
+	var size0 := tree.root.size
+	var scale0 := tree.root.content_scale_size
+	var phone := Vector2i(1280, 720)
+	DisplayServer.window_set_size(phone)
+	tree.root.size = phone
+	tree.root.content_scale_size = ScreenFit.base_for(phone)
+	for i in 3: await tree.process_frame
+	var view := tree.root.get_visible_rect().size
+	hud.buttons.layout(view)
+	hud.layout(view)
+	await tree.process_frame
+	for b in hud.top_right.find_children("*", "BaseButton", true, false):
+		if (b as Control).is_visible_in_tree() and (b as Control).get_global_rect().has_point(thumb):
+			r = "setup: icon button %s under the thumb at %s (view %s)" % [b.name, thumb, view]
 	_touch(0, thumb, true, true)                       # the thumb: Godot's mouse finger
 	hud.open_bag()
 	for i in 2: await tree.process_frame
@@ -280,7 +294,10 @@ func test_second_finger_on_bag_and_skill_panels():
 	tree.paused = false
 	hud.queue_free()
 	hero.queue_free()
-	for i in 2: await tree.process_frame
+	DisplayServer.window_set_size(size0)
+	tree.root.size = size0
+	tree.root.content_scale_size = scale0
+	for i in 3: await tree.process_frame
 	return r
 
 ## Review I1/M2 (2026-11-09): an iOS touchcancel (a call, a system gesture) over a button is not a tap, and a finger
