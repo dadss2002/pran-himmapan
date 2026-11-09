@@ -177,7 +177,8 @@ func test_zone_slow_and_taken_keep_highest():
 	if not is_equal_approx(s.speed_mult(), 0.7): return "zone speed ×%s, want 0.7" % s.speed_mult()
 	if not is_equal_approx(s.taken_mult(), 1.2): return "zone taken ×%s, want 1.2" % s.taken_mult()
 	s.apply_mark(0.3, 4.0)
-	if not is_equal_approx(s.taken_mult(), 1.3 * 1.2): return "mark + zone ×%s, want 1.56" % s.taken_mult()
+	# owner 2026-11-09 (Task 5 review, "บวกกัน +50%"): mark and zone ADD (1 + 0.3 + 0.2), they do not multiply (×1.56)
+	if not is_equal_approx(s.taken_mult(), 1.5): return "mark + zone ×%s, want 1.5 (they add)" % s.taken_mult()
 	s.tick(0.3)
 	if not is_equal_approx(s.taken_mult(), 1.3) or not is_equal_approx(s.speed_mult(), 1.0): return "zone left after its hold: taken ×%s speed ×%s" % [s.taken_mult(), s.speed_mult()]
 	return ""
@@ -648,6 +649,38 @@ func test_wolf_trail_applies_def():
 	var want := 10.0 * (1.0 - def / (def + 100.0))
 	var r := "" if is_equal_approx(w.status.trail_per_tick, want) else "trail per tick %s, want %s (DEF %s)" % [w.status.trail_per_tick, want, def]
 	w.free()
+	return r
+
+## Task 5 review M2: Wolf.apply_trail runs every frame for every monster in a fire line, so its DEF factor is cached
+## (stats() builds Balance dictionaries): one build however many frames, rebuilt only when the level, the elite flag
+## or (Monster) the kind changes, always equal to 1 − def / (def + 100) of the current stats().
+func test_wolf_trail_def_factor_cached():
+	var w := _wolf()
+	var r := ""
+	var f := func() -> float:
+		var d := float(w.stats().def)
+		return 1.0 - d / (d + 100.0)
+	for i in 120: w.apply_trail(10.0, HOLD, null)
+	if w.def_builds != 1: r = "120 trail frames built the DEF factor %d times, want 1" % w.def_builds
+	elif not is_equal_approx(w.def_factor(), f.call()): r = "factor %s, want %s" % [w.def_factor(), f.call()]
+	if r == "":
+		w.level = 30
+		w.apply_trail(10.0, HOLD, null)
+		if w.def_builds != 2 or not is_equal_approx(w.def_factor(), f.call()): r = "level change: builds %d, factor %s want %s" % [w.def_builds, w.def_factor(), f.call()]
+	if r == "":
+		w.set_elite(true)
+		w.def_factor()
+		if w.def_builds != 3: r = "elite change did not rebuild (%d)" % w.def_builds
+	w.free()
+	if r != "": return r
+	var m: Monster = load("res://scenes/monster.tscn").instantiate()
+	m.kind = "deer"
+	m.setup()
+	var a := m.def_factor()
+	m.kind = "boar"
+	var dd := float(m.stats().def)
+	if not is_equal_approx(m.def_factor(), 1.0 - dd / (dd + 100.0)): r = "kind change: factor %s (deer %s), want boar's %s" % [m.def_factor(), a, 1.0 - dd / (dd + 100.0)]
+	m.free()
 	return r
 
 ## A trail tick goes through health like a burn tick (dot_tick, no knockback) and the wolf's cast stays readable.

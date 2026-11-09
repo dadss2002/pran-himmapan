@@ -68,7 +68,7 @@ func advance(delta: float) -> void:
 			if _pierce_left > 0:
 				_pierce_left -= 1
 				continue
-			_finish()
+			_finish(t)
 			return
 	if travelled >= range_px - 0.0001:
 		_finish()
@@ -78,7 +78,8 @@ func _after_hit(t: Node2D, amount: int) -> void:
 	match String(build.get("element", "")):
 		"fire":
 			if t.has_method("apply_status"):
-				t.apply_status("burn", amount * Balance.num("elements.fire.burn_frac"), float(build.get("leech", 0.0)), shooter)
+				# the press's ledger (build.cast): a burn kill credits this press (Task 8; Task 5 review M5)
+				t.apply_status("burn", amount * Balance.num("elements.fire.burn_frac"), float(build.get("leech", 0.0)), shooter, build.get("cast"))
 		"ice":
 			if t.has_method("apply_status"): t.apply_status("slow")
 		"lightning":
@@ -111,18 +112,22 @@ func _lay_trail() -> void:
 	var secs := _cp("trail_secs")
 	if secs <= 0.0: return
 	trail = FireTrail.new()
-	trail.setup(_pos(), atk, mult, _cp("trail_frac"), secs, targets, shooter, build.get("cast"), float(build.get("leech", 0.0)), combo_id())
+	# per tick × the press's expected crit factor (no per-tick roll; the approved sim, Task 5 review I3)
+	trail.setup(_pos(), atk, mult, _cp("trail_frac"), secs, targets, shooter, build.get("cast"), float(build.get("leech", 0.0)), combo_id(),
+		Combat.expected_crit(crit_chance, crit_mult))
 	if is_inside_tree(): get_parent().add_child(trail)
 
-## The line ends (spent by range or by its last hit): the trail burns on for its time, พรหมาสตร์ blasts once at the
-## end. Primary arrows only; once per arrow.
-func _end_line() -> void:
+## The line ends (spent by range, or by its last hit on `struck`): the trail burns on for its time, พรหมาสตร์ blasts
+## once at the end. Primary arrows only; once per arrow. The blast never hits `struck` (the approved sim gives a single
+## target no blast term; Task 5 review I2) and hits each monster at most once per press however many line ends it
+## stands by (cast.once("line_end"), review M1). (ฝนดาวไฟ's on-hit blast, Task 9, is another path: it hits the target.)
+func _end_line(struck: Node2D = null) -> void:
 	if _line_ended or not primary: return
 	_line_ended = true
 	if trail != null: trail.finish()
 	if _cp("blast_on_line_end") > 0.0:
 		var r := _cp("blast_radius")
-		blast(_pos(), r, _cp("blast_frac"), false)
+		blast(_pos(), r, _cp("blast_frac"), false, null, [struck] if struck != null else [], "line_end")
 		if is_inside_tree():
 			for s in ComboFx.play(get_parent(), combo_id(), "line_end", position):
 				s.scale = Vector2.ONE * (2.0 * r / maxf(1.0, s._cell.x))   # the burst as wide as the blast (r32 → 64 px)
@@ -130,13 +135,16 @@ func _end_line() -> void:
 ## Secondary hits of this press at `at`: every live target whose hurt point is within `radius`, plus `include` (hit
 ## even outside the radius: meteor_rain's own target), minus `skip`; each takes frac of this arrow's hit
 ## (_secondary_hit), and with `burn` the fire burn (elements.fire.burn_frac of that hit, the press's leech / ledger).
+## once_tag: when set, each target is hit at most once per press for that tag (build.cast.once; no cast = no limit).
 ## Returns how many were hit. Never spawns arrows, trails or further blasts, never applies the arrow's element.
-func blast(at: Vector2, radius: float, frac: float, burn: bool, include: Node2D = null, skip: Array = []) -> int:
+func blast(at: Vector2, radius: float, frac: float, burn: bool, include: Node2D = null, skip: Array = [], once_tag := "") -> int:
 	var n := 0
 	var r2 := radius * radius
+	var cast = build.get("cast")
 	for t in targets:
 		if not is_instance_valid(t) or not t.is_alive() or t in skip: continue
 		if t != include and at.distance_squared_to(t.hurt_point()) > r2: continue
+		if once_tag != "" and cast is ComboCast and not cast.once(once_tag, t.get_instance_id()): continue
 		var amount := _secondary_hit(t, frac)
 		n += 1
 		if burn and t.has_method("apply_status"):
@@ -209,9 +217,9 @@ func halt() -> void:
 	_line_ended = true                  # no line-end blast after the warp
 	if trail != null and is_instance_valid(trail): trail.halt()   # its fire stops at once (B20)
 
-func _finish() -> void:
+func _finish(struck: Node2D = null) -> void:
 	spent = true
-	_end_line()
+	_end_line(struck)
 	if is_inside_tree():
 		queue_free()
 

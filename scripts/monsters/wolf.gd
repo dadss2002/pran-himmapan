@@ -210,12 +210,34 @@ func apply_freeze(secs: float, lock_secs: float, cast: ComboCast = null) -> bool
 func apply_mark(taken: float, secs: float, cast: ComboCast = null) -> void:
 	if is_alive(): status.apply_mark(taken, secs, cast)
 
-## raw_per_tick: the trail's damage per tick before DEF; this monster's DEF applies as for a hit (no roll, no crit).
-## leech: the leech fraction of the press that laid the trail (its ticks leech that, never a burn's).
+## raw_per_tick: the trail's damage per tick before DEF (the press's expected crit already in it, FireTrail); this
+## monster's DEF applies as for a hit (no roll, no crit roll). leech: the leech fraction of the press that laid the
+## trail (its ticks leech that, never a burn's). Called every frame for every monster in a fire line: the DEF
+## factor is cached (def_factor), no Balance dictionaries per frame (Task 5 review M2).
 func apply_trail(raw_per_tick: float, hold: float, source: Object = null, cast: ComboCast = null, leech := 0.0) -> void:
 	if not is_alive(): return
-	var def := float(stats().def)
-	status.apply_trail(raw_per_tick * (1.0 - def / (def + 100.0)), hold, source, cast, leech)
+	status.apply_trail(raw_per_tick * def_factor(), hold, source, cast, leech)
+
+var def_builds := 0              # times the DEF factor was (re)built (tests: once per level / elite / kind)
+var _df := 1.0
+var _df_level := -1
+var _df_elite := false
+var _df_tag := ""
+
+## 1 − DEF / (DEF + 100) of stats(), cached; rebuilt when the level, the elite flag or stats_tag() changes.
+func def_factor() -> float:
+	if level != _df_level or elite != _df_elite or stats_tag() != _df_tag:
+		var d := float(stats().def)
+		_df = 1.0 - d / (d + 100.0)
+		_df_level = level
+		_df_elite = elite
+		_df_tag = stats_tag()
+		def_builds += 1
+	return _df
+
+## What else stats() depends on besides level and elite ("" for the wolf; a Monster's kind).
+func stats_tag() -> String:
+	return ""
 
 func apply_zone(slow: float, taken: float, hold: float, cast: ComboCast = null) -> void:
 	if is_alive(): status.apply_zone(slow, taken, hold, cast)

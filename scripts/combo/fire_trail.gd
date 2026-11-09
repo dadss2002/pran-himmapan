@@ -4,8 +4,13 @@ extends Node2D
 ## arrow lays one from where it was shot, grows it as it flies (extend_to) and, when it is spent, leaves it burning
 ## for trail_secs (finish), then it ends and frees itself. Every step, each live target whose hurt point is within
 ## its hurt_radius (else shot.arrow_hit_radius, Global Constraints) of the line gets apply_trail(per_tick, HOLD, ...):
-## per_tick = trail_frac × the arrow's hit (atk × mult), credited to the press that laid it (its ComboCast) with that
-## press's own leech (Task 4 review I1). StatusEffects keeps the highest per_tick on one clock, so overlapping lines
+## per_tick = trail_frac × the arrow's hit (atk × mult) × the press's expected crit factor (Combat.expected_crit: no
+## per-tick roll, as tools/gem_combo_sim.py; Task 5 review I3), credited to the press that laid it (its ComboCast)
+## with that press's own leech (Task 4 review I1).
+## The line is the path the arrow really flew (Task 5 review I1: a homing arrow curves): every SPACING px of path a
+## point is recorded (at most MAX_STREAKS, in a PackedVector2Array allocated once in setup) and a mark is laid there;
+## the fire is the polyline from → points → to (the arrow's position). Past the last point the line is the chord to
+## `to` (only for a path longer than MAX_STREAKS × SPACING = 264 px; the longest arrow skill flies 220 px). StatusEffects keeps the highest per_tick on one clock, so overlapping lines
 ## (3 split lines, back-to-back presses) burn once a second at most; a monster standing in one trail gets exactly
 ## round(trail_secs) ticks, as simulated (risks.md B26).
 ## Never saved, never outlives its room: halt() (the warp's dark, Arrow.halt, TestGround) ends it at once (B20).
@@ -36,17 +41,24 @@ var combo_id := ""
 var finished := false
 var done := false
 var _dir := Vector2.ZERO
-var _marks := 0
+var _pts := PackedVector2Array()  # the recorded path points (marks), MAX_STREAKS slots, _n used
+var _n := 0
+var _path := 0.0                   # px of path flown so far
+var _last := Vector2.ZERO          # the previous extend_to point
 var _radius := 10.0
 
 ## from_p: where the line starts; atk × mult = the arrow's hit; frac / secs_: the recipe's trail_frac / trail_secs;
 ## targets_: the arrow's targets; source_: the shooter (leech); cast_ / leech_: the press's ledger and leech;
-## combo: the recipe id (its "trail" effects).
+## combo: the recipe id (its "trail" effects); crit_factor: the press's expected crit factor (Combat.expected_crit).
 func setup(from_p: Vector2, atk: float, mult: float, frac: float, secs_: float, targets_: Array, source_: Object,
-		cast_: ComboCast = null, leech_ := 0.0, combo := "") -> void:
+		cast_: ComboCast = null, leech_ := 0.0, combo := "", crit_factor := 1.0) -> void:
 	from = from_p
 	to = from_p
-	per_tick = frac * atk * mult
+	_last = from_p
+	_pts.resize(MAX_STREAKS)
+	_n = 0
+	_path = 0.0
+	per_tick = frac * atk * mult * crit_factor
 	secs = secs_
 	targets = targets_
 	source = source_
@@ -57,21 +69,31 @@ func setup(from_p: Vector2, atk: float, mult: float, frac: float, secs_: float, 
 	_radius = Balance.num("shot.arrow_hit_radius")
 	made += 1
 
-## The line now ends at p (the arrow's position). Lays a streak at each new SPACING mark, up to MAX_STREAKS.
+## The arrow is now at p: the line follows it. Each time the path flown passes another SPACING px, the point on the
+## path there is recorded and gets a streak, up to MAX_STREAKS. Allocates nothing but the effects.
 func extend_to(p: Vector2) -> void:
 	if finished: return
 	to = p
-	var length := from.distance_to(to)
-	if length < 0.001: return
-	if _dir == Vector2.ZERO: _dir = (to - from) / length
-	while _marks < MAX_STREAKS and length >= SPACING * (_marks + 1):
-		_mark(from + _dir * SPACING * (_marks + 1))
+	var seg := _last.distance_to(p)
+	if seg < 0.001: return
+	var d := (p - _last) / seg
+	_dir = d
+	while _n < MAX_STREAKS and _path + seg >= SPACING * (_n + 1):
+		var at := _last + d * (SPACING * (_n + 1) - _path)
+		_pts[_n] = at
+		_mark(at, d, _n)
+		_n += 1
+	_path += seg
+	_last = p
 
-func _mark(p: Vector2) -> void:
+## Recorded path points so far (tests).
+func points() -> PackedVector2Array:
+	return _pts.slice(0, _n)
+
+func _mark(p: Vector2, d: Vector2, i: int) -> void:
 	# flames on marks 1, 3, 5 (88, 176, 264 px): the split lines are still close together at the first mark, where
 	# three flames would stack into one column by the hero (seen in docs/preview/m5b/fire_fan_ingame.png)
-	ComboFx.play(self, combo_id, "trail", to_local(p) if is_inside_tree() else p, _dir, _marks % FLAME_EVERY == FLAME_EVERY - 1)
-	_marks += 1
+	ComboFx.play(self, combo_id, "trail", to_local(p) if is_inside_tree() else p, d, i % FLAME_EVERY == FLAME_EVERY - 1)
 
 ## The arrow is spent: the line stops growing and burns on for `secs`. A line too short for a mark gets one at its
 ## end, so the fire is never invisible.
@@ -79,9 +101,9 @@ func finish() -> void:
 	if finished: return
 	finished = true
 	left = secs
-	if _marks == 0 and from.distance_to(to) > 0.5:
+	if _n == 0 and from.distance_to(to) > 0.5:
 		if _dir == Vector2.ZERO: _dir = (to - from).normalized()
-		_mark(to)
+		_mark(to, _dir, 0)
 	if secs <= 0.0: _end()
 
 ## Burns whatever stands on the line; counts down after finish(). Callable without a tree (tests).
@@ -97,8 +119,15 @@ func step(delta: float) -> void:
 		if not is_instance_valid(t) or not t.is_alive() or not t.has_method("apply_trail"): continue
 		var hp: Vector2 = t.hurt_point()
 		var r: float = t.hurt_radius() if t.has_method("hurt_radius") else _radius
-		if Geometry2D.get_closest_point_to_segment(hp, from, to).distance_squared_to(hp) <= r * r:
-			t.apply_trail(per_tick, HOLD, source, cast, leech)
+		if _near(hp, r * r): t.apply_trail(per_tick, HOLD, source, cast, leech)
+
+## True when p is within sqrt(r2) of the polyline from → recorded points → to.
+func _near(p: Vector2, r2: float) -> bool:
+	var a := from
+	for i in _n:
+		if Geometry2D.get_closest_point_to_segment(p, a, _pts[i]).distance_squared_to(p) <= r2: return true
+		a = _pts[i]
+	return Geometry2D.get_closest_point_to_segment(p, a, to).distance_squared_to(p) <= r2
 
 ## Ends it now (the warp, a room change): no further damage.
 func halt() -> void:

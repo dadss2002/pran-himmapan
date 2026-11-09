@@ -22,6 +22,19 @@ var _kept := {}                   # room id -> {groups, piles, packs}
 static func new_seed() -> int:
 	return int(randi() & 0x7fffffff)
 
+## Owner 2026-11-09 ("ห้ามได้ผังเดิมซ้ำ"): a waypoint re-roll never gives room id its current pile layout again.
+## Keeps new_seed unless it equals old_seed or, with a bank of bank_size > 1 entries, picks the same entry for room id
+## (PileBank.pick: posmod(MonsterPiles.room_seed(seed, id), size)); then steps to the next seed (31 bits, wrapping)
+## until it differs. Deterministic, a few string hashes at most (a clash is 1 in the bank's size). No bank (live
+## placement) or a 1-entry bank: only the seed must differ.
+static func distinct_seed(old_seed: int, new_seed: int, room_id: String, bank_size: int) -> int:
+	var s := new_seed & 0x7fffffff
+	var old_entry := posmod(MonsterPiles.room_seed(old_seed, room_id), bank_size) if bank_size > 1 else -1
+	for i in 4096:                       # a guard only: each step clashes with chance 1 / bank_size
+		if s != old_seed and (old_entry < 0 or posmod(MonsterPiles.room_seed(s, room_id), bank_size) != old_entry): return s
+		s = (s + 1) & 0x7fffffff
+	return s
+
 ## Re-roll every room: new pile seed, no kept rooms.
 func reroll_all(seed: int) -> void:
 	pile_seed = seed

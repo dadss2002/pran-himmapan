@@ -344,8 +344,16 @@ func piles_for(id: String, groups: Array) -> Array:
 ## (new_seed, or a random one when < 0), every kept room forgotten (the current room too: it is not kept when
 ## left), e0's set chosen again on its next entry (addendum 2). Every room entered after this spawns fresh,
 ## its piles from the baked bank with the new seed. Returns the seed used.
-func reroll(new_seed := -1) -> int:
-	reset.reroll_all(new_seed if new_seed >= 0 else RoomReset.new_seed())
+## dest (the waypoint trip's room, owner 2026-11-09 "ห้ามได้ผังเดิมซ้ำ"): the seed is moved off any seed that would
+## give dest its current layout again (RoomReset.distinct_seed with dest's bank size for the groups it will get; no
+## placement pass, only the bank lookup the trip makes anyway).
+func reroll(new_seed := -1, dest := "") -> int:
+	var s := new_seed if new_seed >= 0 else RoomReset.new_seed()
+	if dest != "" and rooms.has(dest):
+		var groups: Array = groups_for(dest, room_id)
+		var bank := PileBank.find(dest, rooms.pile_hash(dest, groups))
+		s = RoomReset.distinct_seed(reset.pile_seed, s, dest, bank["p"].size() if not bank.is_empty() else 0)
+	reset.reroll_all(s)
 	_piles.clear()
 	arena_set = -1
 	return reset.pile_seed
@@ -367,7 +375,7 @@ func warp_through(w: Warp) -> void:
 func travel_to_waypoint(id: String) -> void:
 	if warping or not rooms.has(id) or rooms.waypoint(id) == Vector2.INF: return
 	if hud: hud.close_waypoints()
-	reroll()
+	reroll(-1, id)
 	_trip(id, WAYPOINT_ARRIVAL)
 
 ## Task 3f review: frees every one-shot effect playing on the stage or in the world (hit sparks, crits, pickups,

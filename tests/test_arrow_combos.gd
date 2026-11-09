@@ -154,6 +154,15 @@ func _trail_case(keys: Array, frac: float, secs: float) -> String:
 	elif not is_equal_approx(d.status.trail_per_tick, want): r = "trail per tick %s, want %s (%.0f%% of the arrow's hit)" % [d.status.trail_per_tick, want, frac * 100]
 	if r == "":
 		var t: FireTrail = a.trail
+		# Frame counting (review M7) assumes: (1) _step advances the arrows BEFORE it steps the trails, so the frame
+		# the arrow is spent already stepped the finished trail once (left = secs − DT); (2) secs is a whole number
+		# of frames (2.0 / 3.0 s at 1/60 s), so after (secs / DT − 2) more frames left = DT (still on) and the 3
+		# below take it to ≤ 0 (FireTrail.step ends it with its 1e-6 tolerance); (3) a "tick" is a frame in which
+		# the dummy lost whole HP: the dummy's receive_hit takes no HP, and the fire gem's own burn (0.2 of the
+		# dummy's 1-damage hit) starts on the hit frame, the same frame the trail first reaches the dummy, so the two
+		# clocks tick together; its lone 3rd tick (fire_fan) adds 0.2 to a carry of ~0.18 and stays under 1 HP. With
+		# other numbers (a larger hit, a dummy off the line start) the count could include a burn-only frame.
+		# Speed / range / DT changes need this re-checked.
 		for i in int(round(secs / DT)) - 2:            # the spent frame stepped it once: secs − 1 frame so far
 			if _step([a], [d]) > 0: ticks += 1
 		if t.done: r = "trail ended before %s s after the arrow was spent" % secs
@@ -336,11 +345,16 @@ func test_halt_ends_trail_and_skips_blast():
 
 ## Performance: a trail lays at most FireTrail.MAX_FX effects however long the line (spaced marks, not one per
 ## frame), stepping it allocates nothing, and the PerfSaver sheds the flames but never the streak or the damage.
+## Review M2: the monster in the fire is a real Wolf (its apply_trail + tick_burn every frame, DEF factor cached:
+## built once) and the trail is stepped through its fade to its end.
 func test_trail_fx_bounded():
 	var r := ""
 	for saver in [false, true]:
 		PerfSaver.active = saver
-		var d := _dummy(Vector2(500, 0))
+		var d: Wolf = load("res://scenes/wolf.tscn").instantiate()
+		d.setup()
+		d.health.setup(1000000)
+		d.position += Vector2(500, 0) - d.hurt_point()       # its hurt point on the line
 		var t := FireTrail.new()
 		t.setup(Vector2.ZERO, ATK, 2.0, 0.3, 3.0, [d], null, null, 0.0, "brahmastra")
 		for i in 300: t.extend_to(Vector2(i * 4.0, 0))      # a 1200 px line, extended every frame
@@ -353,12 +367,21 @@ func test_trail_fx_bounded():
 		elif not saver and flames == 0: r = "saver off: no flames"
 		if r == "":
 			t.finish()
+			t.step(DT)                                    # first contact (and the DEF factor) before counting
+			d.tick_burn(DT)
 			var objs := Performance.get_monitor(Performance.OBJECT_COUNT)
 			var kids := t.get_child_count()
-			for i in 100: t.step(DT)
+			var hp0: int = d.health.hp
+			var burned := false
+			for i in int(round(3.0 / DT)) + 30:          # past the fade (last FADE s) and _end
+				t.step(DT)
+				d.tick_burn(DT)
+				burned = burned or d.status.in_trail()
 			if Performance.get_monitor(Performance.OBJECT_COUNT) != objs: r = "step() allocated objects (%d → %d)" % [objs, Performance.get_monitor(Performance.OBJECT_COUNT)]
 			elif t.get_child_count() != kids: r = "step() added effects"
-			elif not d.status.in_trail(): r = "saver %s: the trail did not burn a monster on its line" % saver
+			elif not burned or d.health.hp >= hp0: r = "saver %s: the trail did not burn a wolf on its line" % saver
+			elif not t.done: r = "the trail did not end after its 3 s"
+			elif d.def_builds != 1: r = "the wolf's DEF factor was built %d times over the trail, want 1" % d.def_builds
 		t.free()
 		d.free()
 		if r != "": break
@@ -398,6 +421,137 @@ func test_trail_carries_press_cast_and_leech():
 		if not is_equal_approx(sink.got - before, want): r = "one trail tick leeched %s, want %s" % [sink.got - before, want]
 	_free([a, d])
 	sink.free()
+	return r
+
+## Distance from p to the polyline pts.
+func _dist_to_path(p: Vector2, pts: PackedVector2Array) -> float:
+	var best := INF
+	for i in pts.size() - 1:
+		best = minf(best, Geometry2D.get_closest_point_to_segment(p, pts[i], pts[i + 1]).distance_to(p))
+	return best
+
+## Review I1: a homing arrow's trail follows the path it really flew: its marks lie on that path and a monster on
+## the curve burns, while one on the straight chord from the start to the end (inside the curve) does not, nor does
+## one on the first heading. The arrow circles a target inside its turning circle (r = speed / turn ≈ 115 px), so
+## its path bends ≥ 90° within its 220 px.
+func test_homing_trail_follows_the_path():
+	_spawned = []
+	var b := _build(["split", "fire", "homing"])
+	var h := _dummy(Vector2(40, 100))
+	var a := _arrow(Vector2.RIGHT, [h], b)
+	var path := PackedVector2Array([a.position])
+	var f := 0
+	while not a.spent and f < 120:
+		_step([a], [])
+		path.append(a.position)
+		f += 1
+	var r := ""
+	var t: FireTrail = a.trail
+	var turned := rad_to_deg(absf(Vector2.RIGHT.angle_to(a.dir)))
+	var on := path[path.size() / 2]
+	var chord := (path[0] + path[path.size() - 1]) / 2.0
+	var first := Vector2(150, 0)
+	if not bool(b.get("homing", false)) or String(b.combo.get("id", "")) != "fire_fan": r = "setup: build %s" % b.combo
+	elif t == null or not t.finished: r = "setup: no finished trail"
+	elif turned < 90.0: r = "setup: the path bent %.0f°, want ≥ 90" % turned
+	elif Geometry2D.get_closest_point_to_segment(on, path[0], path[path.size() - 1]).distance_to(on) < 25.0: r = "setup: the path point is near the chord"
+	elif _dist_to_path(chord, path) < 25.0 or _dist_to_path(first, path) < 25.0: r = "setup: a probe is near the path"
+	if r == "":
+		var streaks := t.get_children().filter(func(c): return c is FxSprite and c.animation == "piercing_trail")
+		if streaks.size() < 4: r = "%d streaks on a 220 px path, want ≥ 4" % streaks.size()
+		for s in streaks:
+			if r == "" and _dist_to_path(s.position, path) > 2.0: r = "a trail mark at %s is %.1f px off the arrow's path" % [s.position, _dist_to_path(s.position, path)]
+	if r == "":
+		var p_on := _dummy(on)
+		var p_chord := _dummy(chord)
+		var p_first := _dummy(first)
+		t.targets = [p_on, p_chord, p_first]
+		var hp0: int = p_on.hp
+		for i in int(round(1.0 / DT)) + 1:
+			t.step(DT)
+			for d in [p_on, p_chord, p_first]: d.tick_status(DT)
+			if r == "" and (p_chord.status.in_trail() or p_first.status.in_trail()): r = "a monster off the path (chord / first heading) is in the fire"
+		if r == "" and p_on.hp >= hp0: r = "a monster on the curved path did not burn"
+		_free([p_on, p_chord, p_first])
+	_free([a, h])
+	return r
+
+## Review I2: when a line ends on a hit (spread's arrows stop on their first monster), its line-end blast never hits
+## that monster (the approved sim gives the single target no blast term); a neighbour inside r32 still takes 50 %.
+func test_line_end_blast_skips_the_struck_target():
+	_spawned = []
+	var b := _build(["split", "fire", "multiply"], "spread")
+	var d := _dummy(Vector2(60, 0))
+	var nb := _dummy(Vector2(60, 20))            # 20 px off the line: not the arrow's, inside the r32 blast
+	var a := _arrow(Vector2.RIGHT, [d, nb], b)
+	for i in 40: _step([a], [])
+	var r := ""
+	if String(b.combo.get("id", "")) != "brahmastra" or bool(b.pierce_all): r = "setup: %s pierce_all %s" % [b.combo, b.pierce_all]
+	elif not a.spent: r = "setup: the arrow did not stop on its target"
+	elif d.hits.size() != 1: r = "the struck monster took %d hits, want 1 (its arrow only, no line-end blast)" % d.hits.size()
+	elif not is_equal_approx(float(d.hits[0][1]), float(b.arrow_mult)): r = "the struck monster's hit mult %s" % d.hits[0][1]
+	elif nb.hits.size() != 1 or not is_equal_approx(float(nb.hits[0][1]), float(b.arrow_mult) * 0.5): r = "the neighbour took %s, want one blast at 50 %%" % [nb.hits]
+	_free([a, d, nb])
+	return r
+
+## Review I3: a trail tick is per_tick = frac × atk × mult × the press's expected crit factor
+## (1 + crit_chance × (crit_mult − 1), as tools/gem_combo_sim.py multiplies every hit), with no per-tick roll.
+func test_trail_tick_uses_expected_crit():
+	var r := ""
+	if not is_equal_approx(Combat.expected_crit(0.25, 2.0), 1.25): r = "expected_crit(0.25, 2.0) = %s" % Combat.expected_crit(0.25, 2.0)
+	elif not is_equal_approx(Combat.expected_crit(-1.0, -1.0), 1.0 + Balance.num("crit.chance") * (Balance.num("crit.mult") - 1.0)): r = "base numbers: %s" % Combat.expected_crit(-1.0, -1.0)
+	elif not is_equal_approx(Combat.expected_crit(1.5, 2.0), 2.0): r = "chance above 1 must clamp: %s" % Combat.expected_crit(1.5, 2.0)
+	if r != "": return r
+	_spawned = []
+	var b := _build(["split", "fire"])
+	var d := _dummy(Vector2(60, 0))
+	var a := _arrow(Vector2.RIGHT, [d], b)
+	a.crit_chance = 0.25
+	a.crit_mult = 2.0
+	for i in 20: _step([a], [d])
+	var want := 0.20 * ATK * float(b.arrow_mult) * 1.25
+	if not is_equal_approx(d.status.trail_per_tick, want): r = "trail per tick %s, want %s (× expected crit 1.25)" % [d.status.trail_per_tick, want]
+	elif not is_equal_approx(a.trail.per_tick, want): r = "FireTrail.per_tick %s, want %s" % [a.trail.per_tick, want]
+	_free([a, d])
+	return r
+
+## Review M1: a monster between two line ends (inside both r32 blasts) takes ONE line-end blast per press
+## (cast.once("line_end", target)); the next press can blast it again.
+func test_line_end_blast_once_per_target_per_press():
+	var r := ""
+	var rng := Balance.num("skills.piercing.range")
+	var d: Node2D = null
+	for press in 2:
+		_spawned = []
+		var b := _build(["split", "fire", "multiply"])     # a new press: a new ledger
+		var fan := deg_to_rad(float(b.fan_deg))
+		var e0 := Vector2.RIGHT.rotated(-fan / 2.0) * rng   # the ends of lines 0 and 1 (the middle line)
+		var e1 := Vector2.RIGHT * rng
+		var mid := (e0 + e1) / 2.0
+		if d == null: d = _dummy(mid)
+		if mid.distance_to(e0) > 31.0 or mid.distance_to(e1) > 31.0: r = "setup: the dummy is %.0f / %.0f px from the line ends" % [mid.distance_to(e0), mid.distance_to(e1)]
+		var arrows := _fan(b, [d])
+		for i in 60: _step(arrows, [])
+		if r == "" and d.hits.size() != press + 1: r = "after press %d: %d hits, want %d (one line-end blast per target per press)" % [press + 1, d.hits.size(), press + 1]
+		_free(arrows)
+		if r != "": break
+	_free([d])
+	return r
+
+## Review M5: the fire gem's burn from an arrow hit carries the press's ledger (build.cast), so a burn kill credits
+## the press (Task 8).
+func test_fire_gem_burn_carries_the_press_cast():
+	_spawned = []
+	var b := _build(["split", "fire"])
+	var d := _dummy(Vector2(60, 0))
+	var a := _arrow(Vector2.RIGHT, [d], b)
+	for i in 20: _step([a], [d])
+	var burns: Array = d.statuses.filter(func(s): return s[0] == "burn")
+	var r := ""
+	if burns.size() != 1: r = "%d burns, want 1" % burns.size()
+	elif not is_same(burns[0][2], b.cast): r = "the hit's burn carries %s, want the press's cast" % [burns[0][2]]
+	elif not is_same(d.status.burn_cast, b.cast): r = "the dummy's burn_cast is not the press's"
+	_free([a, d])
 	return r
 
 # ---------- the hero's press ----------

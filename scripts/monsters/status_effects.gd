@@ -88,7 +88,8 @@ func apply_mark(taken: float, secs: float, cast: ComboCast = null) -> void:
 ## `per_tick` is the damage per elements.fire.tick (after DEF; Wolf.apply_trail applies it); `hold` = how long it
 ## keeps burning without being re-applied (the trail re-applies it every step the monster stands in it).
 ## `leech` = the leech fraction of the press that laid the trail (plan Global Constraints: trail ticks leech; they
-## never crit, Task 8), newer application like source / cast.
+## never roll a crit: FireTrail puts the press's expected crit factor in per_tick, Task 5 review I3), newer
+## application like source / cast.
 func apply_trail(per_tick: float, hold: float, source: Object = null, cast: ComboCast = null, leech := 0.0) -> void:
 	trail_per_tick = maxf(trail_per_tick if trail_hold > 0.0 else 0.0, per_tick)
 	trail_hold = maxf(trail_hold, hold)
@@ -109,8 +110,10 @@ func speed_mult() -> float:
 	if zone_hold > 0.0: m *= 1.0 - zone_slow
 	return m
 
+## Damage taken × this: mark and zone ADD (owner 2026-11-09, "บวกกัน +50%": garuda +30 % and hellfield +20 % = +50 %,
+## not ×1.56).
 func taken_mult() -> float:
-	return (1.0 + (mark_taken if mark_left > 0.0 else 0.0)) * (1.0 + (zone_taken if zone_hold > 0.0 else 0.0))
+	return 1.0 + (mark_taken if mark_left > 0.0 else 0.0) + (zone_taken if zone_hold > 0.0 else 0.0)
 
 func is_burning() -> bool:
 	return burn_left > 0.0

@@ -36,6 +36,14 @@ static func roll_damage(atk: float, mult: float, def: float, can_crit: bool = tr
 		amount = max(1, int(round(float(amount) * crit_mult / Balance.num("crit.mult"))))
 	return {"amount": amount, "crit": crit}
 
+## The expected crit factor of a hit, 1 + chance × (mult − 1), with no roll (M5b Task 5 review I3): what
+## tools/gem_combo_sim.py multiplies every hit by, used for fire-trail ticks (they never roll). chance / mult < 0
+## mean the base numbers (crit.chance, crit.mult); chance is clamped to 0..1, as in the sim (min(1, crit)).
+static func expected_crit(crit_chance := -1.0, crit_mult := -1.0) -> float:
+	var c := crit_chance if crit_chance >= 0.0 else Balance.num("crit.chance")
+	var m := crit_mult if crit_mult >= 0.0 else Balance.num("crit.mult")
+	return 1.0 + clampf(c, 0.0, 1.0) * (m - 1.0)
+
 ## Index of the nearest target within max_range (ties within 0.5 px → lower hp), or -1.
 static func pick_target(origin: Vector2, positions: Array, hps: Array, max_range: float) -> int:
 	var best := -1

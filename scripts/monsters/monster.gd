@@ -57,6 +57,10 @@ static func stats_for(k: String, lv: int) -> Dictionary:
 func stats() -> Dictionary:
 	return with_elite(stats_for(kind, level))
 
+## Wolf.def_factor's cache key: a Monster's stats depend on its kind too.
+func stats_tag() -> String:
+	return kind
+
 func manifest_path() -> String:
 	return "res://assets/monsters/%s/manifest.json" % kind
 

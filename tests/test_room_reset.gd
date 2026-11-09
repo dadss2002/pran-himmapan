@@ -78,6 +78,56 @@ func test_room_reset_rules():
 	if s < 0 or s > 0x7fffffff: return "new_seed %d out of 31 bits" % s
 	return ""
 
+## Owner 2026-11-09 ("ห้ามได้ผังเดิมซ้ำ"): a waypoint re-roll never gives the room its current pile layout again.
+## RoomReset.distinct_seed(old, new, id, bank size) keeps `new` unless it equals `old` or picks the same bank entry
+## (posmod(room_seed, size)) for room id; then it steps to the next seed until the entry differs. Deterministic.
+## No bank (size 0, live placement) or a 1-entry bank: only the seed must differ.
+func test_distinct_seed_never_repeats_the_entry():
+	var id := "c2r0"
+	var old := 12345
+	for n in [64, 7, 2]:
+		var e_old := posmod(MonsterPiles.room_seed(old, id), n)
+		var clash := old + 1
+		while posmod(MonsterPiles.room_seed(clash, id), n) != e_old: clash += 1
+		var s := RoomReset.distinct_seed(old, clash, id, n)
+		if posmod(MonsterPiles.room_seed(s, id), n) == e_old: return "bank %d: seed %d still picks entry %d" % [n, s, e_old]
+		if s == old or s < 0 or s > 0x7fffffff: return "bank %d: seed %d (old %d)" % [n, s, old]
+		if RoomReset.distinct_seed(old, clash, id, n) != s: return "bank %d: not deterministic" % n
+		var free_seed := clash + 1
+		while posmod(MonsterPiles.room_seed(free_seed, id), n) == e_old: free_seed += 1
+		if RoomReset.distinct_seed(old, free_seed, id, n) != free_seed: return "bank %d: changed a seed that already differs" % n
+	for n in [0, 1]:
+		if RoomReset.distinct_seed(old, old, id, n) == old: return "bank %d: the same seed again" % n
+		if RoomReset.distinct_seed(old, 999, id, n) != 999: return "bank %d: changed a different seed" % n
+	if RoomReset.distinct_seed(0x7fffffff, 0x7fffffff, id, 0) != 0: return "the step must wrap within 31 bits"
+	return ""
+
+## The same rule in the game: reroll(seed, room) with a seed that would pick the room's current bank entry lays a
+## different layout when the room is built again.
+func test_reroll_with_a_clashing_seed_changes_the_room():
+	var g := _ground()
+	var id := "c1r2"
+	g.go_to(id, "", false)
+	var r := ""
+	var groups: Array = g._room_groups
+	var bank := PileBank.find(id, g.rooms.pile_hash(id, groups))
+	var n: int = bank["p"].size() if not bank.is_empty() else 0
+	var old: int = g.pile_seed
+	var homes0: Array = g._room_piles.map(func(p): return p.home)
+	var clash := old + 1
+	if n > 1:
+		while posmod(MonsterPiles.room_seed(clash, id), n) != posmod(MonsterPiles.room_seed(old, id), n): clash += 1
+	var got: int = g.reroll(clash, id)
+	if n > 1 and posmod(MonsterPiles.room_seed(got, id), n) == posmod(MonsterPiles.room_seed(old, id), n): r = "the re-roll kept bank entry %d" % posmod(MonsterPiles.room_seed(old, id), n)
+	elif got == old: r = "the re-roll kept the seed"
+	if r == "":
+		g.go_to(id, "", false)
+		if g._room_piles.map(func(p): return p.home) == homes0: r = "%s has the same piles after the re-roll (bank size %d)" % [id, n]
+	if r == "" and g.reroll(old + 1000) != old + 1000: r = "reroll(seed) without a room must keep the seed"
+	_free(g)
+	_clean()
+	return r
+
 ## Walking out and back: the killed stay dead (unseen, no EXP again; M4c addendum: they stay dead however long
 ## the hero waits, until a re-roll brings the room back fresh), the living stand where they were (a chasing one walks home), elite marks kept, HP full; the piles
 ## (homes, spawn points) unchanged.
