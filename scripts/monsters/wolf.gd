@@ -211,10 +211,11 @@ func apply_mark(taken: float, secs: float, cast: ComboCast = null) -> void:
 	if is_alive(): status.apply_mark(taken, secs, cast)
 
 ## raw_per_tick: the trail's damage per tick before DEF; this monster's DEF applies as for a hit (no roll, no crit).
-func apply_trail(raw_per_tick: float, hold: float, source: Object = null, cast: ComboCast = null) -> void:
+## leech: the leech fraction of the press that laid the trail (its ticks leech that, never a burn's).
+func apply_trail(raw_per_tick: float, hold: float, source: Object = null, cast: ComboCast = null, leech := 0.0) -> void:
 	if not is_alive(): return
 	var def := float(stats().def)
-	status.apply_trail(raw_per_tick * (1.0 - def / (def + 100.0)), hold, source, cast)
+	status.apply_trail(raw_per_tick * (1.0 - def / (def + 100.0)), hold, source, cast, leech)
 
 func apply_zone(slow: float, taken: float, hold: float, cast: ComboCast = null) -> void:
 	if is_alive(): status.apply_zone(slow, taken, hold, cast)
@@ -250,7 +251,8 @@ func telegraph_visible() -> bool:
 
 # ---------- events ----------
 
-## Hit by the hero. Returns damage dealt (0 when dead). Knockback, except during the bite windup.
+## Hit by the hero. Returns damage dealt (0 when dead). Knockback, except during the bite windup, on elites and
+## while frozen (owner 2026-11-09: a frozen monster is not knocked back, "ไม่กระเด็น ติดอยู่กับที่").
 func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, crit_mult := -1.0) -> int:
 	if not is_alive(): return 0
 	var r := Combat.roll_damage(atk, mult * status.taken_mult(), stats().def, true, crit_chance, crit_mult)   # mark / zone
@@ -260,7 +262,7 @@ func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, cr
 	if lands and is_alive(): Sfx.play_monster(sound_kind(), "hurt")
 	if not is_alive(): return r.amount
 	_flash = n("hit_flash")
-	if state != "bite" and not elite:          # elites do not get knocked back (M3h)
+	if state != "bite" and not elite and not status.is_frozen():   # elites do not get knocked back (M3h)
 		var away := _pos() - from
 		if away.length() > 0.01:
 			_push(away.normalized() * n("hit_knockback"))
@@ -383,16 +385,19 @@ func _on_died() -> void:
 # ---------- simulation ----------
 
 ## Status timers and the burn / fire-trail damage (a DoT tick: dot_tick is set while it goes through health, so the
-## test ground shows its number without a hit spark), with the fire gem's leech. status.tick_cast is the ledger a
-## kill by this tick belongs to (M5b Task 8 hook).
+## test ground shows its number without a hit spark). Leech (review I1): the burn's part with the burn's leech to the
+## burn's source, the trail's part with the trail's own leech to its source; read before the damage, as a killing
+## tick clears the statuses. status.tick_cast is the ledger a kill by this tick belongs to (M5b Task 8 hook).
 func tick_burn(delta: float) -> void:
 	var burn := status.tick(delta)
 	if burn <= 0: return
+	var heals := [[status.last_burn_source, status.last_burn_dmg * status.last_burn_leech],
+		[status.last_trail_source, status.last_trail_dmg * status.last_trail_leech]]
 	dot_tick = true
 	health.take_hit(burn, false)
 	dot_tick = false
-	if status.burn_leech > 0.0 and is_instance_valid(status.burn_source) and status.burn_source.has_method("leech_heal"):
-		status.burn_source.leech_heal(burn * status.burn_leech)
+	for h in heals:
+		if h[1] > 0.0 and is_instance_valid(h[0]) and h[0].has_method("leech_heal"): h[0].leech_heal(h[1])
 
 func step(delta: float, hero: Hero) -> void:
 	if hero != null: _hero = hero
@@ -646,7 +651,9 @@ func _move(v: Vector2, dt: float) -> void:
 func push(v: Vector2) -> void:
 	_push(v)
 
+## Every push (hit knockback, the crowd's separation) stops here while frozen: a frozen monster stays put.
 func _push(v: Vector2) -> void:
+	if status.is_frozen(): return
 	if is_inside_tree(): move_and_collide(v)
 	else: position += v
 

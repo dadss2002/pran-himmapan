@@ -130,12 +130,13 @@ func _enter_tree() -> void:
 ## pack in the room moves away from it, at most monster_push.speed px/s, by move_and_collide (walls stop it;
 ## the hero is not in the monsters' collision mask, so he is never pushed). Each pack moves only its own
 ## monsters, so a pair from two packs is pushed once from each side. Lunging monsters neither push nor move.
+## A frozen monster is never moved (owner 2026-11-09: "ติดอยู่กับที่"); the others still move off it.
 func _separate(delta: float) -> void:
 	var others: Array = wolves
 	if is_inside_tree(): others = _room_monsters()
 	var step := Balance.num("monster_push.speed") * delta
 	for a in wolves:
-		if not a.is_alive() or a.state in ["lunge_warn", "lunge"]: continue
+		if not a.is_alive() or a.state in ["lunge_warn", "lunge"] or a.is_frozen(): continue
 		var away := Vector2.ZERO
 		for b in others:
 			if b == a or not is_instance_valid(b) or not b.is_alive() or b.state in ["lunge_warn", "lunge"]: continue

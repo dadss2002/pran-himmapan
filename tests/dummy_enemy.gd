@@ -36,8 +36,8 @@ func apply_freeze(secs: float, lock_secs: float, cast: ComboCast = null) -> bool
 func apply_mark(taken: float, secs: float, cast: ComboCast = null) -> void:
 	if alive: status.apply_mark(taken, secs, cast)
 
-func apply_trail(raw_per_tick: float, hold: float, source: Object = null, cast: ComboCast = null) -> void:
-	if alive: status.apply_trail(raw_per_tick * (1.0 - def / (def + 100.0)), hold, source, cast)
+func apply_trail(raw_per_tick: float, hold: float, source: Object = null, cast: ComboCast = null, leech := 0.0) -> void:
+	if alive: status.apply_trail(raw_per_tick * (1.0 - def / (def + 100.0)), hold, source, cast, leech)
 
 func apply_zone(slow: float, taken: float, hold: float, cast: ComboCast = null) -> void:
 	if alive: status.apply_zone(slow, taken, hold, cast)

@@ -319,9 +319,19 @@ func test_travel_rerolls_and_lands_by_the_stone():
 		g.hud.waypoint_list.rows["c2r0"].pressed.emit()      # the room the hero is in: a reset
 		await tree.create_timer(TestGround_fade()).timeout
 		await _frames(2)
+		# Deterministic (M5b Task 4 review): the global RNG is also drawn by monsters during the real-time fade, so
+		# the new seed is not fixed, and two seeds can pick the same bank entry (1 in the bank's size, ~1/64). The
+		# trip must re-roll the seed and lay the new seed's piles; "different homes" is checked only when the two
+		# seeds pick different bank entries. Whether a re-roll must always differ is the owner's call (not decided).
+		var groups2: Array = g.groups_for("c2r0", "c2r0")
+		var bank := PileBank.find("c2r0", g.rooms.pile_hash("c2r0", groups2))
+		var n_bank: int = bank["p"].size() if not bank.is_empty() else 0
+		var idx0 := posmod(MonsterPiles.room_seed(seed1, "c2r0"), n_bank) if n_bank > 0 else -1
+		var idx1 := posmod(MonsterPiles.room_seed(g.pile_seed, "c2r0"), n_bank) if n_bank > 0 else -1
 		if g.room_id != "c2r0": r = "current-room trip left the room (%s)" % g.room_id
 		elif g.pile_seed == seed1: r = "current-room trip did not re-roll"
-		elif g._room_piles.map(func(p): return p.home) == homes0: r = "current-room trip kept the same piles"
+		elif g._room_piles != g.rooms.piles("c2r0", groups2, MonsterPiles.room_seed(g.pile_seed, "c2r0")): r = "current-room trip: piles are not the new seed's"
+		elif idx0 != idx1 and g._room_piles.map(func(p): return p.home) == homes0: r = "current-room trip kept the same piles (bank entries %d → %d)" % [idx0, idx1]
 		elif g.hero.global_position.distance_to(g.rooms.waypoint_landing("c2r0")) > 1.0: r = "current-room trip landed at %s" % g.hero.global_position
 	if r == "":
 		var locked := Waypoints.make(g.waypoints.ids)

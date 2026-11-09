@@ -8,6 +8,12 @@ var tree: SceneTree
 const DT := 1.0 / 60.0
 const FRUIT := preload("res://scripts/monsters/fruit.gd")
 
+## A stand-in for the hero as a DoT's source: records leech heals.
+class Sink extends RefCounted:
+	var got := 0.0
+	func leech_heal(a: float) -> void:
+		got += a
+
 func setup(t: SceneTree) -> void:
 	tree = t
 
@@ -25,11 +31,11 @@ func _hero(world: Node2D, pos: Vector2) -> Hero:
 	h.health.setup(100000)
 	return h
 
-func _pack(world: Node2D, kind: String, home: Vector2, lv := 1) -> WolfPack:
+func _pack(world: Node2D, kind: String, home: Vector2, lv := 1, n := 1) -> WolfPack:
 	var p := WolfPack.new()
 	p.kind = kind
 	p.level = lv
-	p.count = 1
+	p.count = n
 	p.home = home
 	world.add_child(p)
 	p.set_physics_process(false)
@@ -110,17 +116,45 @@ func test_trail_does_not_stack():
 	c.apply_trail(6.0, 0.25, null)                 # a weaker overlapping trail keeps the highest
 	return "" if c.trail_per_tick == 10.0 else "overlapping trails per tick %s, want 10" % c.trail_per_tick
 
-## A monster in the fire ticks at most once a second, even stepping out and back in (no re-entry tick), and the
-## first tick lands on contact (a monster crossing a line quickly still burns once).
+## A monster in the fire ticks once per full second it has been in it (burn-style, at the end of each second), never
+## more often, stepping out and back in included. Review I2 (approved numbers = tools/gem_combo_sim.py: fire_fan 2
+## ticks, brahmastra 3): the Task 4 version ticked on contact and so gave one tick more per trail; this test was
+## changed with it (an approved-number fix, not a weaker check). HOLD = what a FireTrail re-applies every step.
+const HOLD := 0.25
+
 func test_trail_ticks_once_a_second_on_reentry():
 	var s := StatusEffects.new()
 	var total := 0
-	for i in 120:                                  # 2 s: in the fire on even frames only (edge of the line)
-		if i % 2 == 0: s.apply_trail(10.0, DT * 0.5, null)
+	for i in 120:                                  # 2 s at the edge: in 0.1 s, out 0.1 s (out < hold: one stay)
+		if (i / 6) % 2 == 0: s.apply_trail(10.0, HOLD, null)
 		total += s.tick(DT)
 	if total != 20: return "2 s flickering in and out dealt %d, want 20 (one tick a second)" % total
 	for i in 120: total += s.tick(DT)               # left the fire: nothing more
-	return "" if total == 20 else "trail kept burning after the hold ended (%d)" % total
+	if total != 20: return "trail kept burning after the hold ended (%d)" % total
+	var r := StatusEffects.new()                    # in 0.6 s, out 0.5 s (> hold), again and again: re-entry
+	total = 0                                       # never starts a tick early; each stay is < 1 s → no tick
+	for i in 330:
+		if i % 66 < 36: r.apply_trail(10.0, HOLD, null)
+		total += r.tick(DT)
+	return "" if total == 0 else "stepping out and back in dealt %d (each stay < 1 s, want 0)" % total
+
+## The approved numbers are the sim's: a target standing in one trail gets exactly round(secs / tick) ticks: fire_fan
+## 2 s → 2, brahmastra 3 s → 3, counted from the arrow passing it to the trail's end (+ the last hold), with the
+## arrow's flight (0 .. range / speed = 0.61 s) still inside the line.
+func test_trail_ticks_match_the_sim():
+	var flight := Balance.num("shot.range") / Balance.num("shot.arrow_speed")
+	for secs in [2.0, 3.0]:
+		for extra in [0.0, flight]:
+			var s := StatusEffects.new()
+			var ticks := 0
+			for i in int(round((secs + extra) / DT)):
+				s.apply_trail(10.0, HOLD, null)
+				if s.tick(DT) > 0: ticks += 1
+			for i in 120:
+				if s.tick(DT) > 0: ticks += 1
+			var want := int(round(secs / Balance.num("elements.fire.tick")))
+			if ticks != want: return "a %s s trail (+%.2f s flight) ticked %d times, want %d (sim)" % [secs, extra, ticks, want]
+	return ""
 
 func test_zone_slow_and_taken_keep_highest():
 	var s := StatusEffects.new()
@@ -166,9 +200,11 @@ func test_statuses_carry_their_press_cast():
 	return ""
 
 ## tick_cast: the ledger of the DoT that dealt this step's damage (null when nothing ticked), so a burn or trail
-## kill is credited to exactly one press (Task 8 hook). Both ticking at once: the larger tick's ledger, ties = burn.
+## kill is credited to exactly one press (Task 8 hook). Both ticking at once and neither ledger pays: the larger
+## tick's ledger, ties = burn (review M4: a paying ledger goes first, test_dot_kill_credits_the_paying_ledger; this
+## test used a paying bloodthirst ledger for `a` before M4, now two 0-MP ones).
 func test_tick_cast_names_one_ledger():
-	var a := ComboCast.new("bloodthirst")
+	var a := ComboCast.new("frost_shard")
 	var b := ComboCast.new("fire_fan")
 	var s := StatusEffects.new()
 	s.apply_burn(4.0, 0.0, null, a)
@@ -191,6 +227,84 @@ func test_tick_cast_names_one_ledger():
 	if not is_same(d.tick_cast, b) or not is_same(d.tick_source, src): return "trail ending on its killing tick lost cast/source"
 	d.clear()                                           # death clears the statuses, not the last tick's report
 	return "" if is_same(d.tick_cast, b) and is_same(d.tick_source, src) else "clear() dropped tick_cast / tick_source"
+
+## Review M4: a burn and a trail tick on the same step and kill: the kill goes to the ledger that pays (MP on kill
+## left, or a heal) over a 0-MP one, whichever tick was larger; only when both or neither pay does the larger tick
+## (ties: the burn) decide. One ledger per step, so one kill still pays at most once.
+func test_dot_kill_credits_the_paying_ledger():
+	var pays := ComboCast.new("bloodthirst")
+	var src_b := RefCounted.new()
+	var src_t := RefCounted.new()
+	var s := StatusEffects.new()
+	s.apply_burn(2.0, 0.0, src_b, pays)                  # small burn from a bloodthirst press (+ fire gem)
+	s.apply_trail(9.0, 2.0, src_t, ComboCast.new("fire_fan"))   # larger trail tick, 0 MP
+	s.tick(1.0)
+	if not is_same(s.tick_cast, pays) or not is_same(s.tick_source, src_b): return "larger 0-MP trail tick took the kill from the paying burn"
+	var t := StatusEffects.new()
+	t.apply_burn(9.0, 0.0, src_b, ComboCast.new("fire_fan"))
+	t.apply_trail(2.0, 2.0, src_t, pays)
+	t.tick(1.0)
+	if not is_same(t.tick_cast, pays) or not is_same(t.tick_source, src_t): return "larger 0-MP burn tick took the kill from the paying trail"
+	var spent := ComboCast.new("rahu")                   # rahu at its 9 MP cap pays nothing more (no kill heal)
+	for i in 3: spent.refund_kill()
+	var u := StatusEffects.new()
+	u.apply_burn(2.0, 0.0, src_b, ComboCast.new("bloodthirst"))
+	u.apply_trail(9.0, 2.0, src_t, spent)
+	u.tick(1.0)
+	if u.tick_cast == null or u.tick_cast.id != "bloodthirst": return "a capped ledger beat one that still pays (%s)" % u.tick_cast
+	var w := StatusEffects.new()                         # both pay: the larger tick
+	var big := ComboCast.new("rahu")
+	w.apply_burn(2.0, 0.0, src_b, ComboCast.new("bloodthirst"))
+	w.apply_trail(9.0, 2.0, src_t, big)
+	w.tick(1.0)
+	return "" if is_same(w.tick_cast, big) else "both pay: the larger tick should take it"
+
+## Review I1: a burn's leech and source end with the burn (and in clear()); they never outlive it.
+func test_burn_leech_ends_with_the_burn():
+	var src := Sink.new()
+	var s := StatusEffects.new()
+	s.apply_burn(5.0, 0.5, src)
+	for i in int(round(3.2 / DT)): s.tick(DT)
+	if s.is_burning(): return "burn still on after 3.2 s"
+	if s.burn_leech != 0.0 or s.burn_source != null: return "burn ended but leech %s / source %s stayed" % [s.burn_leech, s.burn_source]
+	var c := StatusEffects.new()
+	c.apply_burn(5.0, 0.5, src)
+	c.clear()
+	return "" if c.burn_leech == 0.0 and c.burn_source == null else "clear() left the burn's leech / source"
+
+## Review I1: Wolf.tick_burn leeches each DoT's own part with its own leech, to its own source: the burn's leech
+## never applies to trail damage (during or after the burn). Reading (plan Global Constraints: trail ticks are hits
+## of their press and leech; Task 8: DoT ticks never crit): a trail leeches with its own press's leech fraction.
+func test_wolf_leeches_each_dot_part_only():
+	var w := _wolf()
+	w.health.setup(100000)
+	var burner := Sink.new()
+	var trailer := Sink.new()
+	w.apply_status("burn", 10.0, 0.5, burner)
+	for i in int(round(1.0 / DT)):
+		w.apply_trail(40.0, HOLD, trailer)         # no leech on this trail's press
+		w.tick_burn(DT)
+	var r := ""
+	if not is_equal_approx(burner.got, 5.0): r = "burn leech healed %s, want 5 (10 × 0.5; not the trail's part)" % burner.got
+	elif trailer.got != 0.0: r = "a trail without leech healed %s" % trailer.got
+	if r == "":
+		for i in int(round(2.5 / DT)):              # burn ends at 3 s; the trail goes on
+			w.apply_trail(40.0, HOLD, trailer)
+			w.tick_burn(DT)
+		if not is_equal_approx(burner.got, 15.0): r = "after the burn ended its leech still healed (%s, want 15)" % burner.got
+	if r == "":
+		var v := _wolf()
+		v.health.setup(100000)
+		var own := Sink.new()
+		var def := float(v.stats().def)
+		for i in int(round(1.0 / DT)):
+			v.apply_trail(40.0, HOLD, own, null, 0.25)   # a trail whose press has a leech gem: its own fraction
+			v.tick_burn(DT)
+		var want := 40.0 * (1.0 - def / (def + 100.0)) * 0.25
+		if not is_equal_approx(own.got, want): r = "trail with leech 0.25 healed %s, want %s" % [own.got, want]
+		v.free()
+	w.free()
+	return r
 
 ## clear() (death, revive, kept room) ends every status including the freeze lock.
 func test_clear_ends_everything():
@@ -218,27 +332,33 @@ func test_freeze_cancels_windup_and_holds():
 	var r := ""
 	if not await _frames(p, h, 120, func(): return m.state == "lunge_warn"): r = "boar never warned a lunge (state %s)" % m.state
 	elif not m.telegraph_visible(): r = "no lunge warning shown"
+	# Review M6: the frozen window must be longer than the boar's whole attack (warning + lunge), so "the hero takes
+	# no damage" can fail: without the freeze hold the boar (lunge cooldown 0) re-warns at once and lands by ~1.1 s.
+	var attack := m.n("lunge_warn") + m.n("lunge_time")
+	var secs := attack + 0.5
 	if r == "":
 		var cd := m._lunge_cd
-		if not m.apply_freeze(1.0, 5.0): r = "freeze refused"
+		if not m.apply_freeze(secs, 5.0): r = "freeze refused"
 		elif m.telegraph_visible(): r = "lunge warning still shown while frozen"
 		elif m.state in ["lunge_warn", "lunge", "bite", "ring_warn"]: r = "still in attack state %s" % m.state
 		elif m._lunge_cd != cd: r = "freeze changed the lunge cooldown"
 	if r == "":
 		var at := m.global_position
 		var hp := h.health.hp
-		await _frames(p, h, 30)                        # 0.5 s frozen
-		if not m.is_frozen(): r = "thawed before 1 s"
+		await _frames(p, h, int((attack + 0.3) / DT))   # longer than warning + lunge, still frozen
+		if h.health.hp != hp: r = "the hero was hit by a frozen boar"
+		elif not m.is_frozen(): r = "thawed before %.1f s" % secs
 		elif m.global_position.distance_to(at) > 0.01: r = "frozen boar moved %s" % (m.global_position - at)
-		elif h.health.hp != hp: r = "the hero was hit by a frozen boar"
 		elif m.velocity != Vector2.ZERO: r = "frozen velocity %s" % m.velocity
 		elif m.body.is_playing(): r = "frozen body still animating"
 		elif m.telegraph_visible(): r = "warning came back while frozen"
 	if r == "":
+		await _frames(p, h, int(0.25 / DT))
 		var at := m.global_position
-		await _frames(p, h, 36)                        # thawed: it acts again (moves or winds up a new attack)
-		if m.is_frozen(): r = "still frozen after 1.1 s"
-		elif m.global_position.distance_to(at) < 0.5 and m.state == "chase": r = "thawed boar does nothing (state %s)" % m.state
+		await _frames(p, h, 6)                         # thawed: it acts again (moves or winds up a new attack)
+		var moved := m.global_position.distance_to(at) >= 0.5
+		if m.is_frozen(): r = "still frozen after %.1f s" % secs
+		elif not (moved or m.state in ["lunge_warn", "lunge", "bite"]): r = "thawed boar does nothing (state %s, moved %s)" % [m.state, m.global_position - at]
 	world.queue_free()
 	return r
 
@@ -290,14 +410,109 @@ func test_elite_freezes_too():
 	world.queue_free()
 	return r
 
-## Guard for the owner's boss rule: no monster script overrides the freeze (so a boss added later freezes too).
-func test_no_monster_opts_out_of_freeze():
-	var d := DirAccess.open("res://scripts/monsters")
+## Every .gd under res://scripts, recursively.
+func _scripts(dir := "res://scripts") -> Array:
+	var out: Array = []
+	var d := DirAccess.open(dir)
+	if d == null: return out
 	for f in d.get_files():
-		if not f.ends_with(".gd") or f in ["wolf.gd", "status_effects.gd"]: continue
-		var text := FileAccess.get_file_as_string("res://scripts/monsters/" + f)
-		if "func apply_freeze" in text or "func is_frozen" in text: return "%s overrides the freeze (owner: bosses freeze like others)" % f
-	return ""
+		if f.ends_with(".gd"): out.append(dir + "/" + f)
+	for sub in d.get_directories(): out.append_array(_scripts(dir + "/" + sub))
+	return out
+
+## Monster scripts: everything under scripts/monsters (any depth), plus any script elsewhere that extends a monster.
+func _monster_scripts() -> Array:
+	var out: Array = []
+	var ext := RegEx.create_from_string("(?m)^extends\\s+(Wolf|Monster|\"res://scripts/monsters/)")
+	for path in _scripts():
+		if path.begins_with("res://scripts/monsters/") or ext.search(FileAccess.get_file_as_string(path)) != null:
+			out.append(path)
+	return out
+
+## Owner 2026-11-09 (Task 4 review M1): a frozen monster is not knocked back and does not slide ("ไม่กระเด็น
+## ติดอยู่กับที่"). Control: the same hit knocks an unfrozen wolf back (so this check can fail).
+func test_frozen_monster_is_not_knocked_back():
+	var a := _wolf()
+	var b := _wolf()
+	a.health.setup(100000)
+	b.health.setup(100000)
+	b.apply_freeze(1.0, 5.0)
+	var pa := a.position
+	var pb := b.position
+	a.receive_hit(5.0, 1.0, pa + Vector2(-40, 0))
+	b.receive_hit(5.0, 1.0, pb + Vector2(-40, 0))
+	var r := ""
+	if a.position.distance_to(pa) < 1.0: r = "control: an unfrozen wolf was not knocked back (%s)" % (a.position - pa)
+	elif b.position != pb: r = "a frozen wolf was knocked back by %s" % (b.position - pb)
+	a.free()
+	b.free()
+	return r
+
+## M1: in a crowd (monsters on one spot push apart, WolfPack._separate) a frozen monster is never the one pushed,
+## also after a knockback hit; its unfrozen neighbours still move off it (control).
+func test_frozen_monster_is_not_pushed_by_the_crowd():
+	var world: Node2D = await _world()
+	var h := _hero(world, Vector2(900, 900))
+	var p := _pack(world, "wolf", Vector2(300, 300), 1, 3)
+	await tree.physics_frame
+	var r := "" if p.wolves.size() >= 3 else "pack has %d wolves" % p.wolves.size()
+	if r == "":
+		for w in p.wolves:
+			w.global_position = Vector2(300, 300)
+			w.health.setup(100000)
+		var f: Wolf = p.wolves[0]
+		var o: Wolf = p.wolves[1]
+		f.apply_freeze(1.0, 5.0)
+		f.receive_hit(5.0, 1.0, Vector2(260, 300))      # a hit with knockback, in the crowd
+		for i in 30:
+			await tree.physics_frame
+			p._separate(DT)
+		if f.global_position != Vector2(300, 300): r = "frozen wolf pushed to %s" % f.global_position
+		elif o.global_position.distance_to(Vector2(300, 300)) < 1.0: r = "control: the crowd did not push the unfrozen wolf"
+		if r == "":
+			await _frames(p, h, 10)                    # a full step (step_all = wolves + _separate) too
+			if f.global_position != Vector2(300, 300): r = "frozen wolf moved during step_all: %s" % f.global_position
+	world.queue_free()
+	return r
+
+## Guard for the owner's boss rule: no monster script overrides the freeze or the frozen hold, or the push that the
+## frozen hold blocks (so a boss added later freezes and stays put too). Review M2: scans scripts/monsters
+## recursively and every script elsewhere that extends a monster.
+func test_no_monster_opts_out_of_freeze():
+	var found := 0
+	for path in _monster_scripts():
+		if path.get_file() in ["wolf.gd", "status_effects.gd"] and path.get_base_dir() == "res://scripts/monsters": continue
+		found += 1
+		var text := FileAccess.get_file_as_string(path)
+		for f in ["func apply_freeze", "func is_frozen", "func _hold_frozen", "func _push", "func push("]:
+			if f in text: return "%s has its own %s (owner: bosses freeze and stay put like others)" % [path, f]
+	return "" if found >= 2 else "scan found only %d monster scripts (monster.gd, ...): the scan is broken" % found
+
+## Review M2: every state a monster script enters, other than the resting / moving-away ones, is one of its
+## _fight_states(), so apply_freeze cancels it (a future boss's slam warning hides on freeze too).
+const NOT_FIGHT := ["idle", "dead", "return", "flee"]
+
+func test_every_attack_state_is_a_fight_state():
+	var assign := RegEx.create_from_string("\\bstate\\s*=\\s*\"(\\w+)\"")
+	var checked := 0
+	for path in _monster_scripts():
+		var s: Script = load(path)
+		var chain: Array = []
+		var b: Script = s
+		while b != null:
+			chain.append(b.resource_path)
+			b = b.get_base_script()
+		if not "res://scripts/monsters/wolf.gd" in chain: continue
+		var used := {}
+		for p in chain:
+			for m in assign.search_all(FileAccess.get_file_as_string(p)): used[m.get_string(1)] = true
+		var inst = s.new()
+		var fight: Array = inst._fight_states()
+		inst.free()
+		checked += 1
+		for st in used:
+			if not st in NOT_FIGHT and not st in fight: return "%s enters state \"%s\" that is not in _fight_states() %s: a freeze would not cancel it" % [path, st, fight]
+	return "" if checked >= 2 else "only %d monster scripts checked" % checked
 
 func test_dead_monster_ignores_freeze():
 	var w := _wolf()
@@ -368,16 +583,22 @@ func test_wolf_trail_applies_def():
 	return r
 
 ## A trail tick goes through health like a burn tick (dot_tick, no knockback) and the wolf's cast stays readable.
+## Review I2: the first tick lands after a full second in the fire (was: on contact).
 func test_wolf_trail_tick_damages():
 	var w := _wolf()
 	w.health.setup(1000)
 	var hp := w.health.hp
 	var c := ComboCast.new("fire_fan")
-	w.apply_trail(40.0, 0.25, null, c)
-	w.tick_burn(DT)
 	var r := ""
-	if w.health.hp >= hp: r = "trail did not damage the wolf"
+	var at := w.position
+	for i in int(round(1.0 / DT)):
+		if r == "" and w.health.hp != hp: r = "trail ticked before a full second (frame %d)" % i
+		w.apply_trail(40.0, HOLD, null, c)
+		w.tick_burn(DT)
+	if r != "": pass
+	elif w.health.hp >= hp: r = "trail did not damage the wolf after 1 s"
 	elif not is_same(w.status.tick_cast, c): r = "tick_cast is not the trail's press"
+	elif w.position != at: r = "a trail tick knocked the wolf back"
 	w.free()
 	return r
 
