@@ -1,9 +1,16 @@
 extends Node2D
-## Minimal enemy for hero/arrow tests: same interface as Wolf (is_alive, hurt_point, receive_hit).
+## Minimal enemy for hero/arrow tests: same interface as Wolf (is_alive, hurt_point, receive_hit) and, from M5b
+## Task 4, the same status API (apply_status / apply_freeze / apply_mark / apply_trail / apply_zone, is_frozen /
+## is_chilled / is_marked) on a real StatusEffects. receive_hit records the multiplier it was given (no taken_mult),
+## so older tests keep their numbers; combo tests read `status` and the counters.
 
 var alive := true
 var hp := 40
+var def := 0
 var hits: Array = []   # [atk, mult, from]
+var status := StatusEffects.new()
+var freezes := 0       # successful apply_freeze calls
+var statuses: Array = []   # [kind, value, cast] from apply_status
 
 func is_alive() -> bool:
 	return alive
@@ -14,3 +21,40 @@ func hurt_point() -> Vector2:
 func receive_hit(atk: float, mult: float, from: Vector2, _crit_chance := -1.0, _crit_mult := -1.0) -> int:
 	hits.append([atk, mult, from])
 	return 1
+
+func apply_status(kind: String, value := 0.0, leech := 0.0, source: Object = null, cast: ComboCast = null) -> void:
+	if not alive: return
+	statuses.append([kind, value, cast])
+	if kind == "burn": status.apply_burn(value, leech, source, cast)
+	elif kind == "slow": status.apply_slow()
+
+func apply_freeze(secs: float, lock_secs: float, cast: ComboCast = null) -> bool:
+	if not alive or not status.apply_freeze(secs, lock_secs, cast): return false
+	freezes += 1
+	return true
+
+func apply_mark(taken: float, secs: float, cast: ComboCast = null) -> void:
+	if alive: status.apply_mark(taken, secs, cast)
+
+func apply_trail(raw_per_tick: float, hold: float, source: Object = null, cast: ComboCast = null) -> void:
+	if alive: status.apply_trail(raw_per_tick * (1.0 - def / (def + 100.0)), hold, source, cast)
+
+func apply_zone(slow: float, taken: float, hold: float, cast: ComboCast = null) -> void:
+	if alive: status.apply_zone(slow, taken, hold, cast)
+
+func is_frozen() -> bool:
+	return alive and status.is_frozen()
+
+func is_chilled() -> bool:
+	return alive and (status.is_slowed() or status.is_frozen())
+
+func is_marked() -> bool:
+	return alive and status.is_marked()
+
+## Advances the statuses; burn / trail damage comes off hp (dies at 0). Returns the damage dealt.
+func tick_status(delta: float) -> int:
+	var dmg := status.tick(delta)
+	if alive and dmg > 0:
+		hp -= dmg
+		if hp <= 0: alive = false
+	return dmg

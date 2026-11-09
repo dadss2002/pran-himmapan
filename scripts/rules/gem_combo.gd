@@ -10,6 +10,7 @@ const ELEMENT_KEYS := ["fire", "ice", "lightning"]
 
 static var _no_rows: Array = []
 static var _src: Array = []        # the recipe list _by_id was built from
+static var _src_size := -1         # its size then (a list grown / shrunk in place rebuilds too)
 static var _by_id := {}            # id → row (the data row itself, not a copy)
 
 static func _rows() -> Array:
@@ -17,12 +18,14 @@ static func _rows() -> Array:
 	if typeof(gc) != TYPE_DICTIONARY or typeof(gc.get("recipes", null)) != TYPE_ARRAY: return _no_rows
 	return gc.recipes
 
-## GemCombo is read per hit from M5b Task 4 on: one id → row map, rebuilt only when the recipe list itself is
-## replaced (tests that swap it), so recipe() / p() allocate nothing per call.
+## GemCombo is read per hit from M5b Task 4 on: one id → row map, rebuilt only when the recipe list is replaced or
+## grown / shrunk in place (tests that swap or append), so recipe() / p() allocate nothing per call. Contract: a
+## row's `id` is never changed in place (replace the row or the list instead); its numbers may be.
 static func _index() -> Dictionary:
 	var rows := _rows()
-	if not is_same(rows, _src):
+	if not is_same(rows, _src) or rows.size() != _src_size:
 		_src = rows
+		_src_size = rows.size()
 		_by_id = {}
 		for row in rows: _by_id[String(row.id)] = row
 	return _by_id

@@ -92,3 +92,46 @@ func test_refund_cap_below_press_cost():
 			var cap := int(GemCombo.p(id, "kill_mp_cap"))
 			if float(b.mp) <= cap or worst <= cap: return "%s on %s costs %s MP (4 gems: %s) but can refund %d" % [id, skill, b.mp, worst, cap]
 	return ""
+
+## Task 3 review M4: refund_kill() grants this press's own kill_mp (copied at the press), under the same cap.
+func test_refund_kill_uses_stored_kill_mp():
+	var b := ComboCast.new("bloodthirst")
+	var r := ComboCast.new("rahu")
+	var got := [[], []]
+	for i in 4:
+		got[0].append(b.refund_kill())
+		got[1].append(r.refund_kill())
+	if got != [[2, 2, 2, 0], [3, 3, 3, 0]]: return "refund_kill got %s, want [[2,2,2,0],[3,3,3,0]]" % [got]
+	if ComboCast.new("").refund_kill() != 0 or ComboCast.new("garuda").refund_kill() != 0: return "a combo with no MP on kill refunded"
+	var mixed := ComboCast.new("bloodthirst")         # refund_mp (kept for callers) and refund_kill share one cap
+	return "" if [mixed.refund_mp(5), mixed.refund_kill(), mixed.refund_kill()] == [5, 1, 0] else "refund_mp and refund_kill do not share the cap"
+
+## Task 3 review M5: a press's ledger is built from the build's combo_p (one source for the press's numbers), so a
+## hit and the ledger can never disagree; a build with no combo gives an empty ledger.
+func test_from_build_reads_combo_p():
+	var stats := {"crit": 0.05, "element_dmg": 0.0, "skill_cd_cut": 0.0}
+	var gems := [{"type": "leech", "level": 1, "exp": 0}, {"type": "multiply", "level": 1, "exp": 0}, {"type": "execute", "level": 1, "exp": 0}]
+	var b := SkillBuild.of("piercing", 10, gems, stats)
+	b.combo_p.kill_mp_cap = 4.0                       # the build's copy is the source, not balance.json
+	var c := ComboCast.from_build(b, 0.8)
+	if c.id != "rahu": return "from_build id %s" % c.id
+	if c.kill_mp != 3 or c.kill_mp_cap != 4: return "from_build kill_mp %d cap %d (want 3 / the build's 4)" % [c.kill_mp, c.kill_mp_cap]
+	if not is_equal_approx(c.dmg_bonus(), 0.30): return "from_build HP bonus %s at 80 %% HP" % c.dmg_bonus()
+	if not is_equal_approx(ComboCast.from_build(b, 0.5).dmg_bonus(), 0.0): return "from_build HP bonus below 70 %"
+	if [c.refund_kill(), c.refund_kill()] != [3, 1]: return "from_build cap not the build's"
+	var none := ComboCast.from_build(SkillBuild.of("piercing", 10, [], stats), 1.0)
+	if none.id != "" or none.refund_kill() != 0 or none.dmg_bonus() != 0.0: return "no-combo build gave a ledger with effects"
+	var junk := ComboCast.from_build({}, 1.0)
+	return "" if junk.id == "" and junk.refund_kill() == 0 else "a junk build gave a ledger with effects"
+
+## Task 3 review M3: once() keys by tag then target id (no "tag:id" string built per call).
+func test_once_keys_by_tag_then_target():
+	var c := ComboCast.new("anodard")
+	c.once("shatter", 7)
+	c.once("shatter", 8)
+	c.once("freeze", 7)
+	if c._once.size() != 2 or not (c._once.get("shatter", {}) as Dictionary).has(7) or not (c._once.get("freeze", {}) as Dictionary).has(7): return "once table %s" % [c._once]
+	var src := FileAccess.get_file_as_string("res://scripts/rules/combo_cast.gd")
+	var body := src.substr(src.find("func once("))
+	body = body.substr(0, body.find("\nfunc ", 1)) if body.find("\nfunc ", 1) > 0 else body
+	return "" if not ("%" in body or "str(" in body or "String(" in body) else "once() still builds a string per call"

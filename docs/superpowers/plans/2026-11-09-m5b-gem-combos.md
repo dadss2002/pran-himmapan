@@ -192,7 +192,7 @@ const SPEC := {   # spec §1 and §2 at gem Lv1, verbatim
 	"fire_fan":      {"tier": 2, "name": "ศรพัดเพลิง", "gems": ["split", "fire"], "trail_secs": 2.0, "trail_frac": 0.20},
 	"thunder_hop":   {"tier": 2, "name": "ศรอสนีกระโดด", "gems": ["ricochet", "lightning"], "extra_bounces": 1, "bolts": 1, "bolt_frac": 0.50},
 	"hawk_eye":      {"tier": 2, "name": "ศรตาเหยี่ยว", "gems": ["homing", "execute"], "homing_full": 1, "crit_bonus": 0.15, "mark_secs": 4.0, "mark_taken": 0.20},
-	"bloodthirst":   {"tier": 2, "name": "ศรกระหายเลือด", "gems": ["leech", "multiply"], "leech_mult": 2.0, "kill_heal_frac": 0.03, "kill_mp": 2, "kill_mp_cap": 6},
+	"bloodthirst":   {"tier": 2, "name": "ศรกระหายเลือด", "gems": ["leech", "multiply"], "leech_add": 0.03, "kill_heal_frac": 0.03, "kill_mp": 2, "kill_mp_cap": 6},
 	"frost_shard":   {"tier": 2, "name": "ศรเกล็ดน้ำแข็ง", "gems": ["ice", "split"], "freeze_hits": 3, "freeze_secs": 1.0, "freeze_lock_secs": 5.0, "bonus_vs_chilled": 0.25},
 	"shockwave":     {"tier": 2, "name": "ศรคลื่นกระแทก", "gems": ["pierce", "expand"], "blast_on_pierce": 1, "blast_radius": 32, "blast_frac": 0.80},
 	"hunter_zone":   {"tier": 2, "name": "อาณาเขตพราน", "gems": ["expand", "extend"], "zone_slow": 0.30, "zone_taken": 0.10},
@@ -201,7 +201,7 @@ const SPEC := {   # spec §1 and §2 at gem Lv1, verbatim
 	"thousand_bolts":{"tier": 3, "name": "ศรอสนีพันสาย", "gems": ["ricochet", "lightning", "split"], "bases": ["thunder_hop"], "bolts": 2, "bolt_frac": 0.50},
 	"garuda":        {"tier": 3, "name": "ศรเนตรพญาครุฑ", "gems": ["homing", "execute", "multiply"], "bases": ["hawk_eye"], "homing_full": 1, "crit_bonus": 0.15, "mark_secs": 4.0, "mark_taken": 0.30, "sure_crit_marked": 1},
 	"anodard":       {"tier": 3, "name": "ศรผลึกอโนดาต", "gems": ["ice", "split", "execute"], "bases": ["frost_shard"], "freeze_hits": 3, "freeze_secs": 1.0, "freeze_lock_secs": 5.0, "sure_crit_chilled": 1, "blast_on_chilled": 1, "blast_radius": 32, "blast_frac": 0.50},
-	"rahu":          {"tier": 3, "name": "ศรราหูอมจันทร์", "gems": ["leech", "multiply", "execute"], "bases": ["bloodthirst"], "hp_min": 0.70, "hp_bonus": 0.30, "leech_mult": 2.0, "crit_heal_frac": 0.01, "kill_mp": 3, "kill_mp_cap": 9},
+	"rahu":          {"tier": 3, "name": "ศรราหูอมจันทร์", "gems": ["leech", "multiply", "execute"], "bases": ["bloodthirst"], "hp_min": 0.70, "hp_bonus": 0.30, "leech_add": 0.03, "crit_heal_frac": 0.01, "kill_mp": 3, "kill_mp_cap": 9},
 	"hellfield":     {"tier": 3, "name": "ทุ่งเพลิงบรรลัยกัลป์", "gems": ["expand", "extend", "fire"], "bases": ["hunter_zone", "fire_burst"], "zone_slow": 0.30, "zone_taken": 0.20, "burn_all": 1},
 	"earth_piercer": {"tier": 3, "name": "ศรอัคนีทะลวงพิภพ", "gems": ["pierce", "expand", "fire"], "bases": ["shockwave", "fire_burst"], "blast_on_pierce": 1, "blast_radius": 40, "blast_frac": 1.00, "blast_burn": 1},
 	"meteor_rain":   {"tier": 3, "name": "ฝนดาวไฟ", "gems": ["split", "fire", "expand"], "bases": ["fire_fan", "fire_burst"], "blast_on_hit": 1, "blast_radius": 40, "blast_frac": 0.80},
@@ -244,8 +244,8 @@ For area recipes, the tests add `Balance.data()["skill_labels"]["test_fire_arrow
 **Interfaces:**
 - Consumes: `GemCombo.resolve`, `GemCombo.p`
 - Produces:
-  - `SkillBuild.of(...)` gains output keys `"combo": Dictionary` (the resolve result) and `"extra_bounces": int`. `crit` adds `crit_bonus`. `leech` is multiplied by `leech_mult`. With `homing_full`, homing does not multiply `per_arrow`. `mp` is unchanged by combos.
-  - `class_name ComboCast extends RefCounted`: `func _init(id := "", hp_frac := 1.0)`, `var id: String`, `func dmg_bonus() -> float` (Rahu: `hp_bonus` if `hp_frac >= hp_min`, else 0), `func refund_mp(per_kill: int) -> int` (granted after the cap), `func count_hit(target_key: int) -> int` (returns the new count), `func once(tag: String, target_key: int) -> bool`
+  - `SkillBuild.of(...)` gains output keys `"combo": Dictionary` (the resolve result) and `"extra_bounces": int`. `crit` adds `crit_bonus`. `leech` adds `leech_add` (owner 2026-11-09: the leech gem's own leech + a flat 3 %; was `leech_mult` ×2 before the Task 2 review). With `homing_full`, homing does not multiply `per_arrow`. `mp` is unchanged by combos.
+  - `class_name ComboCast extends RefCounted`: `func _init(id := "", hp_frac := 1.0)`, `var id: String`, `func dmg_bonus() -> float` (Rahu: `hp_bonus` if `hp_frac >= hp_min`, else 0), `func refund_mp(per_kill: int) -> int` (granted after the cap), `func count_hit(target_key: int) -> int` (returns the new count), `func once(tag: String, target_key: int) -> bool`. Task 3 review (done in Task 4): `static func from_build(b: Dictionary, hp_frac := 1.0) -> ComboCast` (numbers from `b.combo_p`, the press's single source; use it in `Hero._release`), `func refund_kill() -> int` (this press's stored `kill_mp` under the cap; Task 8 calls it instead of `refund_mp(int(kill_mp))`), `once` keyed by tag then target (no string per call)
 
 - [x] **Step 1: Write the failing tests**
 
@@ -255,7 +255,7 @@ func test_build_spec_section5_numbers():  # piercing [split]: arrow_mult≈1.566
 func test_combo_adds_no_mp():             # for every recipe formable on piercing: mp == 8 × Π gem mp multipliers (is_equal_approx)
 func test_hawk_eye_homing_full_crit():    # [homing, execute] Lv1: arrow_mult ≈ Skills.damage_mult("piercing",1) (no ×0.9); crit ≈ 0.05+0.15+0.15
 func test_homing_alone_keeps_penalty():   # [homing]: arrow_mult ≈ 1.8 × 0.9
-func test_bloodthirst_doubles_leech():    # [leech, multiply] Lv1 leech ≈ 0.06; leech gem Lv5 → ≈ (0.03+0.004)×2
+func test_sustain_leech_is_gem_plus_flat_three(): # [leech, multiply] Lv1 leech ≈ 0.03 + 0.03 = 0.06; leech gem Lv5 → ≈ (0.03+0.004) + 0.03 (owner 2026-11-09: leech_add, not ×2)
 func test_thunder_hop_extra_bounce():     # [ricochet, lightning] extra_bounces == 1; [ricochet, lightning, split] (thousand_bolts) extra_bounces == 0
 # tests/test_combo_cast.gd
 func test_bloodthirst_refund_caps_at_6(): # c = ComboCast.new("bloodthirst"); [c.refund_mp(2) ×4] == [2,2,2,0]
@@ -286,7 +286,7 @@ func test_rahu_hp_threshold():            # ComboCast.new("rahu", 0.70).dmg_bonu
 - Produces on `StatusEffects`: `apply_freeze(secs: float, lock_secs: float) -> bool` (false while locked or already frozen); `is_frozen() -> bool`; `apply_mark(taken: float, secs: float)` (keeps the highest `taken` while active and refreshes the time); `is_marked() -> bool`; `apply_trail(per_tick: float, hold: float, source: Object)` (keeps the highest per_tick; burns while `hold` > 0; ticks every `elements.fire.tick`); `apply_zone(slow: float, taken: float, hold: float)`; `taken_mult() -> float` = (1 + mark) × (1 + zone_taken); `speed_mult()` = 0 when frozen, otherwise (1 − ice slow if slowed) × (1 − zone slow if in zone); `tick()` returns burn + trail damage; `clear()` clears everything.
 - Produces on `Wolf` (and the same names on `tests/dummy_enemy.gd`): `apply_freeze(secs, lock_secs) -> bool`, `apply_mark(taken, secs)`, `apply_trail(raw_per_tick, hold, source)` (applies its own DEF: per_tick = raw × (1 − def/(def+100))), `apply_zone(slow, taken, hold)`, `is_frozen()`, `is_chilled()` (slowed or frozen), `is_marked()`. `receive_hit` multiplies `mult` by `status.taken_mult()`. Burn and trail ticks are multiplied by it too.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```gdscript
 func test_freeze_once_per_lock():          # s.apply_freeze(1.0, 5.0) true; tick(0.5); apply → false; tick(0.5): not frozen; tick(3.9): apply false; tick(0.2): apply true
@@ -303,10 +303,12 @@ func test_marked_wolf_takes_20pct_more():  # two wolves with the same Combat.rng
 func test_frozen_tint_is_frost():          # while frozen, status_tint() == frost tint (same as slowed)
 ```
 
-- [ ] **Step 2: Run and check it fails** (`TEST_ONLY=test_status_combo`).
-- [ ] **Step 3: Implement.** In `Wolf.step`, after `_update_status_fx()`, a frozen monster gets `velocity = Vector2.ZERO` and the body animation paused; the step returns before the state `match` (cooldowns still tick). `apply_freeze` on a monster in an attack windup (any of `_fight_states()` other than chase) ends it: `_end_lunge()`, `_show_telegraph(false)`, state set to `"chase"`, and its attack cooldown is left as it was. Frost FX and tint show while frozen. `Monster.step` (monster.gd:148) gets no special case, since its windups go through `super.step`. Check ring and throw too, and cancel their telegraphs the same way.
-- [ ] **Step 4: Run and check it passes.** Run `TEST_ONLY=test_status_combo`, then `test_monsters`, `test_elite` and the tint tests (`test_frost_tint_reads_as_ice_on_every_monster`) to catch regressions.
-- [ ] **Step 5: Commit** `git commit -m "M5b Task 4: freeze (5 s lock, bosses too), mark, non-stacking trail burn, zone statuses"`
+- [x] **Step 2: Run and check it fails** (`TEST_ONLY=test_status_combo`).
+- [x] **Step 3: Implement.** In `Wolf.step`, after `_update_status_fx()`, a frozen monster gets `velocity = Vector2.ZERO` and the body animation paused; the step returns before the state `match` (cooldowns still tick). `apply_freeze` on a monster in an attack windup (any of `_fight_states()` other than chase) ends it: `_end_lunge()`, `_show_telegraph(false)`, state set to `"chase"`, and its attack cooldown is left as it was. Frost FX and tint show while frozen. `Monster.step` (monster.gd:148) gets no special case, since its windups go through `super.step`. Check ring and throw too, and cancel their telegraphs the same way.
+- [x] **Step 4: Run and check it passes.** Run `TEST_ONLY=test_status_combo`, then `test_monsters`, `test_elite` and the tint tests (`test_frost_tint_reads_as_ice_on_every_monster`) to catch regressions.
+- [x] **Step 5: Commit** `git commit -m "M5b Task 4: freeze (5 s lock, bosses too), mark, non-stacking trail burn, zone statuses"`
+
+**Done (2026-11-09):** `StatusEffects` (pure): `apply_freeze(secs, lock, cast) -> bool` (lock per target, counted from the freeze, max(lock, secs); refused while frozen/locked), `is_frozen`, `apply_mark` (highest taken kept, any re-mark refreshes the time), `is_marked`, `apply_trail(per_tick, hold, source, cast)` (highest per_tick while held; first tick on contact, then every `elements.fire.tick`, never more often, stepping out and back in included), `in_trail`, `apply_zone` (highest slow / taken while held), `in_zone`, `taken_mult()` = (1+mark)(1+zone) applied to hits and to burn/trail ticks, `speed_mult()` 0 when frozen; every status keeps the `ComboCast` of the press that applied it (`burn_cast`, `trail_cast` = newer application like `burn_source`; `freeze_cast` = first, a refused freeze keeps it; `mark_cast`, `zone_cast`); `tick_cast` / `tick_source` = the ONE ledger + source of the DoT that dealt the last tick (larger tick, ties burn; `clear()` leaves them so the Task 8 kill hook reads them after the killing tick). `Wolf`: `apply_freeze` (dead → false; ends any windup in `_fight_states()` except chase: `_end_lunge`, telegraph/ring hidden, state chase, cooldowns untouched), `apply_mark`, `apply_trail` (own DEF, no roll), `apply_zone`, `is_frozen`, `is_chilled`, `is_marked`, `apply_status(..., cast)`; `receive_hit` × `taken_mult()`; a frozen `step` holds (velocity 0, body paused, flash still shown, cooldowns tick, no state change, no throw) and returns before the state match; frost tint + frost overlay while frozen (frost-wins and PerfSaver shedding unchanged). No monster script may override the freeze (owner: bosses freeze too; there is no boss monster yet). `tests/dummy_enemy.gd`: same status API on a real `StatusEffects` (+ `def`, `freezes`, `statuses`, `tick_status`); `receive_hit` unchanged. Task 3 review follow-ups: M1 `GemCombo` cache also rebuilds when the list is resized in place (row `id`s are never edited in place: documented); M3 `ComboCast.once` keyed tag → target (no string per call); M4 `refund_kill()` (stored kill_mp, shares the cap with `refund_mp`, kept); M5 `ComboCast.from_build(b, hp_frac)` reads `b.combo_p` (`_init` takes an optional numbers dict); M6 plan text (Task 2 SPEC, Task 3 interfaces/test name → `leech_add`), Task 8 text now uses `from_build` / `refund_kill` / `tick_cast`; Task 10 / 11 gained the closed-slot behaviour tests and the widened open-gems guard (to implement there: skill_panel.gd still reads `hero.skill_gems` at 4 places). New tests: test_status_combo 21 (the plan's 9 + ring/throw cancel, re-entry tick, zone, DoT × taken, casts, tick_cast, clear, no-override guard, frozen overlay + saver, trail DEF, trail tick damage, dummy API), test_combo_cast +3, test_gem_combo +1. Plan wording changed in one test: after the thaw the boar "acts again" (moves or starts a new windup) instead of "moves", because its lunge cooldown is left as it was (0) so it re-warns at once. No existing assertion changed. Seen failing first (missing API / from_build / cache missed append); mutation checks: no frozen hold → 2 fails, no windup cancel → 2, trail `+=` → 1, re-entry tick → 1, no taken_mult on hits → 1. Full suite: `RESULT passed=555 failed=0` (530 + 25 new; a first run had 554/1: `test_waypoints::test_travel_rerolls_and_lands_by_the_stone` "current-room trip kept the same piles", a timing flake (global RNG drawn by monsters during a real-time fade); passed 3/3 alone and in the clean rerun; no shared code). Risk B26 added, B25 updated.
 
 ---
 
@@ -423,7 +425,7 @@ func test_boss_size_target_freezes():              # a wolf with set_elite(true)
 
 **Interfaces:**
 - Consumes: `ComboCast.refund_mp`, `ComboCast.dmg_bonus`, `Hero.leech_heal(amount: float)`
-- Produces: `Hero.on_combo_kill(cast: ComboCast) -> void` (heals `kill_heal_frac × max_hp` through `leech_heal`; `mp = minf(max_mp(), mp + cast.refund_mp(int(kill_mp)))`); `Hero.on_combo_crit(cast: ComboCast) -> void` (heals `crit_heal_frac × max_hp`). An arrow calls `on_combo_kill` when `amount > 0 and not t.is_alive()` after a direct or secondary hit, and `on_combo_crit` on a crit hit. **Burn and trail kills count too** (owner "นับทุกแบบ"). `apply_status("burn", value, leech, source, cast := null)` and `apply_trail(raw, hold, source, cast := null)` gain an optional trailing `cast`. `StatusEffects` keeps `burn_cast` / `trail_cast` beside `burn_source`, so a re-burn takes the newer cast. When a burn or trail tick in `Wolf.tick_burn` kills, it calls `source.on_combo_kill(cast)` if both are valid. Because that cast is the press's ledger object, it shares that press's 6 / 9 cap. DoT ticks never call `on_combo_crit` (they don't crit).
+- Produces: `Hero.on_combo_kill(cast: ComboCast) -> void` (heals `kill_heal_frac × max_hp` through `leech_heal`; `mp = minf(max_mp(), mp + cast.refund_kill())`); `Hero.on_combo_crit(cast: ComboCast) -> void` (heals `crit_heal_frac × max_hp`). An arrow calls `on_combo_kill` when `amount > 0 and not t.is_alive()` after a direct or secondary hit, and `on_combo_crit` on a crit hit. **Burn and trail kills count too** (owner "นับทุกแบบ"). `apply_status("burn", value, leech, source, cast := null)` and `apply_trail(raw, hold, source, cast := null)` gain an optional trailing `cast`. `StatusEffects` keeps `burn_cast` / `trail_cast` beside `burn_source`, so a re-burn takes the newer cast (built in Task 4, with `freeze_cast` / `mark_cast` / `zone_cast`). When a burn or trail tick in `Wolf.tick_burn` kills, it calls `status.tick_source.on_combo_kill(status.tick_cast)` (the one ledger and source of the DoT that dealt that tick; Task 4; `clear()` on death leaves both) if both are valid. Because that cast is the press's ledger object, it shares that press's 6 / 9 cap. DoT ticks never call `on_combo_crit` (they don't crit).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -444,7 +446,7 @@ func test_bounce_and_bolt_kills_share_cap():  # [leech, multiply] + ricochet: ki
 ```
 
 - [ ] **Step 2: Run and check it fails.**
-- [ ] **Step 3: Implement.** `Hero._release` builds `ComboCast.new(b.combo.get("id", ""), float(health.hp) / health.max_hp)` once per press and shares it through `b["cast"]` (bounce arrows copy the build shallowly, so they share the same object). Rahu's `dmg_bonus()` is applied once to `b.arrow_mult` at release. Arrows pass `build.cast` into `apply_status("burn", …)` and `FireTrail.setup` / `apply_trail`. The ledger object outlives the press for as long as a burn holds it (RefCounted), and that is intended: its cap is the press's cap.
+- [ ] **Step 3: Implement.** `Hero._release` builds `ComboCast.from_build(b, float(health.hp) / health.max_hp)` once per press and shares it through `b["cast"]` (bounce arrows copy the build shallowly, so they share the same object). Rahu's `dmg_bonus()` is applied once to `b.arrow_mult` at release. Arrows pass `build.cast` into `apply_status("burn", …)` and `FireTrail.setup` / `apply_trail`. The ledger object outlives the press for as long as a burn holds it (RefCounted), and that is intended: its cap is the press's cap.
 - [ ] **Step 4: Run and check it passes.**
 - [ ] **Step 5: Commit** `git commit -m "M5b Task 8: sustain combos; MP on kill capped 6 / 9 per press (burn/trail kills count)"`
 
@@ -710,6 +712,8 @@ func test_new_state_has_empty_combos():      # SaveGame.new_state().combos == []
 func test_first_combo_announces_once():      # hero Lv1: socket split, socket fire → one combo_found("fire_fan", "ศรพัดเพลิง"); unsocket fire, socket it again → no second emit
 func test_three_gem_announces_advanced():    # Lv10 with fire_fan found: socket multiply → combo_found("brahmastra", "พัดเพลิงพรหมาสตร์")
 func test_save_still_under_max_bytes():      # max state from test_save_hardening + all 16 ids → text size ≤ save.max_bytes
+func test_closed_slot_combo_never_discovered_on_load(): # (Task 3 review) hero Lv1 loading sockets piercing [split, homing, fire] (fire in closed slot 3, bag full so it stays):
+                                            # after_load([]) → combos_found == [] (split+fire would be fire_fan only with slot 3 open), no combo_found emit; same with a free bag (fire goes back to the bag)
 ```
 
 - [ ] **Step 2: Run and check it fails** (`TEST_ONLY=test_save_combos`).
@@ -747,6 +751,14 @@ func test_row_gold_only_recipe_slots(): # hero Lv10 [split, fire, leech]: row_vi
 func test_preview_shows_delta():     # [split] socketed, fire gem selected in the bag: row_view("piercing").title == "ศรทะลวง · ศรพัดเพลิง", numbers[0] == {"แนวละ 172% (+10%)", "up"}, numbers[-1].kind == "down"
 func test_preview_full_slots_breaks_combo(): # Lv1 [split, fire] (2/2), homing selected → preview replaces slot 1 (index 0): title == "ศรทะลวง", gold_slots == []
 func test_title_above_icon():        # in the built row, the title Label's global y < the skill icon's global y (built in a tree at 640×360)
+func test_closed_slot_gem_never_gold(): # (Task 3 review) hero Lv1, piercing [split, homing, fire] with fire stuck in closed slot 3 (bag full):
+                                    # row_view title == "ศรทะลวง" (no combo name), title_color == SkillPanel.TEXT, gold_slots == [], no gold frame on any slot incl. index 2;
+                                    # same while previewing a gem that would only form a combo with the closed-slot gem
+# tests/test_gem_combo.gd: widen test_every_combo_reader_uses_open_gems (Task 3 review): in every file that calls SkillBuild.of / GemCombo.resolve,
+# also flag any `skill_gems[` or `skill_gems.get(` read, except inside an allow-list of functions that manage the sockets themselves
+# (hero.gd: open_gems, return_closed_gems, socket, unsocket, set_skill_gems; skill_panel.gd: only a function that draws closed slots
+# as closed, each listed in the test with its reason). Today skill_panel.gd reads hero.skill_gems at :120, :142, :151, :376: move them to
+# hero.open_gems (or the allow-list) in this task, so the guard passes.
 ```
 
 - [ ] **Step 2: Run and check it fails.**

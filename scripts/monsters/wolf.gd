@@ -182,11 +182,52 @@ func _fight_states() -> Array:
 func _step_custom(_delta: float) -> void:
 	pass
 
-## Gem element effects: "burn" (damage per tick, leech fraction, source hero) or "slow".
-func apply_status(kind: String, value := 0.0, leech := 0.0, source: Object = null) -> void:
+## Gem element effects: "burn" (damage per tick, leech fraction, source hero) or "slow". `cast` = the ComboCast of
+## the press that applied it (M5b: a burn kill refunds through that press's ledger, risks.md B25).
+func apply_status(kind: String, value := 0.0, leech := 0.0, source: Object = null, cast: ComboCast = null) -> void:
 	if not is_alive(): return
-	if kind == "burn": status.apply_burn(value, leech, source)
+	if kind == "burn": status.apply_burn(value, leech, source, cast)
 	elif kind == "slow": status.apply_slow()
+
+# ---------- M5b combo statuses (plan Task 4; StatusEffects has the rules) ----------
+
+## Freezes for `secs` and locks this monster against freezes for `lock_secs`. False while frozen / locked or dead.
+## Bosses and elites freeze like any monster (owner 2026-11-08: "บอสแข็งได้เหมือนมอนอื่น"). A freeze during an
+## attack windup (bite, lunge warning / lunge, ring warning, hop) ends it: the warning hides, the attack never goes
+## off, the monster is back to chasing, its attack cooldowns stay as they were.
+func apply_freeze(secs: float, lock_secs: float, cast: ComboCast = null) -> bool:
+	if not is_alive(): return false
+	if not status.apply_freeze(secs, lock_secs, cast): return false
+	if state in _fight_states() and state != "chase":
+		_end_lunge()
+		_show_telegraph(false)
+		state = "chase"
+		_t = 0.0
+	velocity = Vector2.ZERO
+	_update_status_fx()
+	return true
+
+func apply_mark(taken: float, secs: float, cast: ComboCast = null) -> void:
+	if is_alive(): status.apply_mark(taken, secs, cast)
+
+## raw_per_tick: the trail's damage per tick before DEF; this monster's DEF applies as for a hit (no roll, no crit).
+func apply_trail(raw_per_tick: float, hold: float, source: Object = null, cast: ComboCast = null) -> void:
+	if not is_alive(): return
+	var def := float(stats().def)
+	status.apply_trail(raw_per_tick * (1.0 - def / (def + 100.0)), hold, source, cast)
+
+func apply_zone(slow: float, taken: float, hold: float, cast: ComboCast = null) -> void:
+	if is_alive(): status.apply_zone(slow, taken, hold, cast)
+
+func is_frozen() -> bool:
+	return is_alive() and status.is_frozen()
+
+## Slowed or frozen (frost combos: bonus / sure crit / shatter vs a chilled target).
+func is_chilled() -> bool:
+	return is_alive() and (status.is_slowed() or status.is_frozen())
+
+func is_marked() -> bool:
+	return is_alive() and status.is_marked()
 
 func n(key: String) -> float:
 	var v := Balance.num("wolf." + key)
@@ -212,7 +253,7 @@ func telegraph_visible() -> bool:
 ## Hit by the hero. Returns damage dealt (0 when dead). Knockback, except during the bite windup.
 func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, crit_mult := -1.0) -> int:
 	if not is_alive(): return 0
-	var r := Combat.roll_damage(atk, mult, stats().def, true, crit_chance, crit_mult)
+	var r := Combat.roll_damage(atk, mult * status.taken_mult(), stats().def, true, crit_chance, crit_mult)   # mark / zone
 	var lands := not health.is_dead() and not health.is_invulnerable()
 	if lands: Sfx.play("crit_hit" if r.crit else "arrow_hit", _pos())
 	health.take_hit(r.amount, r.crit)              # a killing hit cries "die" in _on_died
@@ -292,12 +333,13 @@ func _update_status_fx() -> void:
 	if not is_inside_tree(): return
 	var shed := PerfSaver.active
 	_burn_fx = _toggle_fx(_burn_fx, "status_burn", status.is_burning() and is_alive() and not (shed and PerfSaver.decorative("status_burn")))
-	_frost_fx = _toggle_fx(_frost_fx, "status_frost", status.is_slowed() and is_alive() and not (shed and PerfSaver.decorative("status_frost")))
+	_frost_fx = _toggle_fx(_frost_fx, "status_frost", is_chilled() and not (shed and PerfSaver.decorative("status_frost")))
 
-## The body's status tint now: frost, else burn, else none; alpha = its tint amount (0 = none). Dead monsters are never tinted.
+## The body's status tint now: frost (slowed or frozen), else burn, else none; alpha = its tint amount (0 = none).
+## Dead monsters are never tinted.
 func status_tint() -> Color:
 	if not is_alive(): return Color(0, 0, 0, 0)
-	if status.is_slowed(): return Color(FROST_TINT, FROST_AMOUNT)
+	if status.is_slowed() or status.is_frozen(): return Color(FROST_TINT, FROST_AMOUNT)
 	if status.is_burning(): return Color(BURN_TINT, BURN_AMOUNT)
 	return Color(0, 0, 0, 0)
 
@@ -340,8 +382,9 @@ func _on_died() -> void:
 
 # ---------- simulation ----------
 
-## Status timers and the burn's damage (a DoT tick: dot_tick is set while it goes through health, so the test
-## ground shows its number without a hit spark), with the fire gem's leech.
+## Status timers and the burn / fire-trail damage (a DoT tick: dot_tick is set while it goes through health, so the
+## test ground shows its number without a hit spark), with the fire gem's leech. status.tick_cast is the ledger a
+## kill by this tick belongs to (M5b Task 8 hook).
 func tick_burn(delta: float) -> void:
 	var burn := status.tick(delta)
 	if burn <= 0: return
@@ -361,6 +404,9 @@ func step(delta: float, hero: Hero) -> void:
 	_flash = maxf(0.0, _flash - delta)
 	_bite_cd = maxf(0.0, _bite_cd - delta)
 	_lunge_cd = maxf(0.0, _lunge_cd - delta)
+	if status.is_frozen() and is_alive():
+		_hold_frozen()            # M5b freeze: no move, no attack, no state change; cooldowns above still run
+		return
 	_t += delta
 	_wanted_move = false
 	var alive_hero := _hero != null and is_instance_valid(_hero) and _hero.state != "dead"
@@ -433,6 +479,15 @@ func step(delta: float, hero: Hero) -> void:
 			_wander_to = home
 			velocity = Vector2.ZERO
 	_refresh()
+
+## One frozen step: stands still with its body paused on the current frame (the hit flash still shows).
+func _hold_frozen() -> void:
+	velocity = Vector2.ZERO
+	_wanted_move = false
+	_stuck_t = 0.0
+	_stuck_from = _pos()
+	if body.is_playing(): body.pause()
+	_refresh_flash()
 
 func _stuck(delta: float) -> bool:
 	if not _wanted_move:
@@ -629,6 +684,9 @@ func _refresh(restart := false) -> void:
 		body.frame = 0
 	elif not body.is_playing():
 		body.play()
+	_refresh_flash()
+
+func _refresh_flash() -> void:
 	var fl := 0.85 if _flash > 0.0 else 0.0
 	if body.material and fl != _flash_shown:          # only when it changes (M3k)
 		_flash_shown = fl

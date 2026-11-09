@@ -434,6 +434,19 @@ func test_every_combo_reader_uses_open_gems():
 			if ("SkillBuild.of(" in line or "GemCombo.resolve(" in line) and "skill_gems" in line: return "%s:%d reads skill_gems directly: %s" % [path, n, line.strip_edges()]
 	return "" if callers >= 2 else "expected hero.gd and skill_panel.gd as callers, found %d" % callers
 
+## Task 3 review M1: the cache also follows a recipe list grown or shrunk in place (append / pop), not only a list
+## that is replaced. Rows themselves are edited in place freely (recipe() returns the data row).
+func test_recipe_lookup_cache_follows_in_place_resize():
+	GemCombo.p("fire_fan", "trail_frac")             # build the cache on the real list
+	var rows: Array = Balance.data()["gem_combos"]["recipes"]
+	rows.append({"id": "grown", "tier": 2, "name": "x", "gems": ["split", "ice"], "trail_frac": 0.7})
+	var r := ""
+	if not is_equal_approx(GemCombo.p("grown", "trail_frac"), 0.7): r = "cache missed a row appended in place"
+	rows.pop_back()
+	if r == "" and not GemCombo.recipe("grown").is_empty(): r = "cache kept a row removed in place"
+	if r == "" and not is_equal_approx(GemCombo.p("fire_fan", "trail_frac"), 0.20): r = "cache lost the real rows"
+	return r
+
 ## The id → row cache: same rows as the data, and it follows a test that swaps the recipe list.
 func test_recipe_lookup_cache():
 	if not is_same(GemCombo.recipe("rahu"), GemCombo.recipes()[9]): return "recipe() should return the data row itself"

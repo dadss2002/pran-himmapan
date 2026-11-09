@@ -4,11 +4,13 @@ extends RefCounted
 ## access (risks.md §3). The hero makes ONE per skill press; every hit of that press (primary arrows, blasts, bolts,
 ## trail and burn ticks it applied, area ticks) reports through the same instance, so the caps hold per press:
 ## - MP on kill: bloodthirst +2 / kill, at most 6 per press; rahu +3 / kill, at most 9 (owner 2026-11-08).
-##   Burn / fire-trail kills count too (owner 2026-11-09 "นับทุกแบบ"), through the press that applied them.
+##   Burn / fire-trail kills count too (owner 2026-11-09 "นับทุกแบบ"), through the press that applied them: every
+##   monster status keeps the ComboCast of the press that applied it (StatusEffects.*_cast, M5b Task 4).
 ## - once(tag, target): once-per-target-per-press effects (shatter, freeze, ...).
 ## - count_hit(target): hits of this press on one target (frost: freeze on the 3rd).
 ## - dmg_bonus(): rahu +30 % when HP ≥ 70 % at the press.
-## The numbers are copied from balance.json once, here: hits never look them up.
+## The numbers are copied once, at the press: from the build's combo_p (from_build, the one source the press's hits
+## also read), or from balance.json when made from an id. Hits never look them up.
 ## Client-side only (risks.md S1): online play needs a server to own this ledger.
 
 var id: String
@@ -19,24 +21,39 @@ var crit_heal_frac := 0.0
 var _hp_bonus := 0.0
 var _mp_given := 0
 var _hits := {}       # target_key → hits this press
-var _once := {}       # "tag:target_key" → true
+var _once := {}       # tag → {target_key: true}   (no string built per call, Task 3 review M3)
 
 ## combo_id: the press's combo (build.combo.id, "" for none). hp_frac: the hero's HP / max HP at the press.
-func _init(combo_id := "", hp_frac := 1.0) -> void:
+## numbers: the recipe's numbers (a build's combo_p); null = read GemCombo.numbers(combo_id).
+func _init(combo_id := "", hp_frac := 1.0, numbers = null) -> void:
 	id = combo_id
 	if id == "": return
-	kill_mp = int(GemCombo.p(id, "kill_mp"))
-	kill_mp_cap = int(GemCombo.p(id, "kill_mp_cap"))
-	kill_heal_frac = GemCombo.p(id, "kill_heal_frac")
-	crit_heal_frac = GemCombo.p(id, "crit_heal_frac")
-	if hp_frac >= GemCombo.p(id, "hp_min", INF): _hp_bonus = GemCombo.p(id, "hp_bonus")
+	var cp: Dictionary = numbers if typeof(numbers) == TYPE_DICTIONARY else GemCombo.numbers(id)
+	kill_mp = int(cp.get("kill_mp", 0.0))
+	kill_mp_cap = int(cp.get("kill_mp_cap", 0.0))
+	kill_heal_frac = float(cp.get("kill_heal_frac", 0.0))
+	crit_heal_frac = float(cp.get("crit_heal_frac", 0.0))
+	if cp.has("hp_min") and hp_frac >= float(cp.hp_min): _hp_bonus = float(cp.get("hp_bonus", 0.0))
+
+## The ledger of one press of build `b` (SkillBuild.of): its combo id and its combo_p numbers, so the ledger and the
+## press's hits read the same copy (Task 3 review M5). A build without a combo (or junk) gives an empty ledger.
+static func from_build(b: Dictionary, hp_frac := 1.0) -> ComboCast:
+	var combo = b.get("combo", {})
+	var cid := String(combo.get("id", "")) if typeof(combo) == TYPE_DICTIONARY else ""
+	var cp = b.get("combo_p", {})
+	return ComboCast.new(cid, hp_frac, cp if typeof(cp) == TYPE_DICTIONARY else {})
 
 ## Rahu's damage bonus for this press: hp_bonus if the hero had ≥ hp_min HP at the press, else 0.
 func dmg_bonus() -> float:
 	return _hp_bonus
 
-## MP granted for one kill of `per_kill` MP after this press's cap (0 when the combo has no MP on kill).
+## MP granted for one kill at this press's own kill_mp, after the cap (0 when the combo has no MP on kill).
 ## The caller still clamps to max MP.
+func refund_kill() -> int:
+	return refund_mp(kill_mp)
+
+## MP granted for one kill of `per_kill` MP after this press's cap (kept for callers that pass the amount;
+## shares the cap with refund_kill). The caller still clamps to max MP.
 func refund_mp(per_kill: int) -> int:
 	if per_kill <= 0 or kill_mp_cap <= 0: return 0
 	var grant := mini(per_kill, kill_mp_cap - _mp_given)
@@ -56,7 +73,11 @@ func count_hit(target_key: int) -> int:
 
 ## True the first time (tag, target) is seen in this press, false after.
 func once(tag: String, target_key: int) -> bool:
-	var k := "%s:%d" % [tag, target_key]
-	if _once.has(k): return false
-	_once[k] = true
+	var seen = _once.get(tag)
+	if seen == null:
+		seen = {}
+		_once[tag] = seen
+	elif seen.has(target_key):
+		return false
+	seen[target_key] = true
 	return true
