@@ -334,10 +334,77 @@ func test_fade_runs_while_paused():
 		if g.warping: break
 	var r := "" if g.warping else "no fade started"
 	tree.paused = true
-	await tree.create_timer(0.8, true).timeout
+	await tree.create_timer(g.FADE_OUT + g.FADE_IN + 0.35, true).timeout
 	if r == "" and g.room_id != String(_dest(g, "west").to): r = "fade stopped while paused (in %s)" % g.room_id
 	elif r == "" and g.fade.color.a > 0.01: r = "screen left dark while paused (alpha %.2f)" % g.fade.color.a
 	tree.paused = false
+	await _done(g)
+	return r
+
+## Owner 2026-11-09: the fade out is 0.5 s now, so the hero is in the dark longer. Every physics frame of the
+## whole fade (until the room changes): the game is warping, the hero's physics is off, the old room's packs are
+## stopped and calm, a monster hit and a poison dose do nothing, and held movement (the move action held from the
+## first dark frame, and the joystick's external_input set every frame, though the HUD also zeroes it while the touch
+## UI is hidden) does not move him. Then the fade-in clears in FADE_IN, the hero lands on the arrival point, his
+## physics is back and a held move key walks him again.
+func test_hero_safe_through_the_whole_fade():
+	var g := _ground()
+	await tree.physics_frame
+	var h: Hero = g.hero
+	for i in 10: await tree.process_frame
+	h.health.setup(1000)
+	var hp0 := h.health.hp
+	var ring: Vector2 = g.rooms.warp_at("c1r1", "east")
+	var to := String(_dest(g, "east").to)
+	h.global_position = ring
+	h.reset_physics_interpolation()
+	var r := ""
+	var frames := 0
+	var t0 := -1
+	var at := Vector2.INF
+	while g.room_id == "c1r1" and frames < 120:
+		await tree.physics_frame
+		frames += 1
+		if not g.warping: continue
+		if t0 < 0:
+			t0 = Time.get_ticks_msec()
+			at = h.global_position
+			Input.action_press("move_left")                 # held from the first dark frame on
+		h.external_input = Vector2.LEFT                      # the touch joystick held too
+		if h.is_physics_processing(): r = "frame %d: hero physics on mid-fade" % frames
+		elif not h.warping: r = "frame %d: hero not warping mid-fade" % frames
+		elif h.receive_hit(500.0, 1.0, h.global_position + Vector2(0, -10)) != 0: r = "frame %d: a hit landed mid-fade" % frames
+		else:
+			h.apply_poison(5, 3.0)
+			if h.poison_left > 0.0: r = "frame %d: poisoned mid-fade" % frames
+			elif h.global_position != at: r = "frame %d: hero moved %s -> %s mid-fade" % [frames, at, h.global_position]
+			elif h.health.hp != hp0: r = "frame %d: hp %d -> %d mid-fade" % [frames, hp0, h.health.hp]
+			else:
+				for p in g.packs:
+					if is_instance_valid(p) and (p.can_process() or p.calm <= 0.0): r = "frame %d: an old pack runs (or is not calm) mid-fade" % frames
+		if r != "": break
+	Input.action_release("move_left")
+	h.external_input = Vector2.ZERO
+	var dt := (Time.get_ticks_msec() - t0) / 1000.0
+	if r == "" and t0 < 0: r = "no fade started on the ring"
+	elif r == "" and g.room_id != to: r = "never arrived in %s (in %s)" % [to, g.room_id]
+	elif r == "" and dt < g.FADE_OUT - 0.05: r = "dark for only %.2f s (fade out %.2f)" % [dt, g.FADE_OUT]
+	if r == "":
+		var t1 := Time.get_ticks_msec()
+		while g.fade.color.a > 0.0 and Time.get_ticks_msec() - t1 < 1500: await tree.process_frame
+		var din := (Time.get_ticks_msec() - t1) / 1000.0
+		if g.fade.color.a > 0.0: r = "screen still dark 1.5 s after arrival"
+		elif din < g.FADE_IN - 0.08: r = "fade-in cleared in %.2f s (want %.2f)" % [din, g.FADE_IN]
+		elif g.warping or h.warping: r = "still warping after the fade-in"
+		elif not h.is_physics_processing(): r = "hero physics not back after arrival"
+		elif h.global_position != g.rooms.arrival(to, String(_dest(g, "east").to_warp)): r = "hero at %s, not the arrival point" % h.global_position
+	if r == "":
+		for p in g.packs: p.process_mode = Node.PROCESS_MODE_DISABLED
+		var p0 := h.global_position
+		Input.action_press("move_right")
+		for i in 10: await tree.physics_frame
+		Input.action_release("move_right")
+		if h.global_position.distance_to(p0) < 2.0: r = "a held move key does not move the hero after arrival"
 	await _done(g)
 	return r
 
@@ -450,16 +517,17 @@ func test_drops_avoid_blocked():
 	await _done(g)
 	return r
 
-## M4c §1 approved timings: 0.25 s fade out, then the new room, 0.25 s fade in; monsters calm 1.0 s.
+## M4c §1 approved timings: fade out, then the new room, 0.25 s fade in; monsters calm 1.0 s. The fade out is
+## 0.5 s since the owner's PixelFX decision 2026-11-09 (was 0.25 s): the warp sparkle can be seen.
 func test_fade_and_calm_numbers():
 	var g := _ground(false)
 	var r := ""
-	if g.FADE_OUT != 0.25 or g.FADE_IN != 0.25: r = "fade %s out / %s in" % [g.FADE_OUT, g.FADE_IN]
+	if g.FADE_OUT != 0.5 or g.FADE_IN != 0.25: r = "fade %s out / %s in" % [g.FADE_OUT, g.FADE_IN]
 	elif g.CALM != 1.0: r = "calm %s" % g.CALM
 	await _done(g)
 	return r
 
-## Walking into the ring starts the fade at once; the room changes when the screen is dark (~0.25 s),
+## Walking into the ring starts the fade at once; the room changes when the screen is dark (~0.5 s),
 ## then the screen clears in ~0.25 s and the new room's monsters stay calm for 1.0 s.
 func test_warp_fades_out_then_in():
 	var g := _ground()
@@ -480,7 +548,7 @@ func test_warp_fades_out_then_in():
 		waited += 1
 	var dt := (Time.get_ticks_msec() - t0) / 1000.0
 	if r == "" and g.room_id != String(_dest(g, "east").to): r = "never warped (in %s)" % g.room_id
-	elif r == "" and (dt < 0.2 or dt > 0.5): r = "room changed after %.2f s (want ~0.25)" % dt
+	elif r == "" and (dt < 0.45 or dt > 0.8): r = "room changed after %.2f s (want ~0.5)" % dt
 	elif r == "" and g.fade.color.a < 0.9: r = "screen not dark at the swap (alpha %.2f)" % g.fade.color.a
 	if r == "":
 		for p in g.packs:

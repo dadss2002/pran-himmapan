@@ -134,6 +134,12 @@ func _steer(delta: float) -> void:
 func _pos() -> Vector2:
 	return global_position if is_inside_tree() else position
 
+## Stops the arrow where it is for good: it moves and hits nothing more (the warp fade, review Important #1; the
+## room change then frees it).
+func halt() -> void:
+	spent = true
+	targets = []
+
 func _finish() -> void:
 	spent = true
 	if is_inside_tree():

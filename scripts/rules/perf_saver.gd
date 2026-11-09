@@ -2,8 +2,8 @@ class_name PerfSaver
 extends RefCounted
 ## M3k (owner: "เพิ่มปิดเอฟเฟกต์เมื่อ fps ร่วงต่ำกว่า 60"): watches the frame rate and turns the
 ## saver on when it stays under LOW for ENTER_AFTER seconds, and off again once it stays at or
-## above HIGH for LEAVE_AFTER seconds. The saver only hides decoration (pond ripples, dust and
-## pickup puffs); hits, level-up and skill effects stay, and no game number changes.
+## above HIGH for LEAVE_AFTER seconds. The saver only hides decoration (pond ripples, dust, pickup puffs and the
+## PixelFX extras in DECORATIVE); hits, level-up, skill effects and telegraphs stay, and no game number changes.
 
 const LOW := 57.0          # a 60 Hz screen reports 59-60; under 57 the player can feel it
 const HIGH := 59.0
@@ -25,6 +25,21 @@ func step(delta: float, fps: float) -> bool:
 	_t = 0.0
 	return true
 
-## Decorative effects skipped while the saver is on.
+## Decorative effects skipped while the saver is on. Task 3f review: also the PixelFX extras: the burning /
+## frozen overlays (the monster's tint stays, so the status is still readable), the crit glare (a hit spark plays
+## instead, fallback) and the warp sparkle. Never a gameplay telegraph (lunge_warning, the poison cloud's mist:
+## the cloud is a hazard) or the plain hit spark.
+const DECORATIVE := ["roll_dust", "pickup_pop", "status_burn", "status_frost", "crit_hit", "warp_blink"]
+const FALLBACK := {"crit_hit": "hit_spark"}
+
+## true while a test ground's saver is on (Wolf reads it for its status overlays); the test ground sets it in
+## apply_saver and clears it when it leaves the tree.
+static var active := false
+
 static func decorative(fx_name: String) -> bool:
-	return fx_name in ["roll_dust", "pickup_pop"]
+	return fx_name in DECORATIVE
+
+## What plays instead of a shed effect ("" = nothing).
+static func fallback(fx_name: String) -> String:
+	return FALLBACK.get(fx_name, "")
+
