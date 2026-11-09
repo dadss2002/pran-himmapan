@@ -140,3 +140,5 @@
 3. แท็บผังในหน้าสกิล + ถ่ายภาพจริงแนวตั้ง/แนวนอน และ iPhone (เว้น 64 px) ไว้ใน docs/preview/
 
 **อนุมัติ 2026-11-08 (เจ้าของ):** "ตามที่เสนอ แต่วาดไอคอนใหม่ 11 อัน (~110 gen เปิดงบใหม่)" — แต้มเลเวลละ 2 + ฆ่าเสือสมิงครั้งแรก 2 = 20 แต้ม · เพดาน DPS +20% · ล้างแต้มฟรีตลอดเฟส 1 · ไอคอนโหนด 11 อันวาดด้วย PixelLab งบใหม่ไม่เกิน ~110 gen (ประเมินและบันทึกใน docs/pixellab-budget.md ก่อนเจน ตอนลงมือทำผังวิชา)
+
+**Owner 2026-11-09 (before implementation):** order PixelFX → gem combos → passive tree; a player already above Lv1 when the tree opens gets every point for their level at once ("ได้ครบตามเลเวล": 2 per level above 1, +2 for the first Saming kill — when the save has no record of it, the 2 come with the next Saming kill); small-node icons 17 and 21 (HP) and 19 (DEF) are redrawn as a red heart and a shield in the blue ring with pixelart_workbench (free, 0 gen), shown to the owner before use. Icons: docs/art/passive_icons/32/.
