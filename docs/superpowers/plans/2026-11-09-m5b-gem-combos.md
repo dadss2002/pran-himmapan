@@ -2,13 +2,13 @@
 
 > **For agentic workers:** Implement this plan task-by-task, checking off each step. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Two gems that form a recipe on one skill become a named combo (8 recipes), three become an advanced combo (8 recipes). Every skill gets 2 gem slots from unlock. The skill panel shows the combo live, a toast announces each first discovery, and a recipe book (สมุดสูตร) lists the recipes.
+**Goal:** Two gems that form a recipe on one skill become a named combo (8 recipes), three become an advanced combo (8 recipes). Every skill gets 2 gem slots from unlock. The skill panel shows the combo live, a toast announces each first discovery, and a recipe book (สมุดสูตร) lists the recipes. The three area skills ห่าศร, กับดักหนาม and ศรเพลิง are built in this milestone (owner 2026-11-09), so the 6 area recipes can form in game, and the 4 touch skill buttons become an assignable skill bar.
 
-**Architecture:** Recipes and every number live in `data/balance.json` → `gem_combos.recipes`. A pure rules script (`GemCombo`) works out which recipe a skill's open sockets form. `SkillBuild` folds the stat-level parts into the build. A per-press ledger (`ComboCast`) enforces the per-cast caps and once-per-target rules. `Arrow` applies the on-hit effects. Monsters get freeze, mark, trail-burn and zone statuses in `StatusEffects`. The UI reads the same rules (`SkillText`) so the panel, the HUD and combat always agree. Discovered recipe ids go into the signed save as a new optional, range-checked key.
+**Architecture:** Recipes and every number live in `data/balance.json` → `gem_combos.recipes`. A pure rules script (`GemCombo`) works out which recipe a skill's open sockets form. `SkillBuild` folds the stat-level parts into the build. A per-press ledger (`ComboCast`) enforces the per-cast caps and once-per-target rules. `Arrow` applies the on-hit effects. Monsters get freeze, mark, trail-burn and zone statuses in `StatusEffects`. The UI reads the same rules (`SkillText`) so the panel, the HUD and combat always agree. Discovered recipe ids go into the signed save as a new optional, range-checked key. Area skills (Tasks 8a–8e): `Skills` / `SkillBuild` become data-driven (id list, skill `kind`, area keys). `Hero._release` branches on `kind`: `arrows` keeps the current path, and ศรเพลิง rides it, so every arrow combo works on it; `rain` spawns an `ArrowRain`; `trap` adds a `ThornTrap` to a capped `TrapSet`. Rain and trap hits go through one shared `SkillHit` helper. `StatusEffects` gets a root (ตรึง) status. A 4-slot skill bar (second optional, range-checked save key `bar`) maps the touch buttons and keys 1–4 to skills.
 
 **Tech Stack:** Godot 4.5.1 (GDScript), headless test runner `tests/run_tests.gd`, xvfb + opengl3 screenshots, existing FX sheets in `assets/fx/manifest.json`.
 
-**Spec:** `docs/superpowers/specs/2026-11-08-gem-combos.md` (Option A + "ตัวเลขเสนอ" §1–§5 + effect-reuse table; owner approval line 2026-11-08 and owner addendum 2026-11-09 at the end override earlier lines). Base gem rules: `docs/gems.md` (approved 2026-11-06). Numbers' source: `tools/gem_combo_sim.py`. Cheat rules: `docs/risks.md` S1/S5/B14/B15/B9.
+**Spec:** `docs/superpowers/specs/2026-11-08-gem-combos.md` (Option A + "ตัวเลขเสนอ" §1–§5 + effect-reuse table; owner approval line 2026-11-08 and owner addendum 2026-11-09 at the end override earlier lines; the area-skill decisions D1–D8 of 2026-11-09 are the last block). Base gem rules: `docs/gems.md` (approved 2026-11-06; §2 gives the area skills' MP and labels). Area skill numbers: `docs/skills.md` rows 36, 42, 53 (approved 2026-11-06). Numbers' source: `tools/gem_combo_sim.py`. Cheat rules: `docs/risks.md` S1/S5/B14/B15/B9.
 
 ## Global Constraints
 
@@ -23,12 +23,16 @@
 - **MP on kill:** bloodthirst +2 MP per kill, at most **6** per press. Rahu +3 per kill, at most **9** per press. Never above max MP.
 - Combo numbers are the spec §1/§2 values at gem Lv1 and stay flat at any gem level (open question Q2). The gems' own effects keep scaling.
 - **Combo numbers (spec §1, §2, verbatim):** see Task 2 `test_recipes_match_spec`. Those values are the only new game numbers. The trail's half-width reuses `shot.arrow_hit_radius` (10), the bolt range reuses `elements.lightning.range` (120) and the trail tick reuses `elements.fire.tick` (1.0), so no number goes in that is not approved.
-- **Secondary hits** (plan decision): blasts, bolts, shockwaves, shatters and trail ticks are hits of the same press. They can crit with the arrow's crit chance, leech, and count kills for MP-on-kill (DoT ticks excepted: burn and trail kills give no MP). They never trigger combo effects themselves: no trail, bounce, bolt, blast, freeze count or mark from a secondary hit. Per-line effects (trail, line-end blast) belong to primary arrows only (the ones `Hero._release` fires).
+- **Secondary hits** (plan decision): blasts, bolts, shockwaves, shatters and trail ticks are hits of the same press. They can crit with the arrow's crit chance, leech, and count kills for MP-on-kill. **Burn and fire-trail kills count too** (owner 2026-11-09: "นับทุกแบบ"). They heal and refund MP through the `ComboCast` of the press that applied them, still capped at 6 / 9 MP per press. They never trigger combo effects themselves: no trail, bounce, bolt, blast, freeze count or mark from a secondary hit. Per-line effects (trail, line-end blast) belong to primary arrows only (the ones `Hero._release` fires).
 - **Save (risks.md S5/B14/B15):** `SaveGame.VERSION` stays **4**. Add an optional `"combos"` key: an Array of unique known recipe id Strings. Anything else fails the whole save (Q3 a). The signature covers it. A missing key loads as `[]`.
 - **Art:** 0 PixelLab gen. Effects reuse the manifest ids `piercing_trail, spread_burst, chain_zap, hit_spark, water_ripple, status_burn, status_frost, lock_on, warp_ring, crit_hit, pickup_pop`, recoloured through `modulate` only. Record "M5b: 0 gen" in `docs/pixellab-budget.md`.
 - **Copy (verbatim):** toast `ค้นพบท่าผสม!`, book title `สมุดสูตร`, undiscovered `???`. Skill panel §5 strings: see Task 11. Colours: gains `#6ccf62` (SkillPanel.UP), losses / MP up `#ff9d8a` (SkillPanel.DOWN), combo name and frame `#edbb55` (SkillPanel.GOLD).
 - Rules live in `scripts/rules/` with no scene access (risks.md §3, server-portable). Everything stays client-side (S1). The final report must say that online play will need a server to decide this.
 - Owner reports are in Thai, short and factual (CLAUDE.md).
+- **Area skills (owner 2026-11-09, spec D1–D8):** numbers verbatim from docs/skills.md: ห่าศร (`arrow_rain`) unlock 7, circle r64, 3 s, a tick of 40% every 0.5 s (240% in all), CD 10, MP 18; กับดักหนาม (`thorn_trap`) unlock 10, placed ≤ 160 px, root 2 s + 150%, up to 2 placed, CD 8, MP 12; ศรเพลิง (`fire_arrow`) unlock 10, 200% + burn 20%/s for 3 s (= `elements.fire`), r32 blast on hit, CD 6, MP 14. Per-level scaling is the existing `skills.per_level_*`. Owner decisions: **D1** both Lv10 skills open at Lv10 (no job system yet); 4 skill buttons, assigned from the skill screen. **D2** auto-target the nearest monster (ห่าศร within 220 px, trap within 160 px); no monster → at the hero's feet. **D3** root stops movement only, a rooted monster in reach can still attack, windups are not cancelled, bosses and elites are rooted, roots don't stack, and a trap ignores a monster already rooted. **D4** a trap stays until stepped on, trigger radius 16 px (×1.3 with expand), max 2, cleared on room change / warp / hero death. **D5** ศรเพลิง blast r32 = 100% of that hit on the others, who also burn; range 220. **D6** extend: ห่าศร 3 → 3.9 s (whole ticks only: 7), trap root 2 → 2.6 s; ห่าศร range 220. **D7** an ice or lightning gem on ศรเพลิง **replaces** its own fire (no burn, that element's effect instead); a fire gem keeps the burn (×1.1, no double burn); the arrow's own fire never counts as a fire gem for recipes. **D8** 3-gem area recipes need skill Lv10 (char Lv16 ห่าศร / Lv19 กับดัก, ศรเพลิง), above the phase-1 cap: built and tested, ??? in the book.
+- **Area hits:** rain ticks and trap triggers are **primary hits of the press**. They can crit, leech, apply the element gem's status and count kills through the press's `ComboCast`. They never produce arrow-only combo effects (trail, bounce, bolts, mark, freeze count, shatter). ศรเพลิง's own r32 blast is a secondary hit (`Arrow.blast`).
+- **Area art:** the 2 icons and the ground trap sprite are the owner's PixelLab picks (30 gen, already logged). Paths are placeholder-tolerant. `Skills.icon(id)` returns `res://assets/skills/<id>.png` when `ResourceLoader.exists`, else `res://assets/skills/slot_empty.png`. The trap sprite is looked up at `res://assets/props/thorn_trap.png`, then `res://assets/fx/thorn_trap.png`; with neither present, `ThornTrap` draws a placeholder (brown ring + 6 spikes, marked as a placeholder in a comment). Tests pass with and without the files. After the coordinator installs the PNGs, run `godot --headless --path . --import` once before screenshots. Area effects reuse manifest ids: 0 gen.
+- **Transient objects are never saved:** rains and traps are freed on room change, warp (`begin_warp`, like arrows' `halt()`, B20) and hero death.
 
 ## Review Focus
 
@@ -37,6 +41,9 @@
 3. **A freeze landing during an attack windup** (lunge_warn / bite / ring / throw), or on a dying monster. The attack must not go off while the monster is frozen, the warning must hide, and a dead monster ignores the freeze. → Task 4 `test_freeze_cancels_windup_and_holds`.
 4. **Previewing a gem when every open slot is full** (the panel replaces slot 1), or a swap that breaks a combo. The live title, gold frames and deltas must match what socketing would really do. → Task 11 `test_preview_full_slots_breaks_combo`.
 5. **The save's discovered list**: an old v4 save without the key must load and quietly mark combos that its sockets already form (no toast storm on load). Unknown ids, duplicates or non-strings must fail the save. → Task 10 `test_old_v4_save_loads_and_marks_silently`, `test_bad_combos_refuse_save`.
+6. **One cap per press across every kind of kill** (rain ticks, trap trigger, ศรเพลิง blast, burns and trails applied by the press). A ledger left behind on a burn must not give a second 6 / 9. → Task 8 `test_burn_kill_counts_and_shares_cap`, Task 8b `test_rain_kill_counts_for_sustain`.
+7. **A rain or trap outliving a warp or room change** (B20). → Task 8b `test_rain_freed_on_warp`, Task 8c `test_traps_cleared_on_warp_death_room`.
+8. **Gems on a new skill at the edge of its unlock** (ศรเพลิง gems in a Lv9 save must be refused, Lv10 accepted; `_skills_ok` is data-driven since Task 1: test it, don't assume it), and the `bar` key. → Task 8a `test_save_gems_on_new_skills`, Task 8e `test_bad_bar_refuses_save`.
 
 ---
 
@@ -63,8 +70,15 @@
 | `tests/test_gem_combo.gd`, `test_combo_cast.gd`, `test_status_combo.gd`, `test_arrow_combos.gd`, `test_save_combos.gd`, `test_skill_text.gd`, `test_skill_panel_combos.gd` (new) | Tests per task |
 | `tests/screenshots_m5b_combos.gd` (new) | Acceptance images → `docs/preview/m5b/` |
 | `docs/gems.md`, `docs/superpowers/specs/2026-11-06-m3a-gems-enhance-design.md`, `docs/risks.md`, `docs/pixellab-budget.md`, `tools/gem_combo_sim.py` | Slot rule text, combos section, risks, budget |
+| `data/balance.json` `skills.arrow_rain/thorn_trap/fire_arrow`, `skill_labels` | Area skill numbers (Task 8a) |
+| `scripts/combat/skill_hit.gd` (new, `SkillHit`) | One hit from an area skill: crit, leech, element status, combo kill/crit hooks |
+| `scripts/skills/arrow_rain.gd` (new, `ArrowRain`), `scripts/skills/thorn_trap.gd` (new, `ThornTrap`) | Rain circle ticks; trap trigger, root, spent sprite |
+| `scripts/rules/trap_set.gd` (new, `TrapSet`) | At most `max_traps` armed traps, oldest removed |
+| `scripts/ui/touch_buttons.gd`, `scripts/ui/hud.gd`, `project.godot` | 4-slot skill bar on touch and keys 1–4 |
+| `docs/skills.md` | Dated note with the D1–D8 answers |
+| `tests/test_area_skills.gd`, `tests/test_skill_bar.gd` (new) | Area skill and skill bar tests |
 
-Task order puts what phase 1 can use first (piercing/spread recipes). Area recipes (Task 9) are built generically but no in-game skill can form them yet (see open question Q3).
+Task order puts what phase 1 can use first (piercing/spread recipes, Tasks 3–8). Then the three area skills and the skill bar (Tasks 8a–8e), then the area recipes on those real skills (Task 9). 8a needs only Tasks 1–2; 8b and 8c need Tasks 3, 4 and 8; 8d needs Task 5.
 
 ---
 
@@ -402,12 +416,12 @@ func test_boss_size_target_freezes():              # a wolf with set_elite(true)
 ### Task 8: Sustain combos and MP-on-kill caps (ศรกระหายเลือด, ศรราหูอมจันทร์)
 
 **Files:**
-- Modify: `scripts/hero/hero.gd` (add hooks), `scripts/arrow.gd` (kill and crit detection in `_after_hit` and `_secondary_hit`), `tests/dummy_enemy.gd` (`die_on_hit`)
+- Modify: `scripts/hero/hero.gd` (add hooks), `scripts/arrow.gd` (kill and crit detection in `_after_hit` and `_secondary_hit`; pass the cast to burns and trails), `scripts/combo/fire_trail.gd` (carries the cast), `scripts/monsters/status_effects.gd` + `scripts/monsters/wolf.gd` (`tick_burn`: kill by a burn or trail tick → combo kill hook), `tests/dummy_enemy.gd` (`die_on_hit`, burn tick)
 - Test: `tests/test_arrow_combos.gd`, `tests/test_hero_gems.gd`
 
 **Interfaces:**
 - Consumes: `ComboCast.refund_mp`, `ComboCast.dmg_bonus`, `Hero.leech_heal(amount: float)`
-- Produces: `Hero.on_combo_kill(cast: ComboCast) -> void` (heals `kill_heal_frac × max_hp` through `leech_heal`; `mp = minf(max_mp(), mp + cast.refund_mp(int(kill_mp)))`); `Hero.on_combo_crit(cast: ComboCast) -> void` (heals `crit_heal_frac × max_hp`). An arrow calls `on_combo_kill` when `amount > 0 and not t.is_alive()` after a direct or secondary hit (never from burn or trail ticks), and `on_combo_crit` on a crit hit.
+- Produces: `Hero.on_combo_kill(cast: ComboCast) -> void` (heals `kill_heal_frac × max_hp` through `leech_heal`; `mp = minf(max_mp(), mp + cast.refund_mp(int(kill_mp)))`); `Hero.on_combo_crit(cast: ComboCast) -> void` (heals `crit_heal_frac × max_hp`). An arrow calls `on_combo_kill` when `amount > 0 and not t.is_alive()` after a direct or secondary hit, and `on_combo_crit` on a crit hit. **Burn and trail kills count too** (owner "นับทุกแบบ"). `apply_status("burn", value, leech, source, cast := null)` and `apply_trail(raw, hold, source, cast := null)` gain an optional trailing `cast`. `StatusEffects` keeps `burn_cast` / `trail_cast` beside `burn_source`, so a re-burn takes the newer cast. When a burn or trail tick in `Wolf.tick_burn` kills, it calls `source.on_combo_kill(cast)` if both are valid. Because that cast is the press's ledger object, it shares that press's 6 / 9 cap. DoT ticks never call `on_combo_crit` (they don't crit).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -419,41 +433,256 @@ func test_rahu_mp_cap_9():                    # [leech, multiply, execute], 5 ki
 func test_rahu_bonus_only_at_70pct_hp():      # hp = 0.70 × max: arrow mult ≈ build.arrow_mult × 1.30; hp 0.69 × max: × 1.0 (checked at release)
 func test_rahu_crit_heals_1pct():             # forced crit (crit_chance 1.0 via the dummy recording) heals 0.01 × max_hp
 func test_refund_never_exceeds_max_mp():      # mp at max − 1, 3 kills → mp == max_mp()
-func test_burn_kill_gives_no_mp():            # a monster killed by its burn tick after the press → mp unchanged
+func test_burn_kill_counts_and_shares_cap():  # hero Lv10, piercing [leech, multiply, element fire] (bloodthirst; 3 slots at skill Lv10): 4 dummies in the line, 2 die_on_hit (+4 MP),
+                                              # 2 burn and die later to their burn ticks → +2 then +0 (cap 6 for that press); heal 3% max HP per kill
+func test_trail_kill_calls_hook():            # a dummy dies to an apply_trail tick fed with a press's cast → hero.on_combo_kill called once with that cast
+                                              # (a trail only comes from fire_fan / brahmastra, never with a sustain combo on the same skill, so it grants 0 MP / 0 HP: the hook is for consistency)
+func test_dot_kill_after_cap_gives_nothing(): # press already refunded 6 → a later burn kill from the same press gives 0 MP, still heals 3%
 func test_bounce_and_bolt_kills_share_cap():  # [leech, multiply] + ricochet: kills by bounce arrows count toward the same 6
 ```
 
 - [ ] **Step 2: Run and check it fails.**
-- [ ] **Step 3: Implement.** `Hero._release` builds `ComboCast.new(b.combo.get("id", ""), float(health.hp) / health.max_hp)` once per press and shares it through `b["cast"]` (bounce arrows copy the build shallowly, so they share the same object). Rahu's `dmg_bonus()` is applied once to `b.arrow_mult` at release.
+- [ ] **Step 3: Implement.** `Hero._release` builds `ComboCast.new(b.combo.get("id", ""), float(health.hp) / health.max_hp)` once per press and shares it through `b["cast"]` (bounce arrows copy the build shallowly, so they share the same object). Rahu's `dmg_bonus()` is applied once to `b.arrow_mult` at release. Arrows pass `build.cast` into `apply_status("burn", …)` and `FireTrail.setup` / `apply_trail`. The ledger object outlives the press for as long as a burn holds it (RefCounted), and that is intended: its cap is the press's cap.
 - [ ] **Step 4: Run and check it passes.**
-- [ ] **Step 5: Commit** `git commit -m "M5b Task 8: sustain combos; MP on kill capped 6 / 9 per press"`
+- [ ] **Step 5: Commit** `git commit -m "M5b Task 8: sustain combos; MP on kill capped 6 / 9 per press (burn/trail kills count)"`
 
 ---
 
-### Task 9: Area recipes built generically (คลื่นกระแทก, อัคนีทะลวงพิภพ, ฝนดาวไฟ, เพลิงระเบิด, อาณาเขตพราน, ทุ่งเพลิง)
-
-No skill in the game has the `area` label with numbers yet (ห่าศร has labels only; กับดักหนาม and ศรเพลิง don't exist). This task builds the arrow-side and rule-side parts so the future area-skill task only has to call them. Tests use a temporary `test_fire_arrow` skill added to `Balance.data()` (`skills.test_fire_arrow = {unlock 1, mult 2.0, cooldown 6, mp 14}`, labels `["arrow","area"]`, `Balance.clear_cache()`, removed at the end).
+### Task 8a: Area skill data, data-driven skill list, area build keys, icons
 
 **Files:**
-- Modify: `scripts/arrow.gd` (pierce-through and first-hit blast triggers), `scripts/rules/gem_combo.gd`
-- Test: `tests/test_arrow_combos.gd`, `tests/test_gem_combo.gd`
+- Modify: `data/balance.json` (`skills.arrow_rain`, `skills.thorn_trap`, `skills.fire_arrow`; `skill_labels.thorn_trap`, `skill_labels.fire_arrow`)
+- Modify: `scripts/hero/skills.gd` (`active_ids`, `kind`, `display_name`, `icon`)
+- Modify: `scripts/rules/skill_build.gd` (`_base` per kind; `expand` / `extend` gems; area keys; ศรเพลิง's own fire)
+- Modify: `scripts/hero/hero.gd:35, 214-216` (`skill_gems` keys from `Skills.active_ids()`)
+- Modify: `scripts/ui/skill_panel.gd:18-22, 257-280` (`SKILLS` / `SKILL_NAMES` / `SKILL_ICONS` come from `Skills`; remove the dim "ห่าศร · มาในรอบถัดไป" row; rows go inside a `ScrollContainer` so 5 rows fit at 640×360 and in portrait)
+- Modify: `tests/test_hero_gems.gd` (Task 1's `test_after_load_returns_gems_from_unknown_and_closed_slots` uses `"arrow_rain"` as the unknown skill. Keep it, since ห่าศร is locked at Lv1, and add the same case with a truly unknown id `"poison_shot"`), `tests/test_save_hardening.gd` (`_rich()` comment: gems on ห่าศร are legal from Lv7 now)
+- Test: `tests/test_area_skills.gd` (new)
 
 **Interfaces:**
-- Produces: `GemCombo.area_radius_mult(b: Dictionary) -> float` (1 + expand effect + `area_radius_bonus` when the combo has it); `GemCombo.zone_mods(id: String) -> Dictionary` `{"slow": float, "taken": float, "burn": bool}` (`{}` for non-zone recipes). Arrow: `blast_on_pierce` fires when a primary arrow passes through a target, `blast_on_hit` on its first hit.
-- Hook for the later area-skill task: ห่าศร/กับดัก call `t.apply_zone(mods.slow, mods.taken, hold)` for monsters inside, and use `area_radius_mult` for their radius.
+- Produces: `Skills.active_ids() -> Array` (ids under `skills` that have `unlock`, ordered by unlock level, ties in data order → `["piercing","spread","arrow_rain","thorn_trap","fire_arrow"]`); `Skills.kind(id) -> String` (`"arrows"` | `"rain"` | `"trap"`, from `skills.<id>.kind`, default `"arrows"`); `Skills.display_name(id) -> String` (const table in skills.gd: ศรทะลวง, ศรกระจาย, ห่าศร, กับดักหนาม, ศรเพลิง); `Skills.icon(id) -> String` (fallback in Global Constraints).
+- `SkillBuild.of` adds output keys `kind`, `area_mult` (1 + expand effect; 1.0 without the gem) and `dur_mult` (1 + extend effect). Per kind:
+  - rain: `radius` = 64 × area_mult, `duration` = 3 × dur_mult, `tick_every` 0.5, `ticks` = floor(duration / tick_every + 1e-6), `arrow_mult` = damage per tick, `cast_range` 220
+  - trap: `trigger_radius` = 16 × area_mult, `root_secs` = 2 × dur_mult, `max_traps` 2, `cast_range` 160, `arrow_mult` = trap damage
+  - fire_arrow: `arrows` 1, `pierce_all` false, `blast_radius` = 32 × area_mult, `blast_frac` 1.0, range 220. **D7:** with no element gem, the build gets `element = "fire"` and `element_mult = 1.0 + hero_stats.element_dmg` (no ×1.1), so the existing fire path in `Arrow._after_hit` burns. With an element gem, the normal gem path runs: fire ×1.1 and burn (once), ice ×1.1 and slow **without burn**, lightning ×1.1 and chain **without burn**. Recipe keys still come from the gems only (`GemCombo.resolve`), so the arrow's own fire is never a `fire` key. Applying gear `element_dmg` to the arrow's own fire is a plan decision (it is elemental damage).
+- Task 9's `GemCombo.area_radius_mult(b)` reads `b.area_mult` and adds `area_radius_bonus`.
+
+balance.json rows:
+```json
+"arrow_rain": {"unlock": 7, "kind": "rain", "mult": 0.4, "cooldown": 10, "mp": 18, "radius": 64, "duration": 3, "tick": 0.5, "range": 220},
+"thorn_trap": {"unlock": 10, "kind": "trap", "mult": 1.5, "cooldown": 8, "mp": 12, "range": 160, "root": 2, "max_traps": 2, "trigger_radius": 16},
+"fire_arrow": {"unlock": 10, "mult": 2.0, "cooldown": 6, "mp": 14, "range": 220, "blast_radius": 32, "blast_frac": 1.0}
+```
+`skill_labels`: `"thorn_trap": ["trap", "area"]`, `"fire_arrow": ["arrow", "element", "area"]` (`arrow_rain` stays `["area", "dot"]`).
 
 - [ ] **Step 1: Write the failing tests**
 
 ```gdscript
-func test_shockwave_r32_80pct_excludes_struck():   # test_fire_arrow [pierce, expand]: passing through A makes a blast at A: B at 31 px hit with mult ≈ arrow_mult × 0.80, A not hit twice, C at 33 px not hit
-func test_earth_piercer_r40_100pct_burns():        # [pierce, expand, fire]: B at 39 px hit ×1.00 and burning; one blast per pierced target; no shockwave (replaced)
-func test_meteor_rain_r40_80pct_per_arrow():       # [split, fire, expand]: each of 3 arrows' first hit blasts r40 ×0.80 including the struck target; 3 arrows → 3 blasts
-func test_fire_burst_radius():                     # area_radius_mult for [fire, expand] Lv1 ≈ 1.0 + 0.30 + 0.20; [expand] alone ≈ 1.30
-func test_zone_mods():                             # zone_mods("hunter_zone") == {slow 0.30, taken 0.10, burn false}; hellfield {0.30, 0.20, true}; fire_fan → {}
+# tests/test_area_skills.gd
+func test_numbers_match_skills_md():   # unlock 7/10/10; mult 0.4/1.5/2.0; cooldown 10/8/6; mp 18/12/14; rain radius 64, duration 3, tick 0.5, range 220;
+                                       # trap range 160, root 2, max_traps 2, trigger_radius 16; fire range 220, blast_radius 32, blast_frac 1.0;
+                                       # elements.fire burn_frac 0.2 / tick 1.0 / duration 3.0 unchanged
+func test_active_ids_order():          # Skills.active_ids() == ["piercing","spread","arrow_rain","thorn_trap","fire_arrow"]
+func test_labels():                    # Gem.fits("expand","thorn_trap") and fits("extend","thorn_trap"); fits("split","fire_arrow"); not fits("split","arrow_rain"); fits("extend","arrow_rain"); not fits("extend","fire_arrow")
+func test_rain_build_lv7_and_lv10():   # Lv7: arrow_mult ≈ 0.4, cooldown ≈ 10, ticks == 6; Lv10 (skill Lv4): arrow_mult ≈ 0.46, cooldown ≈ 9.7
+func test_rain_expand_extend():        # [expand] Lv1: radius ≈ 83.2, mp ≈ 23.4; [extend] Lv1: duration ≈ 3.9, ticks == 7; [expand, extend]: mp ≈ 28.08 (spec §3 28.1)
+func test_trap_build():                # Lv10: arrow_mult ≈ 1.5, cooldown 8, mp 12, root_secs 2, trigger_radius 16; [extend]: root_secs ≈ 2.6; [expand]: trigger_radius ≈ 20.8
+func test_fire_arrow_build():          # Lv10 []: arrows 1, pierce_all false, arrow_mult ≈ 2.0, blast_radius 32, element "fire";
+                                       # [element fire]: element "fire", arrow_mult ≈ 2.2, mp ≈ 18.2; [element ice]: element "ice", arrow_mult ≈ 2.2; [element lightning]: element "lightning";
+                                       # [pierce, expand]: mp ≈ 21.84 (spec 21.8); [element fire, expand]: mp ≈ 23.66 (spec 23.7)
+func test_fire_arrow_own_fire_not_a_key(): # GemCombo.resolve("fire_arrow", [split]) == {} (no ศรพัดเพลิง without a fire gem)
+func test_existing_builds_unchanged(): # piercing / spread builds equal to before for every Task 1 fixture (kind "arrows", area_mult 1.0, dur_mult 1.0, element "" without a gem)
+func test_icon_fallback():             # Skills.icon("piercing") ends "piercing.png"; Skills.icon("no_such") ends "slot_empty.png"
+func test_panel_lists_five():          # SkillPanel built at hero Lv10: rows for all 5 ids in active_ids order; Lv6: the arrow_rain row shows "ปลดที่ Lv7"
+func test_save_gems_on_new_skills():   # signed save at level 9 with "fire_arrow": [multiply gem] → refused (new_state); same at level 10 → loads; "arrow_rain" gems at 6 refused, 7 loads
 ```
 
-- [ ] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes.**
-- [ ] **Step 5: Commit** `git commit -m "M5b Task 9: area recipes (arrow blasts + zone rules) ready for area skills"`
+- [ ] **Step 2: Run and check they fail.** `TEST_ONLY=test_area_skills godot --headless --path . --script tests/run_tests.gd` → FAIL, `active_ids` not found.
+- [ ] **Step 3: Implement** as listed. `Hero.set_skill_gems` builds its default dict from `active_ids()`. A locked skill's panel row shows `"%s: ปลดที่ Lv%d"`, as the preview lines already do.
+- [ ] **Step 4: Run and check they pass.** Run `test_area_skills`, then the full suite (`test_hero_gems`, `test_skill_panel`, `test_save_hardening`, `touch_check`, the portrait layout tests).
+- [ ] **Step 5: Commit** `git commit -m "M5b Task 8a: area skill data (ห่าศร/กับดักหนาม/ศรเพลิง), data-driven skill list, area build keys"`
+
+---
+
+### Task 8b: ห่าศร (arrow rain) and the shared SkillHit
+
+**Files:**
+- Create: `scripts/combat/skill_hit.gd` (`SkillHit`), `scripts/skills/arrow_rain.gd` (`ArrowRain extends Node2D`)
+- Modify: `scripts/hero/hero.gd` (`_release` kind branch; `area_point(range)`; `hit_source(b)`; ComboCast per press for every kind; free rains on `begin_warp` / `_on_died`), `scripts/dev/test_ground.gd` (free rains on `room_changed`; cast FX on `skill_released`)
+- Test: `tests/test_area_skills.gd`
+
+**Interfaces:**
+- `Hero.hit_source(b: Dictionary) -> Dictionary` = `{"atk", "crit", "crit_mult", "build", "shooter", "cast"}`, built once per press. `b.cast` is the press's `ComboCast` (Task 8), with Rahu's `dmg_bonus` folded in as for arrows.
+- `SkillHit.hit(t: Node2D, src: Dictionary, mult: float, at: Vector2) -> int`: calls `t.receive_hit(atk, mult, at, crit, crit_mult)` (the target's `taken_mult` applies inside), then leech, then the build's element status (fire → `apply_status("burn", 0.2 × amount, leech, shooter, cast)`; ice → slow; lightning → one chain to the nearest other live target within `elements.lightning.range` at ×0.8, with at most one `chain_zap` FX per tick), then `shooter.on_combo_crit(cast)` on a crit and `shooter.on_combo_kill(cast)` on a kill. Returns the amount. `Arrow._secondary_hit` may delegate to it if Task 5 tests stay unchanged.
+- `Hero.area_point(range_px: float) -> Vector2` (D2): the feet (`global_position`) of the monster `Combat.pick_target(_pos(), pts, hps, range_px)` picks from the same live, not-hidden list as `current_target()` (which always uses `shot.range`, so it is not reused as is); else the hero's own feet.
+- `ArrowRain.setup(center: Vector2, b: Dictionary, src: Dictionary, targets: Array)`, `step(delta)` (works without a tree), `ticks_done: int`. At each `tick_every` mark (0.5, 1.0 … for `ticks` ticks), every live target whose feet are within `radius` of `center` takes `SkillHit.hit(t, src, b.arrow_mult, center)`. With zone mods (Task 9) it also calls `t.apply_zone(slow, taken, 0.25)` every step for targets inside. The node frees itself after the last tick.
+
+FX (0 gen): `warp_ring` tinted `#edbb55`, scaled to `radius`, for the whole duration (the "ยันต์วงกลมบนพื้น"). Each tick drops 3 arrow sprites from the existing arrow texture, falling 48 px; they are decoration and are not drawn while PerfSaver is on. One `hit_spark` per target hit. Sound: one `bow_shot` at cast. Hit sounds come from `receive_hit`: if `Sfx` has no throttle, play at most one hit sound per tick. The cast reuses the bow-shot animation.
+
+- [ ] **Step 1: Write the failing tests**
+
+```gdscript
+func test_rain_six_ticks_r64():          # hero Lv7, rain at the origin: dummy at 63 px gets 6 hits over 3.0 s, each mult ≈ 0.4; dummy at 65 px gets 0; no hit before t = 0.5
+func test_rain_extend_seven_ticks():     # [extend] Lv1: 7 hits, the last at 3.5 s; node freed after it
+func test_rain_expand_radius():          # [expand]: dummy at 83 px hit, 84 px not
+func test_rain_target_point():           # dummy 200 px away → rain centre == dummy feet; dummy 230 px away → centre == hero feet
+func test_rain_costs_and_cooldown():     # Lv10 press: mp −18, cooldown ≈ 9.7; a second press during the cooldown → try_skill false; mp 17 → false
+func test_rain_ticks_crit_and_leech():   # [leech]: hero heals 3% of each tick's damage; dummy records crit_chance == build.crit
+func test_rain_kill_counts_for_sustain():# [leech, multiply] 4 die_on_hit dummies inside: MP +6 (cap), not +8
+func test_rain_fire_gem_burns_all():     # [element fire]: every dummy hit is burning after the first tick
+func test_rain_freed_on_warp():          # hero.begin_warp() during the rain → node freed, no further hits
+func test_rain_not_overlapping():        # extend at gem Lv20 (0.49) → duration 4.47 s < shortest cooldown 10 × 0.7: two rains never overlap
+```
+
+- [ ] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes**, then run `test_hero`, `test_hero_gems` and `test_arrow_gems`.
+- [ ] **Step 5: Commit** `git commit -m "M5b Task 8b: ห่าศร (r64, 6 ticks of 40%) + shared SkillHit"`
+
+---
+
+### Task 8c: กับดักหนาม (thorn trap) and the root status (ตรึง)
+
+**Files:**
+- Modify: `scripts/monsters/status_effects.gd` (root), `scripts/monsters/wolf.gd` (`apply_root`, `is_rooted`), `tests/dummy_enemy.gd` (same API)
+- Create: `scripts/skills/thorn_trap.gd` (`ThornTrap extends Node2D`), `scripts/rules/trap_set.gd` (`TrapSet extends RefCounted`, pure)
+- Modify: `scripts/hero/hero.gd` (`traps: TrapSet`; `_release` trap branch; clear on warp and death), `scripts/dev/test_ground.gd` (clear on `room_changed`)
+- Test: `tests/test_area_skills.gd`, `tests/test_status_combo.gd`
+
+**Interfaces:**
+- `StatusEffects.apply_root(secs: float)` keeps the larger remaining time and never adds. `is_rooted() -> bool`. `speed_mult()` returns 0 while rooted (beside Task 4's freeze). `clear()` clears it.
+- `Wolf.apply_root(secs) -> bool` (false when dead). D3: root stops movement only. Walk, chase and lunge all go through `_move` × `speed_mult`, so a lunge moves 0 px. Windups are **not** cancelled (unlike freeze), and a rooted monster still bites or throws if the hero is in reach. Elites and bosses are rooted too.
+- `TrapSet.add(trap) -> Object` (returns the trap removed to keep `max_traps`, the oldest, or null); `armed() -> Array`; `clear()`.
+- `ThornTrap.setup(at: Vector2, b: Dictionary, src: Dictionary, targets: Array)`, `step(delta)`. It checks the live targets whose feet are within `trigger_radius` of the trap and **skips monsters already rooted** (D3). If any remain, it fires once: each of them gets `SkillHit.hit(t, src, b.arrow_mult, at)` and `apply_root(b.root_secs)`. Then the trap is spent: its sprite stays closed under the target for `root_secs`, then fades. With a zone recipe (Task 9), the spent trap's circle (`trigger_radius × area_radius_mult`) is the zone for `root_secs`. D4: an armed trap has no time limit.
+- Placement: `Hero.area_point(160)`, the monster's feet if within 160 px, else the hero's feet (D2).
+
+FX (0 gen): the owner-picked trap sprite (or the placeholder). On trigger, `spread_burst` tinted `#8a6a3a`. The monster's ordinary hit spark plays. No new root overlay: the closed trap under the feet shows the root. The cast reuses the bow-shot animation.
+
+- [ ] **Step 1: Write the failing tests**
+
+```gdscript
+# test_status_combo.gd
+func test_root_speed_zero_and_ends():    # apply_root(2.0): speed_mult 0; tick(1.99) still rooted; tick(0.02) → speed_mult 1.0
+func test_root_keeps_longer_not_sum():   # apply_root(2.0); tick(0.5); apply_root(1.0) → 1.5 left (not 2.5, not 1.0)
+func test_rooted_wolf_does_not_move():   # chasing wolf rooted 2 s: position unchanged after step(1.0); a boar in lunge moves 0 px; a bite in reach still lands
+func test_dead_ignores_root():           # health 0 → apply_root false
+func test_elite_rooted():                # set_elite(true) → apply_root true
+# test_area_skills.gd
+func test_trap_placed_on_target_within_160(): # dummy 150 px away → trap at dummy feet; 170 px → trap at hero feet
+func test_trap_triggers_150_root_2():    # Lv10 trap, dummy moved to 15 px: one hit mult ≈ 1.5, rooted 2.0 s, trap spent; at 17 px nothing
+func test_trap_hits_all_inside():        # 2 dummies within 16 px on the same step → both hit and rooted once
+func test_max_two_traps_oldest_goes():   # 3 presses (cooldown cleared between): armed() size 2, the first trap freed
+func test_second_trap_ignores_rooted():  # 2 traps on one spot, dummy steps in: 1 hit (150%), not 2; after the root ends (2.01 s) the 2nd fires
+func test_trap_extend_root():            # [extend]: root 2.6 s
+func test_trap_expand_radius():          # [expand]: dummy at 20 px triggers, 21 px does not
+func test_traps_cleared_on_warp_death_room(): # begin_warp / death / room_changed → armed() empty, nodes freed
+func test_trap_cost_and_cooldown():      # mp −12, cooldown 8; locked at Lv9 (try_skill false)
+func test_trap_placeholder_without_art():# with no trap PNG present the trap still builds and draws (no error); with one, it uses the texture
+```
+
+- [ ] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes**, then run `test_status_combo`, `test_monsters` and `test_elite`.
+- [ ] **Step 5: Commit** `git commit -m "M5b Task 8c: กับดักหนาม (≤160 px, root 2 s + 150%, max 2) + root status"`
+
+---
+
+### Task 8d: ศรเพลิง (fire arrow): 200%, burn, r32 blast
+
+**Files:**
+- Modify: `scripts/arrow.gd` (first-hit own blast for builds with `blast_radius`; element status on blast targets), `scripts/dev/test_ground.gd` (`_on_arrow`: fire-arrow tint and trail)
+- Test: `tests/test_area_skills.gd`
+
+**Interfaces:**
+- Consumes: `Arrow.blast(at, radius, frac, burn, include, skip)` and `Arrow.primary` (Task 5). The `kind "arrows"` path in `_release` / `_fire` needs no change beyond 8a.
+- Behaviour: one arrow, range 220. It stops on the first target unless the pierce gem lets it continue. On its **first** hit (primary arrows only) it calls `blast(t.hurt_point(), b.blast_radius, b.blast_frac, b.element == "fire", null, [t])`. Every other target within the radius takes a secondary hit at the arrow's mult, and the struck target is not hit twice (D5). Blast targets get the build's element status: burn for fire (0.2 × amount per s for 3 s, no stacking), slow for an ice gem, nothing extra for lightning (a secondary hit does not chain). D7: with an ice or lightning gem, neither the arrow nor the blast burns.
+
+FX (0 gen): arrow `modulate` `#ff8a3d` (fire) / `#7fd4ff` (ice gem) / `#fff1a0` (lightning gem), a `piercing_trail` in the same tint, `spread_burst` in the same tint at the blast, and `status_burn` on burning targets (existing overlay).
+
+- [ ] **Step 1: Write the failing tests**
+
+```gdscript
+func test_fire_arrow_200_and_burn():      # Lv10, DEF-0 dummy A in line: A hit once, mult ≈ 2.0; A burning, per tick ≈ 0.2 × amount, 3 ticks over 3 s
+func test_fire_arrow_blast_r32():         # B 31 px from A's hurt point: one secondary hit, mult ≈ 2.0 × 1.0, burning; C at 33 px untouched; A's hit count == 1
+func test_fire_arrow_stops_at_first():    # D behind A in the line, 40 px further: not hit (no pierce gem)
+func test_fire_arrow_split_three_blasts():# [split]: 3 arrows ×0.6 each, each first hit blasts once → 3 blasts
+func test_fire_arrow_pierce_blast_once(): # [pierce]: passes A and B; own blast only at A (first hit); Task 9 shockwave adds the per-pierce blasts
+func test_fire_gem_no_double_burn():      # [element fire]: mult ≈ 2.2; burn per tick == 0.2 × amount (not 0.4)
+func test_ice_gem_replaces_burn():        # [element ice]: A slowed and NOT burning; B (blast) slowed and NOT burning; mult ≈ 2.2
+func test_lightning_gem_replaces_burn():  # [element lightning]: A not burning; one chain hit ×0.8 on the nearest other target within 120 px; B (blast) not burning, no chain from B
+func test_fire_arrow_takes_arrow_combos():# fire_arrow [split, element fire] → combo id "fire_fan" and a FireTrail is created (Task 5 path)
+```
+
+- [ ] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes**, then run `test_arrow_gems`, `test_arrow_combos` and `test_hero_gems`.
+- [ ] **Step 5: Commit** `git commit -m "M5b Task 8d: ศรเพลิง (200% + burn 20%/s 3 s + r32 blast; ice/lightning gem replaces the fire)"`
+
+---
+
+### Task 8e: 4-slot skill bar: touch buttons, keys 1–4, skill panel, save key
+
+The touch arc round the shoot button holds exactly 4 skill buttons at r24 (30° apart on a 97 px circle). A 5th at 210° would sit at y≈350, past the screen edge, and 5 buttons at 22.5° would overlap (chord 38 px < 48 px). `docs/skills.md` already says "ใส่ปุ่มสกิลได้ 4 ช่อง". A Lv10 hero has 5 active skills (D1), so the 4 buttons become a bar the player assigns.
+
+**Files:**
+- Modify: `project.godot` `[input]` (add `skill_3` = key 3, `skill_4` = key 4)
+- Modify: `scripts/ui/touch_buttons.gd:59-62` (`skill3` → action `skill_3`, `skill4` → action `skill_4`; new `set_icon(name, path)`)
+- Modify: `scripts/ui/hud.gd:630-640, 645-660` (loop over the 4 bar slots: icon, `Lv%d` lock note, MP note, cooldown; `_skill_numbers` per bar id)
+- Modify: `scripts/hero/hero.gd` (`bar: Array` of 4; `_physics_process` maps `skill_N` → `try_skill(bar[N-1])`; `assign_bar(slot, id) -> String`; `signal bar_changed`)
+- Modify: `scripts/ui/skill_panel.gd` (a `ปุ่ม N` / `—` badge on each unlocked row; a tap cycles 1→2→3→4→— and swaps with the skill already in that slot; touch size ≥ `IconButton.MIN_TOUCH`)
+- Modify: `scripts/rules/save_game.gd` (`bar` key: `new_state`, `_bar_ok`, `_state_ok`, load default), `scripts/dev/test_ground.gd` (save / load `bar`; `bar_changed` → `save_now()`)
+- Test: `tests/test_skill_bar.gd` (new), `tests/test_save_hardening.gd`, `touch_check`
+
+**Interfaces:**
+- `Skills.default_bar(level: int) -> Array`: the first 4 unlocked ids in `active_ids()` order, padded with `""`. Lv10 → `["piercing","spread","arrow_rain","thorn_trap"]`; ศรเพลิง is swapped in from the panel (D1).
+- `Hero.assign_bar(slot: int, id: String) -> String`: `""` on success; `"ยังไม่ปลด"` for a locked skill; an id already in another slot swaps; `""` as id empties the slot. When the level rises, empty slots fill with newly unlocked skills.
+- Save key `"bar"`: optional. If present it is an Array of exactly 4 Strings, each `""` or an id in `Skills.active_ids()` unlocked at the save's level, with no non-empty repeats. Anything else fails the whole save (the same Q3 a rule as `combos`). The signature covers it. `VERSION` stays 4 (B14/B15 reasoning, as in Task 10). A missing key loads as `default_bar(level)`.
+
+- [ ] **Step 1: Write the failing tests**
+
+```gdscript
+func test_default_bar_by_level():     # Lv1 ["piercing","","",""]; Lv3 [+spread]; Lv7 [+arrow_rain]; Lv10 ["piercing","spread","arrow_rain","thorn_trap"]
+func test_assign_swaps():             # Lv10: assign_bar(3, "fire_arrow") → bar[3] == "fire_arrow"; then assign_bar(0, "fire_arrow") → bar == ["fire_arrow","spread","arrow_rain","piercing"]
+func test_assign_locked_refused():    # Lv9: assign_bar(3, "fire_arrow") == "ยังไม่ปลด"; bar unchanged
+func test_keys_follow_bar():          # action skill_4 pressed with bar[3] == "fire_arrow" → hero state "shoot" drawing fire_arrow
+func test_touch_has_four_skill_actions(): # TouchButtons: skill1..skill4 → actions skill_1..skill_4; positions unchanged (landscape and portrait)
+func test_hud_button_states():        # Lv6: skill3 disabled, note "Lv7"; Lv10 with mp 13: skill4 (thorn_trap, MP 12) enabled, note "MP 12"; skill3 (rain, MP 18) dim
+func test_hud_icon_follows_bar():     # assign fire_arrow to slot 4 → skill4 icon path == Skills.icon("fire_arrow")
+func test_bar_round_trip():           # save at Lv10 with bar ["fire_arrow","spread","arrow_rain","piercing"] → load equal
+func test_bad_bar_refuses_save():     # signed: ["piercing","piercing","",""], ["nope","","",""], ["fire_arrow","","",""] at level 9, 3 entries, [1,"","",""], "piercing" → new_state() + .bad.json
+func test_old_save_gets_default_bar():# test_save_hardening.FIXTURE_V4 (no "bar") loads; bar == default_bar(level)
+func test_save_with_all_skills_under_max_bytes(): # max state: gems on all 5 skills, all 16 combos (Task 10), bar → text size ≤ save.max_bytes
+```
+
+- [ ] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes**, then run `test_hud_icons`, `touch_check`, the portrait tests, `test_save_hardening` and `test_skill_panel`.
+- [ ] **Step 5: Commit** `git commit -m "M5b Task 8e: 4-slot skill bar (touch + keys 1-4 + panel assign, range-checked save key)"`
+
+---
+
+### Task 9: Area recipes on the real area skills (คลื่นกระแทก, อัคนีทะลวงพิภพ, ฝนดาวไฟ, เพลิงระเบิด, อาณาเขตพราน, ทุ่งเพลิง)
+
+Runs after Tasks 8a–8d, on the real skills. ศรเพลิง carries the arrow-side recipes. ห่าศร and กับดักหนาม carry the zone recipes, and ห่าศร / ศรเพลิง carry เพลิงระเบิด. Tier-3 tests build with `SkillBuild.of(id, 19, …)` (skill Lv10 = 3 slots for กับดัก / ศรเพลิง; ห่าศร reaches it at char Lv16): the pure build ignores the phase-1 cap (D8). The temporary `test_fire_arrow` skill is not needed.
+
+**Files:**
+- Modify: `scripts/arrow.gd` (pierce-through and first-hit combo blast triggers), `scripts/rules/gem_combo.gd`, `scripts/skills/arrow_rain.gd`, `scripts/skills/thorn_trap.gd` (zone and radius hooks)
+- Test: `tests/test_arrow_combos.gd`, `tests/test_gem_combo.gd`, `tests/test_area_skills.gd`
+
+**Interfaces:**
+- Produces: `GemCombo.area_radius_mult(b: Dictionary) -> float` (`b.area_mult` + `area_radius_bonus` when the combo has it); `GemCombo.zone_mods(id: String) -> Dictionary` `{"slow": float, "taken": float, "burn": bool}` (`{}` for non-zone recipes). Arrow: `blast_on_pierce` fires when a primary arrow passes through a target, `blast_on_hit` on its first hit (both on top of ศรเพลิง's own r32 blast: owner ②, rows read literally).
+- ArrowRain and ThornTrap use `area_radius_mult(b)` for their radius and call `t.apply_zone(mods.slow, mods.taken, 0.25)` each step for monsters inside (a rain for its duration, a spent trap for `root_secs`). With `mods.burn` / `burn_all`, every target inside burns (0.2 × the last hit, or the tick's damage for rain).
+
+- [ ] **Step 1: Write the failing tests**
+
+```gdscript
+func test_shockwave_r32_80pct_excludes_struck():   # fire_arrow [pierce, expand] Lv10: passing through A makes a blast at A: B at 31 px hit with mult ≈ arrow_mult × 0.80, A not hit twice by it, C at 33 px not hit
+func test_earth_piercer_r40_100pct_burns():        # fire_arrow (char Lv19) [pierce, expand, element fire]: B at 39 px hit ×1.00 and burning; one blast per pierced target; no shockwave (replaced)
+func test_meteor_rain_r40_80pct_per_arrow():       # fire_arrow (char Lv19) [split, element fire, expand]: each of 3 arrows' first hit blasts r40 ×0.80 including the struck target; 3 arrows → 3 meteor blasts
+func test_fire_burst_radius():                     # area_radius_mult for [element fire, expand] Lv1 ≈ 1.0 + 0.30 + 0.20; [expand] alone ≈ 1.30
+func test_zone_mods():                             # zone_mods("hunter_zone") == {slow 0.30, taken 0.10, burn false}; hellfield {0.30, 0.20, true}; fire_fan → {}
+func test_hunter_zone_on_rain():                   # arrow_rain [expand, extend]: dummies inside: speed ≈ 0.7, taken ≈ 1.10 while the rain lasts; outside: none
+func test_hellfield_on_rain():                     # arrow_rain (char Lv16) [expand, extend, element fire]: zone 0.30 / 0.20 and every target inside burning
+func test_hunter_zone_on_trap():                   # thorn_trap [expand, extend]: the rooted dummy is in a zone (taken ≈ 1.10) for root_secs (2.6 s)
+func test_fire_burst_rain_radius():                # arrow_rain [element fire, expand]: radius ≈ 96 (dummy at 95 px hit), all hit targets burning
+func test_fire_burst_fire_arrow():                 # fire_arrow [element fire, expand]: own blast radius ≈ 48, all blast targets burning
+func test_area_recipes_formable_in_phase1():       # hero Lv10 sockets: arrow_rain [expand, extend] → hunter_zone; arrow_rain [element fire, expand] → fire_burst; fire_arrow [pierce, expand] → shockwave (the 3 tier-2 area recipes form at the cap)
+```
+
+- [ ] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes**, then run `test_area_skills` and `test_arrow_gems`.
+- [ ] **Step 5: Commit** `git commit -m "M5b Task 9: area recipes on ห่าศร / กับดักหนาม / ศรเพลิง (blasts + zones)"`
 
 ---
 
@@ -461,7 +690,7 @@ func test_zone_mods():                             # zone_mods("hunter_zone") ==
 
 **Files:**
 - Modify: `scripts/hero/hero.gd` (`combos_found`, `combo_found` signal, check after `socket`/`unsocket`, `after_load`), `scripts/rules/save_game.gd` (`new_state`, `_combos_ok`, `_state_ok`, `load_or_new` normalise), `scripts/dev/test_ground.gd:147-152, 598` (save and load)
-- Modify: `tests/test_save_hardening.gd` (the max-state builder includes all 16 ids and stays ≤ `save.max_bytes`)
+- Modify: `tests/test_save_hardening.gd` (the max-state builder includes all 16 ids and stays ≤ `save.max_bytes`; Task 8e's size test adds gems on all 5 skills and the `bar` key on top)
 - Test: `tests/test_save_combos.gd`
 
 **Interfaces:**
@@ -509,7 +738,9 @@ func test_text_two_gems():  # [split, fire]: title == "ศรทะลวง · 
 func test_text_three_gems():# [split, fire, multiply]: title == "ศรทะลวง · พัดเพลิงพรหมาสตร์";
                             # describe == "ยิงศรพรหมาสตร์ 3 แนว ทะลุทุกตัว ทางไฟ 3 วิ ไหม้ 30%/วิ ปลายแนวระเบิดไฟ";
                             # numbers(b3, b2) texts == ["แนวละ 233% (+35%)", "ระเบิด 50%", "MP 21.8"], kinds [up, plain, down]
-func test_every_recipe_has_text():   # for every recipe formable on piercing or spread: title contains the recipe name; describe != ""
+func test_every_recipe_has_text():   # for every recipe formable on any of the 5 active skills: title contains the recipe name; describe != ""
+func test_area_skill_text():        # Lv10, no gems: describe("arrow_rain") == "ห่าศรตกเป็นวง r64 นาน 3 วิ ทิกละ 46%"; describe("thorn_trap") == "วางกับดักไกลสุด 160px ตรึง 2 วิ" with numbers ["150%", "MP 12"];
+                                    # describe("fire_arrow") == "ยิงศรไฟ ไหม้ 20%/วิ 3 วิ ระเบิดวง r32"; with an ice gem the line says "ศรน้ำแข็ง" and has no ไหม้ (D7)
 func test_row_gold_only_recipe_slots(): # hero Lv10 [split, fire, leech]: row_view.gold_slots == [0, 1], tier 2, title_color == SkillPanel.GOLD; no combo → gold_slots [], title_color == SkillPanel.TEXT
 func test_preview_shows_delta():     # [split] socketed, fire gem selected in the bag: row_view("piercing").title == "ศรทะลวง · ศรพัดเพลิง", numbers[0] == {"แนวละ 172% (+10%)", "up"}, numbers[-1].kind == "down"
 func test_preview_full_slots_breaks_combo(): # Lv1 [split, fire] (2/2), homing selected → preview replaces slot 1 (index 0): title == "ศรทะลวง", gold_slots == []
@@ -554,18 +785,20 @@ func test_book_closes_with_panel(): # close() → is_book_open() false; reopenin
 ### Task 13: Docs, risks, screenshots, acceptance
 
 **Files:**
-- Modify: `docs/gems.md` (new §8 "ท่าผสม" short summary pointing to the spec; slot table already done in Task 1), `docs/risks.md` (new rows below), `docs/pixellab-budget.md` ("M5b gem combos: 0 gen")
+- Modify: `docs/gems.md` (new §8 "ท่าผสม" short summary pointing to the spec; slot table already done in Task 1), `docs/risks.md` (new rows below), `docs/pixellab-budget.md` ("M5b gem combos and area-skill effects: 0 gen"; the area-skill icons and trap sprite, 30 gen, are already logged), `docs/skills.md` (a dated note under rows 36/42/53 with the owner's D1–D8 answers)
 - Create: `tests/screenshots_m5b_combos.gd` → `docs/preview/m5b/`
 
 risks.md rows:
 - **S10 🟠:** combos are decided on the player's device (damage, freeze, MP refund). The discovered list is in the signed save, range-checked and cosmetic. Online play needs a server to decide this (S1).
-- **B24 🟢:** the MP refund is capped 6 / 9 per press; burn/trail kills give none.
-- **B25 🟢:** a freeze cancels an attack windup, and bosses freeze (owner). Watch boss fights for freeze-lock feel.
-- **B26 🟠:** the 6 area recipes show as ??? until the area skills are built.
+- **B25 🟢:** the MP refund is capped 6 / 9 per press. Burn and trail kills count (owner "นับทุกแบบ") through the cast of the press that applied them, so they share that press's cap.
+- **B26 🟢:** a freeze cancels an attack windup, and bosses freeze (owner). Watch boss fights for freeze-lock feel.
+- **B27 🟠:** the 3 two-gem area recipes form in phase 1 (ห่าศร from Lv7, กับดักหนาม / ศรเพลิง at Lv10). The 3 three-gem area recipes need skill Lv10 (ห่าศร char Lv16, กับดัก / ศรเพลิง Lv19), so they stay ??? in the book until the level cap rises (owner D8).
+- **B28 🟢:** the trap cap (2) is enforced in `TrapSet` and `Hero.try_skill`, not the touch UI. An armed trap ignores rooted monsters, so two traps on one spot cannot give 300% + a 4 s root. Rains and traps are cleared on warp, room change and death (B20).
+- **B29 🟢:** the skill bar's `bar` save key is optional and range-checked (4 entries, unlocked ids, no repeats, signed, VERSION 4). Traps, rains and cooldowns are never saved.
 
-- [ ] **Step 1: Write the screenshot script.** Header comment gives the run command `xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_m5b_combos.gd`. Outputs: `skill_panel_2gem.png` (Lv10 piercing [split, fire], gold frames, live text), `skill_panel_3gem.png` (brahmastra), `skill_panel_preview.png` (fire gem selected over [split]: green +10%, red MP), `combo_toast.png`, `recipe_book.png` (2 found, the rest ???), `fx_fire_trail.png`, `fx_brahmastra_blast.png`, `fx_thunder_hop.png`, `fx_frost_freeze.png`, `fx_garuda_mark.png`, `fx_bloodthirst_kill.png` (test ground seed 7, room c1r0, 1280×720, plus an ×3 crop for each FX), and `skill_panel_portrait_3gem.png`.
+- [ ] **Step 1: Write the screenshot script.** Header comment gives the run command `xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_m5b_combos.gd`. Outputs: `skill_panel_2gem.png` (Lv10 piercing [split, fire], gold frames, live text), `skill_panel_3gem.png` (brahmastra), `skill_panel_preview.png` (fire gem selected over [split]: green +10%, red MP), `combo_toast.png`, `recipe_book.png` (2 found, the rest ???), `fx_fire_trail.png`, `fx_brahmastra_blast.png`, `fx_thunder_hop.png`, `fx_frost_freeze.png`, `fx_garuda_mark.png`, `fx_bloodthirst_kill.png` (test ground seed 7, room c1r0, 1280×720, plus an ×3 crop for each FX), `skill_panel_portrait_3gem.png`, and for the area skills `area_rain.png`, `area_trap.png` (armed + triggered with a rooted monster), `area_fire_arrow_blast.png`, `area_hunter_zone.png`, `skill_panel_5_skills.png` and `hud_bar_lv10.png` (landscape + portrait, ศรเพลิง on button 4). The PR notes for each area image whether the icon / trap art is the owner's pick or the placeholder.
 - [ ] **Step 2: Run the full suite.** `godot --headless --path . --script tests/run_tests.gd` → `RESULT passed=N failed=0`. Record N in the PR body.
-- [ ] **Step 3: Run the screenshots and look at every image.** Check the Thai text renders (no tofu), the name sits above the icon, the frames are gold, the deltas are green/red, the book shows ???, and each effect is visible on a monster.
+- [ ] **Step 3: Run the screenshots and look at every image.** Check the Thai text renders (no tofu), the name sits above the icon, the frames are gold, the deltas are green/red, the book shows ???, each effect is visible on a monster, the rain circle and trap sit on the ground under the monsters (Y-sort), and the 4 HUD skill buttons show the right icons and lock notes.
 - [ ] **Step 4: Web export and draft PR (coordinator).** `godot --headless --path . --export-release "Web" build/web/index.html` succeeds. Draft PR `m5b/gem-combos` → main with test counts, the screenshot list, the risks rows and the Thai owner summary.
 - [ ] **Step 5: Commit** `git commit -m "M5b Task 13: combos docs, risks, budget, acceptance screenshots"`
 
@@ -573,6 +806,7 @@ risks.md rows:
 
 ## Self-review notes (done)
 
-- **Spec coverage:** all 8 two-gem recipes and 8 three-gem recipes are covered by Tasks 2 and 5–9. The slot rule plus the owner's 2026-11-09 addendum is Task 1. The MP rule is in Task 3 (`test_combo_adds_no_mp`). §5 live text is Task 11. Toast and book are Task 12. The effect reuse with 0 gen is Task 5 plus Task 13's budget line. Boss freeze is Tasks 4 and 7. The MP caps are Tasks 3 and 8. The save is Task 10. The docs (gems.md §3, m3a spec, panel text, test_gem, sim) are Task 1.
-- **Not implemented, on purpose:** the spec row's "บอสช้าลง 60%" (overridden by the owner), and in-game area skills (outside this spec; see Q3).
-- **Type check:** `ComboCast` (Task 3) is used in Tasks 5 and 8. `combo` / `extra_bounces` build keys (Task 3) are used in Tasks 5–9 and 11. `Hero.open_gems` (Task 1) is used in Task 11. `return_closed_gems` (Task 1) is used in Task 10's `after_load`.
+- **Spec coverage:** all 8 two-gem recipes and 8 three-gem recipes are covered by Tasks 2 and 5–9 (the 6 area recipes on the real area skills in Task 9). The 3 area skills follow docs/skills.md rows 36/42/53 and gems.md §2 (Tasks 8a–8d); owner D1 (both open at Lv10, assignable buttons) is 8a + 8e, D2 aiming is 8b `area_point`, D3 root is 8c, D4 trap life and radius is 8a + 8c, D5 blast is 8d, D6 extend is 8a, D7 element replacement is 8a + 8d (`test_ice_gem_replaces_burn`, `test_lightning_gem_replaces_burn`), D8 is Task 9 + B27. "Burn/trail kills count, capped" (owner 2026-11-09) is Global Constraints + Task 8 (`test_burn_kill_counts_and_shares_cap`) + B25. The slot rule plus the owner's 2026-11-09 addendum is Task 1. The MP rule is in Task 3 (`test_combo_adds_no_mp`). §5 live text is Task 11. Toast and book are Task 12. The effect reuse with 0 gen is Task 5 plus Task 13's budget line. Boss freeze is Tasks 4 and 7. The MP caps are Tasks 3 and 8. The save is Task 10. The docs (gems.md §3, m3a spec, panel text, test_gem, sim) are Task 1.
+- **Not implemented, on purpose:** the spec row's "บอสช้าลง 60%" (overridden by the owner); the Lv10 job choice (owner D1: later milestone); joystick or hold-to-place aiming (D2).
+- **Plan decisions to show the owner (not numbers):** gear `element_dmg` also applies to ศรเพลิง's own fire (8a); at most one hit sound and one `chain_zap` FX per rain tick (8b); fire-arrow tints for ice / lightning gems (8d); the panel's `ปุ่ม N` badge cycles on tap (8e); the Task 11 area-skill lines are Claude's wording.
+- **Type check:** `ComboCast` (Task 3) is used in Tasks 5, 8, 8b and 8c (via `Hero.hit_source`). `SkillHit` (8b) is used in 8b, 8c and Task 9. `area_mult` / `dur_mult` (8a) feed `GemCombo.area_radius_mult` (Task 9). `apply_root` (8c) is separate from Task 4's `apply_freeze`; both make `speed_mult()` 0. `Skills.active_ids` / `icon` / `display_name` (8a) are used in 8e and Task 11. The optional `cast` argument on `apply_status("burn")` / `apply_trail` (Task 8) defaults to null, so Task 4 / 5 call sites stay valid. `combo` / `extra_bounces` build keys (Task 3) are used in Tasks 5–9 and 11. `Hero.open_gems` (Task 1) is used in Task 11. `return_closed_gems` (Task 1) is used in Task 10's `after_load`.
