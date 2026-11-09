@@ -21,7 +21,7 @@ and then post-processed here (no drawing by hand):
 Writes assets/fx/pfx_<name>.png and the manifest entry <name> (with "sheet" and "pixelfx" metadata). The old
 PixelLab entry is kept as "pixellab_<name>" (sheet <name>.png) when <name> was a PixelLab effect.
 
-The checkout must be at COMMIT (checked with git; the script stops otherwise).
+The checkout must be at COMMIT and clean (checked with git; the script stops otherwise). Test: tools/test_pixelfx_export.py.
 
 Usage: python3 -I tools/pixelfx_export.py --pixelfx /path/to/pixelfx-checkout [--only name,...] [--work DIR]
 """
@@ -65,13 +65,21 @@ EFFECTS = {
 }
 
 def check_commit(pfx_dir):
-    """The PixelFX checkout must be the commit the licence notice and manifest name."""
+    """The PixelFX checkout must be the commit the licence notice and manifest name, with nothing changed in it."""
     try:
         head = subprocess.run(["git", "-C", pfx_dir, "rev-parse", "--short=%d" % len(COMMIT), "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         sys.exit("pixelfx_export: cannot read the PixelFX checkout's commit (%s)" % e)
     if head != COMMIT:
         sys.exit("pixelfx_export: PixelFX checkout is at %s, want %s (check out %s first)" % (head, COMMIT, COMMIT))
+    # review 2026-11-09: also clean (no edited, staged or untracked files), so the sheets are what COMMIT renders
+    try:
+        dirty = subprocess.run(["git", "-C", pfx_dir, "status", "--porcelain"], check=True, capture_output=True, text=True).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        sys.exit("pixelfx_export: cannot read the PixelFX checkout's status (%s)" % e)
+    if dirty:
+        sys.exit("pixelfx_export: PixelFX checkout has uncommitted changes (git status --porcelain):\n%s\n"
+                 "stash or reset them first (the export must be exactly %s)" % (dirty, COMMIT))
 
 def _packed(r, g, b):
     v = (255 << 24) | (b << 16) | (g << 8) | r

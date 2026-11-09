@@ -1,7 +1,8 @@
 extends Node2D
 ## Poison mist left where a poison mushroom died: for `time` seconds, a hero inside `radius` is
-## poisoned (once per cloud). Task 3f review: the mist and disc fade out over the last FADE s instead of
-## vanishing in one frame (visual only: radius, time and dose are unchanged).
+## poisoned (once per cloud). Task 3f review: it does not vanish in one frame. Review Minor #3 (2026-11-09): it shows
+## at full strength for its whole `time` (it can poison until the end), then, harmless, the mist and disc fade out
+## over FADE s, the mist held on its last frame, and the cloud is freed (gameplay: radius, time and dose unchanged).
 
 const FADE := 0.3
 
@@ -11,6 +12,8 @@ var per_tick := 1
 var poison_time := 3.0
 var hero: Hero
 var _hit := false
+var _fade_t := -1.0          # < 0 while it can poison; then seconds into the harmless fade
+var _mist: FxSprite = null
 
 func setup(at: Vector2, radius_: float, time_: float, per_tick_: int, poison_time_: float, hero_: Hero) -> void:
 	position = at
@@ -32,14 +35,27 @@ func setup(at: Vector2, radius_: float, time_: float, per_tick_: int, poison_tim
 		fx.z_index = 10
 		add_child(fx)
 		fx.play("poison_mist")
+		_mist = fx
 
 func _physics_process(delta: float) -> void:
 	step(delta)
 
+## true while a hero walking in is poisoned (its whole `time`); false during the fade.
+func is_harmful() -> bool:
+	return _fade_t < 0.0
+
 func step(delta: float) -> void:
-	time -= delta
-	modulate.a = clampf(time / FADE, 0.0, 1.0)
-	if not _hit and hero and is_instance_valid(hero) and hero.global_position.distance_to(position) <= radius:
-		_hit = true
-		hero.apply_poison(per_tick, poison_time)
-	if time <= 0.0: queue_free()
+	if _fade_t < 0.0:
+		time -= delta
+		if not _hit and hero and is_instance_valid(hero) and hero.global_position.distance_to(position) <= radius:
+			_hit = true
+			hero.apply_poison(per_tick, poison_time)
+		if time <= 0.0:
+			_fade_t = 0.0                    # harmless from now on: fade out
+			if _mist and is_instance_valid(_mist):
+				_mist.pause()
+				_mist.frame = _mist.sprite_frames.get_frame_count("poison_mist") - 1
+		return
+	_fade_t += delta
+	modulate.a = clampf(1.0 - _fade_t / FADE, 0.0, 1.0)
+	if _fade_t >= FADE: queue_free()

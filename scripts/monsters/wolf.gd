@@ -98,11 +98,31 @@ const STATUS_FX_SCALE := 1.5
 var _burn_fx: FxSprite = null
 var _frost_fx: FxSprite = null
 ## Owner 2026-11-09 (PixelFX decision B): the monster itself is tinted while burning (red-orange) or slowed
-## (ice-blue), as well as its PixelFX overlay; both at once: frost wins (one clear colour; the burn keeps its
-## flames and damage numbers). Visual only. TINT_AMOUNT = how far the body's colours go toward the tint (flash.gdshader).
+## (ice), as well as its PixelFX overlay; both at once: frost wins (one clear colour; the burn keeps its
+## flames and damage numbers). Visual only. *_AMOUNT = how far the body's colours go toward the tint (flash.gdshader).
+## Owner (after f9058ce): frozen = a brighter, whiter ice (#d8f4ff, was #6fd0ff) so the already-blue ice wolf (this
+## wolf) still reads frozen; review: burn stronger (0.85) so a pale monster reads red-orange, not salmon. The shader's
+## numbers (TINT_BASE + TINT_GAIN x luma, outline weight OUTLINE_LO..OUTLINE_HI) are mirrored here for tint_preview.
 const BURN_TINT := Color("#ff5a1f")
-const FROST_TINT := Color("#6fd0ff")
-const TINT_AMOUNT := 0.6
+const FROST_TINT := Color("#d8f4ff")
+const BURN_AMOUNT := 0.85
+const FROST_AMOUNT := 0.8
+const TINT_BASE := 0.5
+const TINT_GAIN := 0.9
+const OUTLINE_LO := 0.06
+const OUTLINE_HI := 0.16
+
+## CPU mirror of flash.gdshader without flash: the colour it draws for texel src under a white modulate, tinted toward
+## tint by amount (amount 0 = the plain body as drawn: the shader squares the texel, see flash.gdshader). Tests and
+## screenshots_m5a_pixelfx (which checks the GPU result against this).
+static func tint_preview(src: Color, tint: Color, amount: float) -> Color:
+	var c := Color(src.r * src.r, src.g * src.g, src.b * src.b, src.a * src.a)
+	var l := 0.299 * src.r + 0.587 * src.g + 0.114 * src.b
+	var u := clampf((l - OUTLINE_LO) / (OUTLINE_HI - OUTLINE_LO), 0.0, 1.0)
+	var w := amount * u * u * (3.0 - 2.0 * u)            # smoothstep: outlines (luma < OUTLINE_LO) untouched
+	var k := TINT_BASE + TINT_GAIN * l
+	return Color(lerpf(c.r, minf(tint.r * k, 1.0), w), lerpf(c.g, minf(tint.g * k, 1.0), w), lerpf(c.b, minf(tint.b * k, 1.0), w), c.a)
+
 var _tint_shown := Color(0, 0, 0, 0)
 ## true while a burn tick's damage goes through health (test_ground shows its number but no hit spark)
 var dot_tick := false
@@ -272,18 +292,18 @@ func _update_status_fx() -> void:
 	_burn_fx = _toggle_fx(_burn_fx, "status_burn", status.is_burning() and is_alive() and not (shed and PerfSaver.decorative("status_burn")))
 	_frost_fx = _toggle_fx(_frost_fx, "status_frost", status.is_slowed() and is_alive() and not (shed and PerfSaver.decorative("status_frost")))
 
-## The body's status tint now: frost, else burn, else none (alpha 0). Dead monsters are never tinted.
+## The body's status tint now: frost, else burn, else none; alpha = its tint amount (0 = none). Dead monsters are never tinted.
 func status_tint() -> Color:
 	if not is_alive(): return Color(0, 0, 0, 0)
-	if status.is_slowed(): return FROST_TINT
-	if status.is_burning(): return BURN_TINT
+	if status.is_slowed(): return Color(FROST_TINT, FROST_AMOUNT)
+	if status.is_burning(): return Color(BURN_TINT, BURN_AMOUNT)
 	return Color(0, 0, 0, 0)
 
 func _apply_tint(c: Color) -> void:
 	if c == _tint_shown or body == null or not (body.material is ShaderMaterial): return   # only when it changes
 	_tint_shown = c
 	body.material.set_shader_parameter("tint_color", Color(c.r, c.g, c.b))
-	body.material.set_shader_parameter("tint_amount", TINT_AMOUNT if c.a > 0.0 else 0.0)
+	body.material.set_shader_parameter("tint_amount", c.a)
 
 func _toggle_fx(fx: FxSprite, fx_name: String, on: bool) -> FxSprite:
 	if on and fx == null:

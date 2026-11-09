@@ -10,7 +10,11 @@ extends SceneTree
 ##      mirrored (the monster left of the hero), a crit, a burning and a frozen monster (tinted), a poison mist and
 ##      a pickup burst, each marked with its number; pixelfx_ingame_x3.png - the middle enlarged x3 (nearest).
 ##      docs/preview/m4b/pixelfx_warp_ingame_x3.png - the warp in game at 0.0 / 0.15 / 0.30 / 0.45 s of the 0.5 s
-##      fade-out, with the fade overlay as the game draws it then (tween held, alpha t / FADE_OUT), round the hero x3.
+##      fade-out, with the fade overlay as the game draws it then (the game's own fade tween, held and stepped to t:
+##      ease-in since the owner's 2026-11-09 addendum), round the hero x3.
+##      docs/preview/m4b/pixelfx_tint_x3.png - the status tint alone (no overlay) x3: rows ice wolf / deer / boar,
+##      columns plain / frozen / burning; and a check that the GPU result (flash.gdshader) equals Wolf.tint_preview,
+##      the CPU mirror the tests use ("tint GPU vs mirror: max diff ..." printed; exit 1 if over 3/255).
 
 const OUT := "res://docs/preview/m4b/"
 var before_dir := OS.get_environment("PFX_BEFORE") if OS.get_environment("PFX_BEFORE") != "" else "/tmp/pfxshots"
@@ -90,7 +94,7 @@ func _tint_mat(tint: String) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = preload("res://shaders/flash.gdshader")
 	m.set_shader_parameter("tint_color", Wolf.BURN_TINT if tint == "burn" else Wolf.FROST_TINT)
-	m.set_shader_parameter("tint_amount", Wolf.TINT_AMOUNT)
+	m.set_shader_parameter("tint_amount", Wolf.BURN_AMOUNT if tint == "burn" else Wolf.FROST_AMOUNT)
 	return m
 
 ## The c685661 export of `id` (the one the owner sent back), as a paused sprite on its anchor; null if missing.
@@ -280,15 +284,22 @@ func _warp_moments() -> void:
 	for c in g.stage.get_children():
 		if c is FxSprite and not c.keep: c.free()
 	var w: Warp = g.warps[0]
+	g.warping = true                     # the ring must not start the warp by itself while the view settles
 	g.hero.global_position = w.position + Vector2(0, 0)
 	g.hero.reset_physics_interpolation()
 	for i in 4: await process_frame
-	g.warp_through(w)
-	if g._fade_tween: g._fade_tween.pause()
+	g.warping = false
+	g.warp_through(w)                    # the warp starts now, at t = 0
+	var fade_tw: Tween = g._fade_tween
+	fade_tw.pause()
 	var fx: FxSprite = g._warp_fx
 	var tiles: Array = []
+	var now := 0.0
+	var alphas := []
 	for t in [0.0, 0.15, 0.30, 0.45]:
-		g.fade.color.a = t / g.FADE_OUT
+		if t > now: fade_tw.custom_step(t - now)              # the game's own (eased) fade at t
+		now = t
+		alphas.append(snappedf(g.fade.color.a, 0.001))
 		if fx:
 			fx.pause()
 			fx.frame = mini(int(t * fx.sprite_frames.get_animation_speed("warp_blink") + 0.0001), fx.sprite_frames.get_frame_count("warp_blink") - 1)
@@ -307,7 +318,64 @@ func _warp_moments() -> void:
 	for i in tiles.size(): out.blit_rect(tiles[i][1], Rect2i(Vector2i.ZERO, tiles[i][1].get_size()), Vector2i(i * (tw + 10), 0))
 	out.save_png(ProjectSettings.globalize_path(OUT + "pixelfx_warp_ingame_x3.png"))
 	print("saved pixelfx_warp_ingame_x3.png ", out.get_size(), " times ", tiles.map(func(x): return x[0]), " frame shown ",
-		[0.0, 0.15, 0.30, 0.45].map(func(t): return int(t * 14 + 0.0001)))
+		[0.0, 0.15, 0.30, 0.45].map(func(t): return int(t * 14 + 0.0001)), " fade alpha ", alphas)
+
+## The status tint on its own, x3 (nearest, whole pixels): rows the ice wolf (assets/wolf), the deer (light), the boar
+## (dark); columns plain / frozen / burning, all drawn with the game's body shader (plain = tint 0, as in game). One
+## pixel of every source pixel's 3x3 block is read back and compared with Wolf.tint_preview: the GPU and the mirror
+## the tests use must agree within 3/255.
+const TINT_KINDS := [["ice wolf", "res://assets/wolf/pose_south.png"], ["deer", "res://assets/monsters/deer/pose_south.png"],
+	["boar", "res://assets/monsters/boar/pose_south.png"]]
+func _tint_sheet() -> bool:
+	var k := 3
+	var cw := 64 * k + 40
+	var rh := 64 * k + 20
+	var size := Vector2i(110 + cw * 3, 40 + rh * TINT_KINDS.size())
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	await _size(size)
+	var board := Node2D.new()
+	root.add_child(board)
+	var bg := ColorRect.new()
+	bg.color = GRASS
+	bg.size = Vector2(size)
+	board.add_child(bg)
+	var heads := ["plain", "frozen (#%s x %.2f)" % [Wolf.FROST_TINT.to_html(false), Wolf.FROST_AMOUNT], "burning (#%s x %.2f)" % [Wolf.BURN_TINT.to_html(false), Wolf.BURN_AMOUNT]]
+	for j in 3: _text(board, Vector2(110 + j * cw, 8), heads[j], 15)
+	var cells := []            # [texture image, top-left on screen, tint, amount]
+	for i in TINT_KINDS.size():
+		_text(board, Vector2(8, 40 + i * rh + 80), TINT_KINDS[i][0], 15)
+		var tex: Texture2D = load(TINT_KINDS[i][1])
+		for j in 3:
+			var sp := Sprite2D.new()
+			sp.texture = tex
+			sp.centered = false
+			sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			sp.scale = Vector2.ONE * k
+			sp.position = Vector2(110 + j * cw, 40 + i * rh)
+			sp.material = _tint_mat("frost" if j == 1 else "burn")    # plain: the game's body shader, amount 0
+			if j == 0: sp.material.set_shader_parameter("tint_amount", 0.0)
+			board.add_child(sp)
+			var img := tex.get_image()
+			img.decompress()
+			cells.append([img, Vector2i(sp.position), [Color.WHITE, Wolf.FROST_TINT, Wolf.BURN_TINT][j], [0.0, Wolf.FROST_AMOUNT, Wolf.BURN_AMOUNT][j]])
+	var shot: Image = await _snap("pixelfx_tint_x3.png")
+	var worst := 0.0
+	var n := 0
+	for c in cells:
+		var img: Image = c[0]
+		for y in img.get_height():
+			for x in img.get_width():
+				var src := img.get_pixel(x, y)
+				if src.a < 1.0: continue                      # opaque pixels only (no blending with the grass)
+				var want := Wolf.tint_preview(src, c[2], c[3])
+				var got := shot.get_pixel(c[1].x + x * k, c[1].y + y * k)   # the block's first pixel (Sprite2D rounds to it)
+				worst = maxf(worst, maxf(absf(got.r - want.r), maxf(absf(got.g - want.g), absf(got.b - want.b))))
+				n += 1
+	print("tint GPU vs mirror: max diff %.4f (%.1f/255) over %d pixels" % [worst, worst * 255.0, n])
+	board.queue_free()
+	root.content_scale_mode = _mode
+	await process_frame
+	return worst <= 3.0 / 255.0 + 0.0001
 
 func _freeze(n: Node) -> void:
 	if n is FxSprite:
@@ -321,6 +389,8 @@ func _freeze(n: Node) -> void:
 func _run() -> void:
 	await process_frame
 	await _compare()
+	var ok: bool = await _tint_sheet()                   # before the test ground (its fade and HUD layers)
+	if not ok: print("FAIL: flash.gdshader and Wolf.tint_preview disagree")
 	await _ingame()
 	await _warp_moments()
-	quit(0)
+	quit(0 if ok else 1)

@@ -563,9 +563,11 @@ func test_status_tints_the_monster():
 	w.apply_status("burn", 1.0)
 	w._update_status_fx()
 	if r == "" and not _tint_is(mat, Wolf.BURN_TINT): r = "burning: tint %s" % _tint_of(mat)
+	if r == "" and absf(_amt(mat) - Wolf.BURN_AMOUNT) > 0.001: r = "burning: amount %.2f, want BURN_AMOUNT %.2f" % [_amt(mat), Wolf.BURN_AMOUNT]
 	w.apply_status("slow")
 	w._update_status_fx()
 	if r == "" and not _tint_is(mat, Wolf.FROST_TINT): r = "burning + slowed: tint %s (frost wins)" % _tint_of(mat)
+	if r == "" and absf(_amt(mat) - Wolf.FROST_AMOUNT) > 0.001: r = "frozen: amount %.2f, want FROST_AMOUNT %.2f" % [_amt(mat), Wolf.FROST_AMOUNT]
 	w.status.slow_left = 0.0
 	w._update_status_fx()
 	if r == "" and (not w.status.is_burning() or not _tint_is(mat, Wolf.BURN_TINT)): r = "slow ended, burn left: tint %s" % _tint_of(mat)
@@ -593,21 +595,224 @@ func _tint_is(mat: ShaderMaterial, c: Color) -> bool:
 	var t: Color = mat.get_shader_parameter("tint_color")
 	return _amt(mat) > 0.2 and Color(t.r, t.g, t.b).is_equal_approx(Color(c.r, c.g, c.b))
 
-## Review: the poison cloud no longer vanishes in one frame: its mist and disc fade out over the last
-## HazardCloud.FADE s (visual only: the hazard is the same size, time and dose).
-func test_mist_fades_out_at_the_end():
-	var c = load("res://scripts/monsters/hazard_cloud.gd").new()
-	c.setup(Vector2(100, 100), 32.0, 2.0, 1, 3.0, null)
-	var fade: float = c.FADE
+## Review Minor #3 (2026-11-09, replaces "fades over the last FADE s of its time"): the cloud is a hazard, so it
+## shows at full strength for as long as it can poison (its whole `time`, cloud_time); only then, harmless, it fades
+## out over HazardCloud.FADE s (mist held on its last frame) and is freed. A hero who walks in during the fade is
+## not poisoned; one who walks in on the last poisonous frame is. Gameplay time and dose unchanged.
+func test_mist_full_while_poisonous_then_fades_harmless():
+	var h: Hero = load("res://scenes/hero.tscn").instantiate()
+	tree.root.add_child(h)
+	h.set_physics_process(false)
+	h.global_position = Vector2(1000, 1000)                 # out of the cloud
 	var r := ""
+	var a = load("res://scripts/monsters/hazard_cloud.gd").new()
+	tree.root.add_child(a)
+	a.set_physics_process(false)
+	a.setup(Vector2(100, 100), 32.0, 2.0, 1, 3.0, h)
+	var fade: float = a.FADE
 	if fade < 0.2 or fade > 0.4: r = "fade %.2f s (want ~0.3)" % fade
-	c.step(2.0 - fade - 0.05)
-	if r == "" and absf(c.modulate.a - 1.0) > 0.001: r = "faded %.2f before its last %.2f s" % [c.modulate.a, fade]
-	c.step(fade * 0.5 + 0.05)
-	if r == "" and (c.modulate.a < 0.3 or c.modulate.a > 0.7): r = "half way through the fade alpha %.2f" % c.modulate.a
-	if r == "" and (c.time <= 0.0 or c.is_queued_for_deletion()): r = "cloud gone early"
-	c.free()
+	for i in 119:                                           # 1.983 s of its 2.0 s: full alpha all the way
+		a.step(1.0 / 60.0)
+		if r == "" and absf(a.modulate.a - 1.0) > 0.001: r = "alpha %.2f at %.2f s while it can still poison" % [a.modulate.a, (i + 1) / 60.0]
+	if r == "" and not a.is_harmful(): r = "harmless before its time ran out"
+	h.global_position = Vector2(100, 100)
+	a.step(1.0 / 60.0)                                      # its last poisonous frame
+	if r == "" and h.poison_left <= 0.0: r = "no poison on the cloud's last frame"
+	if r == "" and absf(a.modulate.a - 1.0) > 0.001: r = "alpha %.2f on its last poisonous frame" % a.modulate.a
+	a.free()
+	h.poison_left = 0.0
+	# a second cloud: the hero walks in just after its time is up
+	var b = load("res://scripts/monsters/hazard_cloud.gd").new()
+	tree.root.add_child(b)
+	b.set_physics_process(false)
+	h.global_position = Vector2(1000, 1000)
+	b.setup(Vector2(100, 100), 32.0, 2.0, 1, 3.0, h)
+	for i in 121: b.step(1.0 / 60.0)                        # 2.017 s: time is up
+	if r == "" and b.is_harmful(): r = "still harmful after its time"
+	h.global_position = Vector2(100, 100)
+	var mist: FxSprite = null
+	for ch in b.get_children():
+		if ch is FxSprite: mist = ch
+	for i in 6:                                             # 0.1 s into the fade, hero inside
+		b.step(1.0 / 60.0)
+	if r == "" and h.poison_left > 0.0: r = "poisoned during the harmless fade"
+	if r == "" and (b.modulate.a <= 0.05 or b.modulate.a >= 0.95): r = "not fading after its time (alpha %.2f)" % b.modulate.a
+	if r == "" and b.is_queued_for_deletion(): r = "cloud freed before its fade"
+	if r == "" and mist != null:
+		var last := mist.sprite_frames.get_frame_count("poison_mist") - 1
+		if mist.is_playing() or mist.frame != last: r = "mist not held on its last frame in the fade (frame %d of %d, playing %s)" % [mist.frame, last, mist.is_playing()]
+	for i in int(ceil(fade * 60.0)) + 1: b.step(1.0 / 60.0)
+	if r == "" and not b.is_queued_for_deletion(): r = "cloud not freed after time + FADE"
+	if r == "" and h.poison_left > 0.0: r = "poisoned during the harmless fade"
+	if is_instance_valid(b): b.free()
+	h.free()
 	return r
+
+## Review Minor #5: clear_cache() also drops the cached manifest (a re-exported manifest is read again).
+func test_clear_cache_drops_the_manifest():
+	FxSprite.make_frames("hit_spark")
+	if FxSprite._cache.is_empty(): return "setup: manifest not cached"
+	FxSprite.clear_cache()
+	var r := ""
+	if not FxSprite._cache.is_empty(): r = "manifest cache kept by clear_cache()"
+	elif not FxSprite._frames.is_empty(): r = "frames cache kept by clear_cache()"
+	elif not FxSprite._manifest().has("hit_spark"): r = "manifest not read again after clear_cache()"
+	return r
+
+# ---------- owner 2026-11-09 (after f9058ce): warp ease-in, whiter frost; review Important #1 ----------
+
+## Owner: the warp fade darkens slowly at first and fast at the end ("ให้จอมืดช้าตอนต้น เร็วตอนท้าย"), still FADE_OUT
+## (0.5 s) in total. The real fade tween, held and stepped: alpha rises every step, at half time it is at most 0.2
+## (a straight fade is 0.5) and the second half darkens more than the first; the room is unchanged until FADE_OUT and
+## changes right after it.
+func test_warp_fade_eases_in():
+	var g = await _ground()
+	g.hero.set_physics_process(false)
+	for i in 4: await tree.process_frame
+	var from: String = g.room_id
+	g.warp_through(g.warps[0])
+	var tw: Tween = g._fade_tween
+	tw.pause()
+	var r := ""
+	if absf(g.FADE_OUT - 0.5) > 0.0001: r = "fade out %.2f s (owner: 0.5)" % g.FADE_OUT
+	var alphas := [g.fade.color.a]
+	var step: float = g.FADE_OUT / 10.0
+	for i in 9:                                             # up to 0.45 s
+		tw.custom_step(step)
+		alphas.append(g.fade.color.a)
+		if r == "" and alphas[-1] <= alphas[-2]: r = "alpha not rising at %.2f s (%.3f -> %.3f)" % [(i + 1) * step, alphas[-2], alphas[-1]]
+	if r == "" and alphas[5] > 0.2: r = "alpha %.2f at half time (ease-in wants <= 0.2; straight 0.5)" % alphas[5]
+	if r == "" and alphas[5] - alphas[0] >= alphas[9] - alphas[5]: r = "first half darkens as much as the second (%s)" % str(alphas)
+	if r == "" and (g.room_id != from or not g.warping): r = "room changed before FADE_OUT"
+	tw.custom_step(step + 0.001)                            # FADE_OUT reached
+	if r == "" and (g.room_id == from or g.warping): r = "room not changed at FADE_OUT"
+	g.queue_free()
+	await tree.process_frame
+	return r
+
+## Review Important #1: an arrow in flight when the warp fade starts used to fly on for the 0.5 s and could kill a
+## monster of the room being left (EXP given, loot dropped into a room about to be freed: lost). Now the hero's
+## arrows stop where they are at the warp's start (the old room stops, as its packs do) and the room change frees
+## them. Control first: the same shot without a warp kills and gives EXP.
+func test_arrow_in_flight_at_warp_kills_nothing():
+	var g = await _ground()
+	g.go_to("c1r0", "", false)
+	var h: Hero = g.hero
+	h.set_physics_process(false)
+	for p in g.packs: p.process_mode = Node.PROCESS_MODE_DISABLED
+	var ws: Array = []
+	for p in g.packs:
+		for w in p.wolves: ws.append(w)
+	if ws.size() < 2 or g.warps.is_empty():
+		g.queue_free()
+		await tree.process_frame
+		return "setup: %d monsters, %d warps in c1r0" % [ws.size(), g.warps.size()]
+	var r := ""
+	# control: no warp, the arrow kills
+	var w0: Wolf = ws[0]
+	w0.health.setup(1)
+	var exp0 := h.exp + h.level * 100000
+	h._fire(w0.hurt_point() + Vector2(-40, 0), Vector2.RIGHT, 1.0, false)
+	for i in 20: await tree.physics_frame
+	if w0.is_alive() or h.exp + h.level * 100000 == exp0: r = "setup: the control arrow did not kill (alive %s)" % w0.is_alive()
+	# the warp starts with an arrow 40 px from a 1-hp monster
+	var w1: Wolf = ws[1]
+	w1.health.setup(1)
+	var exp1 := h.exp + h.level * 100000
+	var drops1: int = g.drops.size()
+	var from: String = g.room_id
+	h._fire(w1.hurt_point() + Vector2(-40, 0), Vector2.RIGHT, 1.0, false)
+	g.warp_through(g.warps[0])
+	g._fade_tween.pause()                                   # stay in the fade
+	for i in 30: await tree.physics_frame                   # 0.5 s: the arrow would have hit at ~0.1 s
+	if r == "" and not w1.is_alive(): r = "an arrow in flight at the warp's start killed an old-room monster"
+	elif r == "" and h.exp + h.level * 100000 != exp1: r = "EXP given after the warp started"
+	elif r == "" and g.drops.size() != drops1: r = "loot dropped after the warp started"
+	g._fade_tween.custom_step(g.FADE_OUT + 0.01)
+	await tree.process_frame
+	if r == "" and g.room_id == from: r = "setup: never left c1r0"
+	if r == "":
+		for c in g.world.get_children():
+			if c is Arrow and not c.is_queued_for_deletion(): r = "an old-room arrow is left in %s" % g.room_id
+	g.queue_free()
+	await tree.process_frame
+	return r
+
+## Mean colour of a sprite's lit pixels (texel luma > 0.15) as the game draws them plain and tinted (Wolf.tint_preview,
+## the CPU mirror of flash.gdshader; screenshots_m5a_pixelfx checks it against the GPU); and the largest change of any
+## outline pixel (texel luma < 0.06) and its luma when tinted.
+func _tint_stats(path: String, tint: Color, amount: float) -> Dictionary:
+	var img: Image = (load(path) as Texture2D).get_image()
+	img.decompress()
+	var a := Vector3.ZERO
+	var b := Vector3.ZERO
+	var n := 0
+	var outline := 0.0
+	var outline_luma := 0.0
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5: continue
+			var l := 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+			var p := Wolf.tint_preview(c, tint, 0.0)        # the plain body as the game draws it
+			var t := Wolf.tint_preview(c, tint, amount)
+			if l < 0.06:
+				outline = maxf(outline, maxf(absf(t.r - p.r), maxf(absf(t.g - p.g), absf(t.b - p.b))))
+				outline_luma = maxf(outline_luma, 0.299 * t.r + 0.587 * t.g + 0.114 * t.b)
+			elif l > 0.15:
+				a += Vector3(p.r, p.g, p.b)
+				b += Vector3(t.r, t.g, t.b)
+				n += 1
+	return {"before": Color(a.x / n, a.y / n, a.z / n), "after": Color(b.x / n, b.y / n, b.z / n), "outline": outline, "outline_luma": outline_luma}
+
+## The south pose sheet of monster kind k (the wolf has its own folder).
+func _pose(k: String) -> String:
+	return "res://assets/wolf/pose_south.png" if k == "wolf" else "res://assets/monsters/%s/pose_south.png" % k
+
+func _luma(c: Color) -> float:
+	return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+
+## Owner (after f9058ce): a frozen monster turns a brighter, whiter ice so the already-blue ice wolf still reads frozen
+## ("มอนที่ติดแข็งให้สว่างขาวเย็นกว่าเดิม"); outlines stay dark. On the wolf's own sprite: the frozen mean colour is far
+## from the plain one (distance >= 0.3), clearly lighter (+0.15 luma) and whiter (saturation down >= 0.15); on every
+## monster no outline pixel changes and frost reads ice (pale: sat <= 0.2, light: luma up >= 0.15).
+func test_frost_tint_reads_on_the_ice_wolf():
+	var s := _tint_stats(_pose("wolf"), Wolf.FROST_TINT, Wolf.FROST_AMOUNT)
+	var a: Color = s.before
+	var b: Color = s.after
+	var d := Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
+	if d < 0.3: return "frozen ice wolf mean %s vs plain %s: distance %.2f (want >= 0.3)" % [b.to_html(false), a.to_html(false), d]
+	if _luma(b) - _luma(a) < 0.15: return "frozen ice wolf only %.2f lighter" % (_luma(b) - _luma(a))
+	if a.s - b.s < 0.15: return "frozen ice wolf not whiter (sat %.2f -> %.2f)" % [a.s, b.s]
+	for k in ["boar", "deer", "kongkoi", "macaque", "shroom", "viper"]:
+		var m := _tint_stats(_pose(k), Wolf.FROST_TINT, Wolf.FROST_AMOUNT)
+		var mb: Color = m.after
+		if mb.s > 0.2 or _luma(mb) - _luma(m.before) < 0.15: return "frozen %s mean %s does not read ice" % [k, mb.to_html(false)]
+	for k in ["wolf", "boar", "deer", "kongkoi", "macaque", "shroom", "viper"]:
+		for pair in [[Wolf.FROST_TINT, Wolf.FROST_AMOUNT], [Wolf.BURN_TINT, Wolf.BURN_AMOUNT]]:
+			var o := _tint_stats(_pose(k), pair[0], pair[1])
+			if o.outline > 0.001 or o.outline_luma >= 0.06: return "%s outline lifted by %.3f under tint %s" % [k, o.outline, pair[0].to_html(false)]
+	return ""
+
+## Burn stays red-orange, also on a light monster (review: at 0.6 x (0.7 + luma) the pale wolf went salmon, sat 0.47):
+## every monster's burning mean colour has hue 8-30 degrees and saturation >= 0.6.
+func test_burn_tint_is_red_orange_not_salmon():
+	for k in ["wolf", "boar", "deer", "kongkoi", "macaque", "shroom", "viper"]:
+		var s := _tint_stats(_pose(k), Wolf.BURN_TINT, Wolf.BURN_AMOUNT)
+		var b: Color = s.after
+		if b.h * 360.0 < 8.0 or b.h * 360.0 > 30.0 or b.s < 0.6: return "burning %s mean %s (hue %.0f, sat %.2f) is not red-orange" % [k, b.to_html(false), b.h * 360.0, b.s]
+	return ""
+
+## The CPU mirror (Wolf.tint_preview) and flash.gdshader share their numbers: the shader's consts equal Wolf's
+## TINT_BASE / TINT_GAIN / OUTLINE_LO / OUTLINE_HI (the GPU result itself is compared in screenshots_m5a_pixelfx).
+func test_tint_shader_matches_its_mirror():
+	var code: String = (load("res://shaders/flash.gdshader") as Shader).code
+	for pair in [["TINT_BASE", Wolf.TINT_BASE], ["TINT_GAIN", Wolf.TINT_GAIN], ["OUTLINE_LO", Wolf.OUTLINE_LO], ["OUTLINE_HI", Wolf.OUTLINE_HI]]:
+		var re := RegEx.create_from_string("const float %s = ([0-9.]+);" % pair[0])
+		var m := re.search(code)
+		if m == null: return "flash.gdshader has no const %s" % pair[0]
+		if absf(float(m.get_string(1)) - float(pair[1])) > 0.00001: return "%s: shader %s, Wolf %s" % [pair[0], m.get_string(1), pair[1]]
+	return ""
 
 # ---------- licence ----------
 

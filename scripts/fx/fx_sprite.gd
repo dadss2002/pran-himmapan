@@ -42,9 +42,10 @@ static func make_frames(fx_name: String) -> SpriteFrames:
 	_frames[fx_name] = sf
 	return sf
 
-## Drops the cached frames (tests; a re-exported sheet).
+## Drops the cached frames and the cached manifest (tests; a re-exported sheet or manifest is read again).
 static func clear_cache() -> void:
 	_frames.clear()
+	_cache = {}
 
 static func make(fx_name: String, keep_after := false) -> FxSprite:
 	var m: Dictionary = _manifest()[fx_name]

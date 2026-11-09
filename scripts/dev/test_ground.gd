@@ -54,6 +54,10 @@ var fog: FogGrid
 var cam: Camera2D
 var fade: ColorRect
 const FADE_OUT := 0.5            # M4c §1: screen goes dark, then the new room (owner 2026-11-09: 0.5 s, was 0.25, so the warp sparkle shows)
+## Owner (after f9058ce): the fade out darkens slowly at first and fast at the end ("ให้จอมืดช้าตอนต้น เร็วตอนท้าย"),
+## still FADE_OUT in total: ease-in cubic (alpha = (t / FADE_OUT)^3: 0.125 at half time, 0.73 at 0.45 s).
+const FADE_OUT_TRANS := Tween.TRANS_CUBIC
+const FADE_OUT_EASE := Tween.EASE_IN
 const FADE_IN := 0.25
 const CALM := 1.0                # the new room's monsters ignore the hero this long after arrival
 ## M4d follow-up 3 (owner): the fade-in always plays its full FADE_IN. A slow room build makes the next frame's
@@ -199,6 +203,10 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	if fade: fade.color.a = 0.0
 	free_one_shots()                     # Task 3f review: sparks, crits, pickups, the warp sparkle belong to the room left
 	_warp_fx = null
+	for c in (world.get_children() if world else []):   # review Important #1: the hero's arrows belong to the room left too
+		if c is Arrow:
+			c.halt()
+			c.queue_free()                   # queued: go_to may run inside an arrow's own hit (a kill that moves us)
 	Sfx.stop_world()                     # sound spec: the old room's hits and cries stop (the warp gong goes on)
 	if hud: hud.close_map()              # Task 8: a room change never leaves the full map open (or the game paused)
 	_keep_room()                         # Task 4: the room being left stays as it is (unless re-rolled since)
@@ -344,8 +352,8 @@ func choose_arena_set(from_id: String) -> void:
 	var sets: Array = rooms.room(RoomLayout.BOSS).get("monster_sets", []) if rooms.has(RoomLayout.BOSS) else []
 	arena_set = RoomLevels.arena_set(sets, hero.level, int(rooms.room_levels().get(from_id, 0)))
 
-## Touching a ring: the screen fades out (FADE_OUT), the room changes, then fades in (go_to). The hero
-## stands still and cannot be hurt; the old room's monsters and their shots stop while it is dark.
+## Touching a ring: the screen fades out (FADE_OUT, ease-in), the room changes, then fades in (go_to). The hero
+## stands still and cannot be hurt; the old room's monsters, their shots and the hero's arrows stop while it is dark.
 func warp_through(w: Warp) -> void:
 	if warping: return
 	_trip(w.to_room, w.to_warp)
@@ -381,7 +389,11 @@ func _trip(to_room: String, to_warp: String) -> void:
 	for p in packs:                      # the old room stops: no bite, lunge or spit lands mid-fade
 		p.calm = maxf(p.calm, FADE_OUT + 0.1)
 		p.set_deferred("process_mode", Node.PROCESS_MODE_DISABLED)   # safe mid physics tick
-	_new_fade().tween_property(fade, "color:a", 1.0, FADE_OUT)
+	# Review Important #1: so do the hero's arrows (ricochets too): each stops where it is and hits nothing more, so
+	# no old-room monster dies mid-fade (no EXP, no loot dropped into a room about to be freed); go_to frees them.
+	for c in world.get_children():
+		if c is Arrow: c.halt()
+	_new_fade().tween_property(fade, "color:a", 1.0, FADE_OUT).set_trans(FADE_OUT_TRANS).set_ease(FADE_OUT_EASE)
 	_fade_tween.tween_callback(func(): go_to(to_room, to_warp))
 
 ## Task 5, every physics frame: feet within Waypoints.RADIUS of the stone unlock it the first time (toast
