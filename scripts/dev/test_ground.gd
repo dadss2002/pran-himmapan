@@ -283,6 +283,11 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	_room_groups = groups
 	_room_piles = piles
 	_room_roll = reset.roll
+	# Task 5 review 2 ("ห้ามได้ผังเดิมซ้ำ"): what the player now sees here is the layout a later re-roll must not repeat.
+	# A kept room was built under this roll too (reroll_all forgets kept rooms), so the current pile seed is its seed.
+	if not groups.is_empty():
+		var bank := PileBank.find(id, rooms.pile_hash(id, groups))
+		reset.mark_shown(id, reset.pile_seed, bank["p"].size() if not bank.is_empty() else 0)
 	if with_fade and is_inside_tree():
 		fade.color.a = 1.0
 		_new_fade().tween_property(fade, "color:a", 0.0, FADE_IN)
@@ -344,15 +349,14 @@ func piles_for(id: String, groups: Array) -> Array:
 ## (new_seed, or a random one when < 0), every kept room forgotten (the current room too: it is not kept when
 ## left), e0's set chosen again on its next entry (addendum 2). Every room entered after this spawns fresh,
 ## its piles from the baked bank with the new seed. Returns the seed used.
-## dest (the waypoint trip's room, owner 2026-11-09 "ห้ามได้ผังเดิมซ้ำ"): the seed is moved off any seed that would
-## give dest its current layout again (RoomReset.distinct_seed with dest's bank size for the groups it will get; no
-## placement pass, only the bank lookup the trip makes anyway).
+## dest (the waypoint trip's room, owner 2026-11-09 "ห้ามได้ผังเดิมซ้ำ"; Task 5 review 2): the seed is moved off any
+## seed that would give dest the layout the player LAST SAW there (RoomReset.reroll_seed, from the per-room memory
+## go_to records; with RoomReset.GUARD_ALL_ROOMS every room shown this session).
 func reroll(new_seed := -1, dest := "") -> int:
 	var s := new_seed if new_seed >= 0 else RoomReset.new_seed()
-	if dest != "" and rooms.has(dest):
-		var groups: Array = groups_for(dest, room_id)
-		var bank := PileBank.find(dest, rooms.pile_hash(dest, groups))
-		s = RoomReset.distinct_seed(reset.pile_seed, s, dest, bank["p"].size() if not bank.is_empty() else 0)
+	# Review 2 minor 4: no groups_for(dest) here: for e0 it would choose the arena set (global RNG) before arena_set is
+	# cleared below. The guard needs only the memory of what dest last showed, so this check has no side effect.
+	if dest != "" and rooms.has(dest): s = reset.reroll_seed(s, dest)
 	reset.reroll_all(s)
 	_piles.clear()
 	arena_set = -1

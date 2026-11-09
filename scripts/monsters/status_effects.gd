@@ -15,7 +15,7 @@ extends RefCounted
 ##   exactly round(secs / tick) ticks (as long as hold + the arrow's flight past it < 1 tick: 0.25 + 0.61 s).
 ##   Overlapping trails keep the highest per_tick, so three lines through one monster burn once a second.
 ## - zone: speed × (1 − slow), damage taken × (1 + taken) while held; the highest of each.
-## taken_mult() = (1 + mark) × (1 + zone taken) applies to hits AND to burn / trail ticks.
+## taken_mult() = 1 + mark + zone taken (they ADD, owner 2026-11-09) applies to hits AND to burn / trail ticks.
 ## Ledger (risks.md B25, owner 2026-11-09 "นับทุกแบบ"): every status keeps the ComboCast of the press that applied
 ## it (*_cast; null = no press, e.g. tests). Burn / trail: the newer application's ledger, like burn_source. A refused
 ## freeze keeps the first. tick_cast names the ONE ledger that a DoT kill on this step is credited to.

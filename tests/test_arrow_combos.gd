@@ -667,3 +667,45 @@ func test_trail_stops_at_warp_and_goes_with_the_room():
 	await tree.process_frame
 	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
 	return r
+
+## Task 5 review 2 (minor 2): the recorded marks (MAX_STREAKS × SPACING px of path) cover the longest arrow an arrow
+## skill can fly, read from balance.json (shot.range and every skills.*.range), so the fire past the last mark is never
+## a chord across a homing arrow's curve.
+func test_trail_marks_cover_the_longest_range():
+	var longest := Balance.num("shot.range")
+	var skills: Dictionary = Balance.data().get("skills", {})
+	for id in skills:
+		if skills[id] is Dictionary and skills[id].has("range"): longest = maxf(longest, float(skills[id].range))
+	if longest <= 0.0: return "no arrow range found in balance.json"
+	if FireTrail.MAX_STREAKS * FireTrail.SPACING < longest:
+		return "marks cover %.0f px, the longest arrow range is %.0f px" % [FireTrail.MAX_STREAKS * FireTrail.SPACING, longest]
+	return ""
+
+## Task 5 review 2 (minor 3): a target outside the trail's path box (grown by its hit radius) costs no segment check;
+## one on the line still burns, one just off the end of the box by less than its radius is still checked.
+func test_trail_box_skips_far_targets():
+	var near := _dummy(Vector2(21, 7))          # on the first leg (0,0) → (100,30)
+	var far := _dummy(Vector2(120, 400))
+	var t := FireTrail.new()
+	t.setup(Vector2.ZERO, ATK, 1.0, 0.2, 2.0, [far], null)
+	t.extend_to(Vector2(100, 30))
+	t.extend_to(Vector2(200, 0))
+	t.finish()
+	var r := ""
+	t.step(DT)
+	if t.seg_checks != 0: r = "a target 400 px off the line cost %d segment checks" % t.seg_checks
+	elif far.status.in_trail(): r = "a far target is in the fire"
+	if r == "":
+		t.targets = [near]
+		t.step(DT)
+		if t.seg_checks == 0: r = "a target on the line was skipped by the box"
+		elif not near.status.in_trail(): r = "a target on the line is not in the fire"
+	if r == "":
+		var edge := _dummy(Vector2(205, 0))          # 5 px past `to`, inside the 10 px hit radius
+		t.targets = [edge]
+		t.step(DT)
+		if not edge.status.in_trail(): r = "a target within the hit radius past the box edge is not in the fire"
+		edge.free()
+	t.free()
+	_free([near, far])
+	return r

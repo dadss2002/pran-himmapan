@@ -102,6 +102,96 @@ func test_distinct_seed_never_repeats_the_entry():
 	if RoomReset.distinct_seed(0x7fffffff, 0x7fffffff, id, 0) != 0: return "the step must wrap within 31 bits"
 	return ""
 
+## Task 5 review 2: the rule is about what the player LAST SAW in a room, not the room's entry under the current pile
+## seed. A → B → A: c1r1 shown under roll A, a waypoint trip to c2r0 (roll B: c1r1 would be some other entry, never
+## seen), then a trip back to c1r1 (roll C) with the worst candidate seed (one giving c1r1 its roll-A entry back):
+## RoomReset.reroll_seed moves it off. Many seeds, deterministic; the old guard (against roll B) would have let it repeat.
+func test_a_b_a_trip_never_repeats_the_last_shown_layout():
+	var old_guard_missed := 0
+	for n in [64, 7, 2, 0]:
+		for k in 300:
+			var r := RoomReset.new()
+			var a := (1000 + k * 7919) & 0x7fffffff
+			r.reroll_all(a)
+			r.mark_shown("c1r1", a, n)
+			var e_a: int = r.last_shown("c1r1").entry
+			var b := r.reroll_seed(a + 17 + k, "c2r0")
+			r.reroll_all(b)
+			r.mark_shown("c2r0", b, n)
+			if r.last_shown("c1r1").is_empty() or int(r.last_shown("c1r1").seed) != a: return "reroll_all forgot c1r1's last-shown layout"
+			var c0 := a                      # no bank of 2+: the seed it was shown with is the clash
+			if n > 1:
+				c0 = b + 1
+				while posmod(MonsterPiles.room_seed(c0, "c1r1"), n) != e_a: c0 += 1
+			if RoomReset.distinct_seed(b, c0, "c1r1", n) == c0: old_guard_missed += 1
+			var c := r.reroll_seed(c0, "c1r1")
+			if n > 1 and posmod(MonsterPiles.room_seed(c, "c1r1"), n) == e_a: return "bank %d seed %d: c1r1 shows entry %d again" % [n, a, e_a]
+			if c == a or c == b or c < 0 or c > 0x7fffffff: return "bank %d: roll C seed %d (A %d, B %d)" % [n, c, a, b]
+			if r.reroll_seed(c0, "c1r1") != c: return "bank %d: not deterministic" % n
+	if old_guard_missed == 0: return "setup: no case the old guard (current seed only) would have let repeat"
+	return ""
+
+## RoomReset.GUARD_ALL_ROOMS (the owner is asked whether the room being left must never repeat either): false = only
+## the trip's destination is guarded; true = every room shown this session. Both settings, many seeds.
+func test_guard_all_rooms_switch():
+	if RoomReset.GUARD_ALL_ROOMS: return "GUARD_ALL_ROOMS is on: the owner's rule today is the destination only"
+	var n := 64
+	var left_repeats := 0
+	for k in 200:
+		var r := RoomReset.new()
+		var a := 5000 + k * 104729
+		r.reroll_all(a)
+		r.mark_shown("c1r1", a, n)
+		var b := r.reroll_seed(a + 1, "c2r0")
+		r.reroll_all(b)
+		r.mark_shown("c2r0", b, n)           # the hero stands in c2r0 and travels to c1r1
+		if r.guarded("c1r1", false) != ["c1r1"] or r.guarded("c1r1", true) != ["c1r1", "c2r0"]: return "guarded %s / %s" % [r.guarded("c1r1", false), r.guarded("c1r1", true)]
+		if r.guarded("c1r1") != r.guarded("c1r1", RoomReset.GUARD_ALL_ROOMS): return "guarded() does not follow GUARD_ALL_ROOMS"
+		var e_left: int = r.last_shown("c2r0").entry
+		var e_dest: int = r.last_shown("c1r1").entry
+		var c0 := b + 1                      # gives the room being left (c2r0) its entry back, the destination a new one
+		while posmod(MonsterPiles.room_seed(c0, "c2r0"), n) != e_left or posmod(MonsterPiles.room_seed(c0, "c1r1"), n) == e_dest: c0 += 1
+		if r.reroll_seed(c0, "c1r1", false) != c0: return "destination only: changed a seed that is new for c1r1"
+		left_repeats += 1
+		var c := r.reroll_seed(c0, "c1r1", true)
+		if posmod(MonsterPiles.room_seed(c, "c2r0"), n) == e_left: return "all rooms: c2r0 shows entry %d again" % e_left
+		if posmod(MonsterPiles.room_seed(c, "c1r1"), n) == e_dest: return "all rooms: c1r1 shows entry %d again" % e_dest
+	if left_repeats == 0: return "setup: no case"
+	return ""
+
+## The same in the game: c1r2 shown, a re-roll trip to c2r0 and back to c1r2 with the worst seed: c1r2 does not show
+## the layout it was last seen with (go_to records it; the memory survives both re-rolls).
+func test_game_a_b_a_trip_never_repeats():
+	var g := _ground()
+	var a_id := "c1r2"
+	var b_id := "c2r0"
+	var r := ""
+	if not g.rooms.has(a_id) or not g.rooms.has(b_id): r = "setup: layout lacks %s / %s" % [a_id, b_id]
+	if r == "":
+		g.go_to(a_id, "", false)
+		var m: Dictionary = g.reset.last_shown(a_id)
+		if m.is_empty() or int(m.seed) != g.pile_seed: r = "go_to did not record %s's layout (%s)" % [a_id, m]
+		else:
+			var n := int(m.size)
+			var seed_a: int = g.pile_seed
+			var homes_a: Array = g._room_piles.map(func(p): return p.home)
+			var b: int = g.reroll(seed_a + 5, b_id)
+			g.go_to(b_id, "", false)
+			var c0 := seed_a
+			if n > 1:
+				c0 = b + 1
+				while posmod(MonsterPiles.room_seed(c0, a_id), n) != int(m.entry): c0 += 1
+			var got: int = g.reroll(c0, a_id)
+			g.go_to(a_id, "", false)
+			var m2: Dictionary = g.reset.last_shown(a_id)
+			if int(m2.seed) != got: r = "%s recorded seed %d, the roll is %d" % [a_id, int(m2.seed), got]
+			elif n > 1 and int(m2.entry) == int(m.entry): r = "%s shows bank entry %d again" % [a_id, int(m.entry)]
+			elif got == seed_a: r = "%s re-rolled back to seed %d" % [a_id, seed_a]
+			elif g._room_piles.map(func(p): return p.home) == homes_a: r = "%s has its last-shown piles again (bank %d)" % [a_id, n]
+	_free(g)
+	_clean()
+	return r
+
 ## The same rule in the game: reroll(seed, room) with a seed that would pick the room's current bank entry lays a
 ## different layout when the room is built again.
 func test_reroll_with_a_clashing_seed_changes_the_room():
