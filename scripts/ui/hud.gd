@@ -139,7 +139,7 @@ func layout(size: Vector2) -> void:
 		waypoint_list.fit_columns(ScreenFit.is_portrait(size))
 		if waypoint_list.visible: place_waypoints(true)
 	if world_map and world_map.is_open():   # Task 8: a turn / resize while the full map is open
-		world_map.relayout(size, minimap.get_global_rect() if minimap else Rect2(), ScreenFit.bottom_inset(ScreenFit.is_portrait(size)))
+		world_map.relayout(size, _map_keep_out(), ScreenFit.bottom_inset(ScreenFit.is_portrait(size)))
 
 func build() -> void:
 	layer = 10
@@ -508,13 +508,19 @@ func open_map() -> void:
 		world_map.close()
 		return
 	if bag_panel.is_open() or skill_panel.is_open() or (hero and hero.warping): return
+	close_waypoints()                    # review M2: like the bag / skills; it opens again after if the hero still stands on the stone
 	joystick.release_all()
 	buttons.release_all()
 	if hero: hero.external_input = Vector2.ZERO
 	var v := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(640, 360)
 	var data: Dictionary = map_source.call() if map_source.is_valid() else {}
-	world_map.open(data, v, minimap.get_global_rect() if minimap and minimap.visible else Rect2(), ScreenFit.bottom_inset(ScreenFit.is_portrait(v)))
+	world_map.open(data, v, _map_keep_out(), ScreenFit.bottom_inset(ScreenFit.is_portrait(v)))
 	Sfx.play("ui_open")
+
+## The minimap's spot the full map keeps clear of (a tap there closes it); Rect2() when the minimap is hidden
+## (review M3: open and relayout agree).
+func _map_keep_out() -> Rect2:
+	return minimap.get_global_rect() if minimap and minimap.visible else Rect2()
 
 ## Shuts the full map (and unpauses) if it is open: room changes call this.
 func close_map() -> void:

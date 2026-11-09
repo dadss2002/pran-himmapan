@@ -488,9 +488,10 @@ func _place_card() -> void:
 			else: best.x = minf(best.x, k.position.x - 1.0 - sz.x)
 	card.position = best.floor()
 
-## Any finger (TouchTaps): taps on the map's buttons; while open every touch stops here.
+## Any finger (TouchTaps): taps on the map's buttons; while open every touch and every drag stops here
+## (review M1: a finger sliding over the open map must not reach the joystick or the game).
 func _input(e: InputEvent) -> void:
-	if _taps.feed(e, _root, TouchTaps.EVERYWHERE, visible):
+	if _taps.feed(e, _root, TouchTaps.EVERYWHERE, visible) or (visible and e is InputEventScreenDrag):
 		get_viewport().set_input_as_handled()
 
 ## M toggles (opening goes through the HUD: Hud.open_map); Esc closes.

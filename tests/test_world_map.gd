@@ -608,3 +608,95 @@ func test_built_once_no_per_frame_work():
 	await _free(g)
 	_clean()
 	return r
+
+## Review M2: opening the full map shuts the waypoint travel list first (as the bag and the skill screen do), so
+## the list is never left open under the paused map; once the map shuts the list comes back by itself while the
+## hero still stands on the stone.
+func test_map_closes_travel_list():
+	_clean()
+	var g: Node2D = await _ground()
+	var hud: Hud = g.hud
+	g.hero.global_position = Waypoints.centre(g.stone.position)
+	g.hero.velocity = Vector2.ZERO
+	for i in 3: await tree.physics_frame
+	var r := ""
+	if not hud.waypoints_open(): r = "setup: the travel list did not open on the start stone"
+	else:
+		hud.open_map()
+		await tree.process_frame
+		if not hud.map_open(): r = "the map did not open"
+		elif hud.waypoints_open(): r = "the travel list stayed open under the map"
+		hud.close_map()
+		for i in 3: await tree.physics_frame
+		if r == "" and not hud.waypoints_open(): r = "the list did not come back after the map shut (hero still on the stone)"
+	hud.close_map()
+	await _free(g)
+	_clean()
+	return r
+
+## Review M1: while the map is open a finger sliding (InputEventScreenDrag) is marked handled in the map's _input,
+## so no other _input listener behind it (a probe placed before the game in the tree, so it hears _input after it)
+## ever sees it; with the map shut a drag still steers the joystick and reaches the probe.
+func test_drag_handled_while_open():
+	_clean()
+	var src := GDScript.new()
+	src.source_code = "extends Node\nvar drags := 0\nfunc _input(e: InputEvent) -> void:\n\tif e is InputEventScreenDrag: drags += 1\n"
+	src.reload()
+	var probe: Node = src.new()
+	probe.process_mode = Node.PROCESS_MODE_ALWAYS     # the open map pauses the game; the probe must still listen
+	tree.root.add_child(probe)
+	tree.root.move_child(probe, 0)
+	var g: Node2D = await _ground()
+	var hud: Hud = g.hud
+	hud.touch_ui.visible = true
+	var r := ""
+	var drag := func(i: int, p: Vector2) -> bool:
+		var d := InputEventScreenDrag.new()
+		d.index = i
+		d.position = p
+		d.relative = Vector2(6, 0)
+		tree.root.push_input(d, true)
+		return tree.root.is_input_handled()
+	var thumb: Vector2 = hud.joystick.idle_center()
+	_touch(3, thumb, true)
+	drag.call(3, thumb + Vector2(30, 0))
+	if not hud.joystick.active or hud.joystick.vector == Vector2.ZERO: r = "map shut: the joystick did not follow the drag"
+	elif probe.drags != 1: r = "map shut: the probe heard %d drags (want 1)" % probe.drags
+	_touch(3, thumb + Vector2(30, 0), false)
+	await tree.process_frame
+	if r == "":
+		hud.open_map()
+		await tree.process_frame
+		probe.drags = 0
+		if not drag.call(1, Vector2(320, 200)): r = "a drag over the open map was not handled"
+		elif not drag.call(1, hud.world_map.close_button.get_global_rect().get_center()): r = "a drag over ✕ was not handled"
+		elif probe.drags != 0: r = "a drag over the open map reached an _input listener behind it (%d)" % probe.drags
+	hud.close_map()
+	await _free(g)
+	probe.free()
+	_clean()
+	return r
+
+## Review M3: the full map keeps clear of the minimap only when the minimap shows; opening and a resize while open
+## agree (hidden minimap -> no keep-out rect, both ways).
+func test_hidden_minimap_same_keep_out_on_open_and_relayout():
+	_clean()
+	var g: Node2D = await _ground()
+	var hud: Hud = g.hud
+	var wm: WorldMap = hud.world_map
+	var r := ""
+	var view := tree.root.get_visible_rect().size
+	for shown in [true, false]:
+		if r != "": break
+		hud.minimap.visible = shown
+		hud.open_map()
+		await tree.process_frame
+		var want := hud.minimap.get_global_rect() if shown else Rect2()
+		if wm.minimap_rect != want: r = "open, minimap shown %s: keep-out %s (want %s)" % [shown, wm.minimap_rect, want]
+		hud.layout(view)
+		if r == "" and wm.minimap_rect != want: r = "relayout, minimap shown %s: keep-out %s (want %s)" % [shown, wm.minimap_rect, want]
+		hud.close_map()
+	hud.minimap.visible = true
+	await _free(g)
+	_clean()
+	return r
