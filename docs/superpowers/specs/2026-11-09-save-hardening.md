@@ -46,3 +46,18 @@ a save larger than ⚙ 256 KB is refused before parsing (a huge file cannot free
 - Q2 (a) "รับครั้งเดียวแล้วใส่ลายเซ็นให้": an unsigned version-3 save is checked, accepted once and re-saved signed (version 4).
 - Q3 (a) "ไม่รับทั้งเซฟ": any value out of range fails the whole save (→ .bad.json, new game).
 - Q4 "9,999,999".
+
+**Done: 2026-11-09** (branch m4b/rooms; scripts/rules/save_game.gd, scripts/rules/inventory.gd, data/balance.json "save",
+tests/test_save_hardening.gd). VERSION 4; `sig` = HMAC-SHA256 hex over a canonical form (sorted keys, numbers `%.6f`)
+of the save without `sig`; the key is a constant in save_game.gd and only a speed bump (it ships inside the game, S6).
+Q1–Q4 as answered. Choices made in the work (reviewer may veto):
+- "Accepted once" (Q2) is per device: after this device writes its first signed save (marker file `<name>.signed`),
+  an unsigned version-1..3 file is refused. Without that, deleting `sig` and setting version 3 would bypass the
+  signature for good (docs/risks.md S9).
+- Also out of range now (Q3): more options than the rarity rolls (items and gems), gem EXP ≥ its next level, a plus above +0 on
+  gear that cannot be enhanced (ring / necklace), any non-whole number in a whole-number field, a "waypoints" value that is not a list. Unknown waypoint ids and ids
+  without a stone fail (they were dropped). Player EXP at the cap may be 0..next − 1 and is then set to 0 (as before).
+- Gold above the cap is picked up and lost (the wallet is full); no message yet.
+- `room` / `seed` are signed but not range-checked (they are not used when loading; a bad room already falls back to
+  the start room).
+- A save `save()` would write that does not verify (or is > 256 KB) is not written; the old file stays.

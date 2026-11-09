@@ -16,7 +16,7 @@ func setup(t: SceneTree) -> void:
 	tree = t
 
 func _clean() -> void:
-	for f in [SAVE, SETTINGS]:
+	for f in [SAVE, SETTINGS, SaveGame.marker_path(SAVE)]:
 		if FileAccess.file_exists(f): DirAccess.remove_absolute(ProjectSettings.globalize_path(f))
 
 ## A test ground in the tree (seed 7), monsters quiet so they never touch the hero.
@@ -254,9 +254,12 @@ func test_saved_loaded_and_only_unlocked_listed():
 		var raw: Dictionary = JSON.parse_string(f.get_as_text())
 		f.close()
 		raw.erase("waypoints")                  # SaveGame.save keeps keys as given; make sure it is an old file
+		raw.erase("sig")                        # save hardening 2026-11-09: a pre-Task-5 file is version 3, unsigned,
+		raw.version = 3                         # on a device that has not written a signed save yet
 		f = FileAccess.open(SAVE, FileAccess.WRITE)
 		f.store_string(JSON.stringify(raw))
 		f.close()
+		if FileAccess.file_exists(SaveGame.marker_path(SAVE)): DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveGame.marker_path(SAVE)))
 		var g3: Node2D = await _ground()
 		if g3.waypoints.list() != ["c1r1"]: r = "old save: %s" % [g3.waypoints.list()]
 		elif g3.hero.level != 4: r = "old save lost its level (%d)" % g3.hero.level

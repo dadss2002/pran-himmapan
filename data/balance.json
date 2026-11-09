@@ -226,7 +226,10 @@
     "max_cooldown_cut": 0.3
   },
   "save": {
-    "autosave_every": 30
+    "_doc": "Save hardening (docs/superpowers/specs/2026-11-09-save-hardening.md, owner-approved 2026-11-09): gold_cap = most gold a wallet/save may hold (Q4); max_bytes = a save file larger than this is refused before parsing (256 KB)",
+    "autosave_every": 30,
+    "gold_cap": 9999999,
+    "max_bytes": 262144
   },
   "start_gear": {
     "bow": "bow_bamboo",

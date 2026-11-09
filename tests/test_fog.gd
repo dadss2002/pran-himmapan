@@ -14,7 +14,7 @@ func setup(t: SceneTree) -> void:
 	tree = t
 
 func _clean() -> void:
-	for f in [SAVE, SETTINGS, SAVE.get_basename() + ".bad.json"]:
+	for f in [SAVE, SETTINGS, SAVE.get_basename() + ".bad.json", SaveGame.marker_path(SAVE)]:
 		if FileAccess.file_exists(f): DirAccess.remove_absolute(ProjectSettings.globalize_path(f))
 
 func _ground() -> Node2D:
@@ -63,6 +63,16 @@ func _write_save(d: Dictionary) -> void:
 	var f := FileAccess.open(SAVE, FileAccess.WRITE)
 	f.store_string(JSON.stringify(d))
 	f.close()
+
+## A Task 6 save as it was really written: version 3, unsigned, on a device that has not yet written a signed
+## save (save hardening 2026-11-09: a hand-edited signed save is broken, so the old file is modelled exactly).
+func _write_old_save(d: Dictionary) -> void:
+	var old := d.duplicate(true)
+	old.erase("sig")
+	old["version"] = 3
+	_write_save(old)
+	var m := SaveGame.marker_path(SAVE)
+	if FileAccess.file_exists(m): DirAccess.remove_absolute(ProjectSettings.globalize_path(m))
 
 ## 96 px round the middle of cell (5, 5) at (176, 176): 7 x 7 cells less the 4 corners (their nearest point is
 ## 80 + 80 px away = 113 px), 45 cells; nothing else.
@@ -274,7 +284,7 @@ func test_save_game_has_no_fog_key():
 	var r := ""
 	for old in [f.to_save(), "junk", 12, null]:      # what Task 6 saves held (and broken copies of it)
 		raw.fog = old
-		_write_save(raw)
+		_write_old_save(raw)
 		var d := SaveGame.load_or_new(SAVE)
 		if FileAccess.file_exists(SAVE.get_basename() + ".bad.json"): r = "old fog %s threw the save away" % [old]
 		elif d.has("fog"): r = "old fog %s kept in the loaded state" % [old]
@@ -363,7 +373,7 @@ func test_in_game_reveal_kept_in_game_reset_on_new_game():
 					for x in range(16, 512, 32): old.reveal(rid, Vector2(x, y))
 			var raw := _read_save()
 			raw.fog = old.to_save()
-			_write_save(raw)
+			_write_old_save(raw)
 		var g2: Node2D = await _ground()                # a new game from the same save
 		var start: String = g2.room_id
 		if g2.fog.known_ids() != [start]: r = "new game (old fog %s): rooms known %s (want only the start room)" % [with_old_fog, g2.fog.known_ids()]
