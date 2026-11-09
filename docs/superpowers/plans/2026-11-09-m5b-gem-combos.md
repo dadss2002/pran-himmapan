@@ -326,7 +326,7 @@ FX reuse table (spec "เอฟเฟกต์ที่ใช้ซ้ำ"; tint
 
 | recipe | event → fx (tint) |
 |---|---|
-| fire_fan / brahmastra | trail → piercing_trail (#ff8a3d) + status_burn; brahmastra line_end → spread_burst (#ff8a3d) |
+| fire_fan / brahmastra | trail → fire_trail (PixelFX T2 fire/campfire, owner 2026-11-09; was piercing_trail #ff8a3d + status_burn); brahmastra line_end → fire_blast (PixelFX B2 explosions/grenade; was spread_burst #ff8a3d) |
 | thunder_hop / thousand_bolts | bounce → chain_zap + hit_spark (#7fd4ff); thousand_bolts plays chain_zap once per bolt |
 | shockwave / earth_piercer | blast → water_ripple (#fff1e0); earth_piercer adds spread_burst (#ff8a3d) + status_burn |
 | hawk_eye / garuda | mark → lock_on (garuda #edbb55); crit → crit_hit |

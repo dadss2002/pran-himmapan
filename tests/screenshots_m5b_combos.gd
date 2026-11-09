@@ -4,11 +4,11 @@ extends SceneTree
 ## Task 5, in game (test ground, seed 7, room c1r0, 1280x720, the real press: Hero.try_skill, its arrows, trails and
 ## blasts as the game runs them; only the monsters are held still):
 ##   docs/preview/m5b/fire_fan_ingame.png - ศรพัดเพลิง (piercing, split + fire, char Lv10): 3 fire lines laid by the
-##     primary arrows (orange-tinted piercing_trail streaks + status_burn flames), 0.75 s after the release.
+##     primary arrows (fire_trail patches: PixelFX T2 campfire, owner 2026-11-09), 0.75 s after the release.
 ##   docs/preview/m5b/brahmastra_ingame.png - พัดเพลิงพรหมาสตร์ (split + fire + multiply): the same lines and the
-##     orange spread_burst at each line end, just after the arrows are spent.
-##   docs/preview/m5b/brahmastra_saver_ingame.png - the same moment with the PerfSaver on: the flames are shed, the
-##     streaks (where the fire burns) and the line-end blasts stay.
+##     fire_blast (PixelFX B2 grenade) at each line end, just after the arrows are spent.
+##   docs/preview/m5b/brahmastra_saver_ingame.png - the same moment with the PerfSaver on: the fire patches (where the
+##     fire burns) and the line-end blasts all stay. (The owner's review set for the new fire: screenshots_m5b_fire_fx.gd.)
 ##   *_x3.png - the hero and the lines enlarged x3 (nearest).
 
 const OUT := "res://docs/preview/m5b/"
@@ -105,7 +105,7 @@ func _case(name: String, keys: Array, after: float, saver: bool) -> void:
 	var trails: Array = g.world.get_children().filter(func(c): return c is FireTrail)
 	var fx := 0
 	for t in trails: fx += t.get_child_count()
-	var bursts: int = g.world.get_children().filter(func(c): return c is FxSprite and c.animation == "spread_burst").size()
+	var bursts: int = g.world.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_blast").size()
 	print(name, ": ", trails.size(), " trails, ", fx, " trail effects, ", bursts, " line-end bursts, saver ", PerfSaver.active)
 	paused = true
 	var img: Image = await _snap(name + "_ingame.png")

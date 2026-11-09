@@ -17,7 +17,13 @@ and then post-processed here (no drawing by hand):
     frames are enlarged (scale, nearest, about the anchor);
   - one-shot tails that are only stray dots are dropped (tail_px), loops can be trimmed to what the game shows (t0/t1);
   - crop to a box round the anchor (crit <= 2x the 48 px hero, poison mist about the old mist's width), with the
-    alpha eased out over the last EDGE px wherever the box cuts the effect, then a grid sheet <= 2048 px a side.
+    alpha eased out over the last EDGE px wherever the box cuts the effect, then a grid sheet <= 2048 px a side;
+  - owner 2026-11-09 fire picks (samples /home/claude/fx_samples, notes.md; rows T2 and B2, exported exactly as sampled):
+    marker (a prop PixelFX draws in a marker colour is cut: the campfire's logs are drawn pure blue, then every blue
+    pixel goes, leaving flames and coals), symmetric (the crop keeps the anchor centred across, so trail patches line
+    up on the path), glow_fade (translucent pixels, alpha < glow_fade: PixelFX's soft light and thin smoke, fade out
+    radially from the cell centre: no rectangular orange glow box on the ground; solid flame is untouched) and
+    fade_out (the last N frames of a one-shot trimmed mid-effect ease out instead of popping off).
 Writes assets/fx/pfx_<name>.png and the manifest entry <name> (with "sheet" and "pixelfx" metadata). The old
 PixelLab entry is kept as "pixellab_<name>" (sheet <name>.png) when <name> was a PixelLab effect.
 
@@ -25,7 +31,7 @@ The checkout must be at COMMIT and clean (checked with git; the script stops oth
 
 Usage: python3 -I tools/pixelfx_export.py --pixelfx /path/to/pixelfx-checkout [--only name,...] [--work DIR]
 """
-import argparse, colorsys, json, os, subprocess, sys, tempfile
+import argparse, colorsys, json, math, os, subprocess, sys, tempfile
 from PIL import Image
 
 COMMIT = "a841596"
@@ -46,7 +52,8 @@ def old_palette(fx_dir, name):
 # point (from its origin) that sits on the node origin; box: crop box round that point (x0, y0, x1, y1).
 # Optional: ramp_drop (leave the old sheet's N lightest colours out of the ramp), white_to / pale_to (recolour
 # near-white / pale pixels, see recolour), scale (nearest enlargement about the anchor point, box in scaled px),
-# tail_px (drop trailing one-shot frames with fewer opaque pixels), t0 / t1 (keep frames in [t0, t1] s, loops too).
+# tail_px (drop trailing one-shot frames with fewer opaque pixels), t0 / t1 (keep frames in [t0, t1] s, loops too),
+# marker (name in MARKERS: cut pixels drawn in a marker colour), symmetric, glow_fade (alpha threshold), fade_out (frames).
 EFFECTS = {
     "hit_spark":    dict(id="impacts/hit-spark",    old="hit_spark",    fps=16, opts={"height": 12}, point=(0, -12), box=(-36, -44, 52, 20),
                          ramp_drop=3, white_to="#ffc23d", pale_to="#f08a24", scale=1.5, tail_px=24),
@@ -63,6 +70,43 @@ EFFECTS = {
     "warp_blink":   dict(id="arcane/blink-out",     old="warp_ring",    fps=14, actor="spark", point=(0, 0), box=(-48, -64, 48, 12),
                          t0=9 / 14, t1=15 / 14, white_to="#86f07a"),
 }
+
+# The fire ramp (= the old PixelLab status_burn sheet's colours, as status_burn's own PixelFX palette).
+# Owner 2026-11-09 fire picks (spec 2026-11-08-gem-combos.md last addendum; samples: /home/claude/fx_samples/notes.md):
+# fire_trail = T2 fire/campfire (the trail patches of ศรพัดเพลิง / พรหมาสตร์), fire_blast = B2 explosions/grenade (the
+# line-end blast of พรหมาสตร์, the grenade's blast only: 1.667-2.2 s, its anchor on the burst 39 px from PixelFX's pivot).
+WOOD_MARK = ["#0000ff", "#0008f8", "#0010f0", "#0018e8", "#0020e0", "#0028d8"]   # campfire logs in pure-blue marker shades
+EFFECTS["fire_trail"] = dict(id="fire/campfire", old="status_burn", fps=15, opts={"wood": WOOD_MARK, "height": 20, "seed": 3},
+                             marker="blue", point=(0, 0), box=(-22, -44, 22, 5), symmetric=True, glow_fade=200)
+EFFECTS["fire_blast"] = dict(id="explosions/grenade", old="status_burn", fps=15, opts={"seed": 6}, point=(39, 0), box=(-32, -52, 32, 10),
+                             t0=25 / 15, t1=25 / 15 + 8 / 15, tail_px=8, symmetric=True, glow_fade=200, fade_out=3)
+
+# Marker tests: a pixel drawn in the marker colour (no fire colour has blue 40 above red and green).
+MARKERS = {"blue": lambda p: p[2] > p[0] + 40 and p[2] > p[1] + 40}
+
+def marker_cut(f, test):
+    """Cut every pixel the test calls a marker (a prop drawn in a marker colour, e.g. the campfire's logs)."""
+    f = f.copy(); px = f.load()
+    for y in range(f.size[1]):
+        for x in range(f.size[0]):
+            p = px[x, y]
+            if p[3] and test(p): px[x, y] = (0, 0, 0, 0)
+    return f
+
+def glow_fade(c, gf):
+    """Translucent pixels (0 < alpha < gf: PixelFX's soft light, thin smoke) fade out radially from the cell centre
+    (smoothstep over the outer 55 % of the ellipse), so the light never shows as a rectangle; solid pixels are kept."""
+    cw, ch = c.size; px = c.load()
+    rx, ry = cw / 2.0, ch / 2.0
+    for y in range(ch):
+        for x in range(cw):
+            r, g, b, a = px[x, y]
+            if 0 < a < gf:
+                dd = math.hypot((x + 0.5 - rx) / rx, (y + 0.5 - ry) / ry)
+                u = min(1.0, max(0.0, (1.0 - dd) / 0.55))
+                a2 = int(round(a * u * u * (3 - 2 * u)))
+                px[x, y] = (r, g, b, a2) if a2 >= ALPHA_FLOOR else (0, 0, 0, 0)
+    return c
 
 def check_commit(pfx_dir):
     """The PixelFX checkout must be the commit the licence notice and manifest name, with nothing changed in it."""
@@ -207,6 +251,7 @@ def export(root, pfx_dir, name, cfg, work, actors):
     t0, t1 = cfg.get("t0", 0.0), cfg.get("t1", 1e9)
     frames = [f for i, f in enumerate(frames) if t0 - 1e-6 <= i / fps <= t1 + 1e-6]
     frames = [recolour(unpremultiply(f), cfg.get("white_to"), cfg.get("pale_to")) for f in frames]
+    if cfg.get("marker"): frames = [marker_cut(f, MARKERS[cfg["marker"]]) for f in frames]
     # cut the body (status effects): every pixel of the actor's mask, widened by cut_dx for a shivering body
     if cfg.get("cut"):
         A = actors[cfg["actor"]]; mw, mh, md = A["mask"]["w"], A["mask"]["h"], A["mask"]["data"]
@@ -242,11 +287,15 @@ def export(root, pfx_dir, name, cfg, work, actors):
         b = f.getbbox()
         if b: ux0, uy0, ux1, uy1 = min(ux0, b[0]), min(uy0, b[1]), max(ux1, b[2]), max(uy1, b[3])
     cx0, cy0, cx1, cy1 = max(ux0, bx0, 0), max(uy0, by0, 0), min(ux1, bx1, fw), min(uy1, by1, fh)
+    if cfg.get("symmetric"):   # the anchor centred across the cell (trail patches line up on the path)
+        half = max(px0 - cx0, cx1 - px0); cx0, cx1 = max(0, px0 - half), min(fw, px0 + half)
     clipped = {"l": ux0 < cx0, "t": uy0 < cy0, "r": ux1 > cx1, "b": uy1 > cy1}
     cw, ch = cx1 - cx0, cy1 - cy0
     out = []
     for f in frames:
-        c = f.crop((cx0, cy0, cx1, cy1)); px = c.load()
+        c = f.crop((cx0, cy0, cx1, cy1))
+        if cfg.get("glow_fade"): glow_fade(c, cfg["glow_fade"])
+        px = c.load()
         if any(clipped.values()):
             for y in range(ch):
                 for x in range(cw):
@@ -263,6 +312,13 @@ def export(root, pfx_dir, name, cfg, work, actors):
     if not loop:   # tail frames of only stray dots (counted in the cropped cell, as the game shows it)
         while len(out) > 1 and opaque_px(out[-1]) < cfg.get("tail_px", 1): out.pop()
         frames = frames[:len(out)]
+    k_out = cfg.get("fade_out", 0)   # a one-shot trimmed mid-effect: its last frames ease out instead of popping off
+    for j in range(k_out):
+        f = out[len(out) - k_out + j]; px = f.load(); m = (k_out - j) / (k_out + 1.0)
+        for y in range(ch):
+            for x in range(cw):
+                r, g, b, a = px[x, y]
+                if a: px[x, y] = (r, g, b, int(a * m)) if a * m >= ALPHA_FLOOR else (0, 0, 0, 0)
     n = len(out)
     rows = (n + max(1, MAX_SIDE // cw) - 1) // max(1, MAX_SIDE // cw)   # fewest rows that fit 2048 px across,
     cols = (n + rows - 1) // rows                                        # then the frames spread evenly (no empty row tail)
@@ -278,7 +334,8 @@ def export(root, pfx_dir, name, cfg, work, actors):
              "sheet": sheet_name,
              "pixelfx": {"id": cfg["id"], "commit": COMMIT, "options": shown_opts, "palette_from": cfg["old"] + ".png",
                          "trim_s": [t0, min(t1, (len(frames) - 1) / fps + t0)] if (not loop or "t1" in cfg) else None,
-                         "post": {k_: cfg[k_] for k_ in ("ramp_drop", "white_to", "pale_to", "scale", "tail_px") if k_ in cfg} or None,
+                         "post": {k_: cfg[k_] for k_ in ("ramp_drop", "white_to", "pale_to", "scale", "tail_px", "marker", "symmetric", "glow_fade", "fade_out")
+                                  if k_ in cfg} or None,
                          "body_cut": bool(cfg.get("cut")), "crop": [cx0 - px0, cy0 - py0, cx1 - px0, cy1 - py0]}}
     return entry
 

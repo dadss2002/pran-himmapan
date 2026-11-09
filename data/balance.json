@@ -546,7 +546,7 @@
     }
   },
   "gem_combos": {
-    "_doc": "M5b gem combos. Numbers: docs/superpowers/specs/2026-11-08-gem-combos.md §1 (2 gems) and §2 (3 gems) at gem Lv1, owner-approved 2026-11-08 ('อนุมัติตามนี้'). Owner 2026-11-09: values stay flat at any gem level; 3-gem rows read literally (a tier-3 row replaces its bases); one combo per skill: higher tier first, then this order (recipe book order). Gem keys are gem types, element gems as fire/ice/lightning. fx: reused manifest effects recoloured by modulate (0 PixelLab gen); tints chosen by Claude for the spec's colour words, #ffffff = no recolour. leech_add (owner 2026-11-09, Task 2 review): the sustain combos' leech = the leech gem's own leech + this flat amount (bloodthirst 3% -> 6%, rahu 6% at gem Lv1, 7.9% at Lv20), not a multiplier. Change numbers only with owner approval.",
+    "_doc": "M5b gem combos. Numbers: docs/superpowers/specs/2026-11-08-gem-combos.md §1 (2 gems) and §2 (3 gems) at gem Lv1, owner-approved 2026-11-08 ('อนุมัติตามนี้'). Owner 2026-11-09: values stay flat at any gem level; 3-gem rows read literally (a tier-3 row replaces its bases); one combo per skill: higher tier first, then this order (recipe book order). Gem keys are gem types, element gems as fire/ice/lightning. fx: reused manifest effects recoloured by modulate (0 PixelLab gen); tints chosen by Claude for the spec's colour words, #ffffff = no recolour. Owner 2026-11-09: the fire line (fire_fan / brahmastra trail) and brahmastra's line-end blast are new PixelFX effects instead (fire_trail = T2 fire/campfire, fire_blast = B2 explosions/grenade; MIT, 0 gen; not recoloured). leech_add (owner 2026-11-09, Task 2 review): the sustain combos' leech = the leech gem's own leech + this flat amount (bloodthirst 3% -> 6%, rahu 6% at gem Lv1, 7.9% at Lv20), not a multiplier. Change numbers only with owner approval.",
     "recipes": [
       {
         "id": "fire_fan",
@@ -561,11 +561,7 @@
         "fx": {
           "trail": [
             {
-              "fx": "piercing_trail",
-              "tint": "#ff8a3d"
-            },
-            {
-              "fx": "status_burn",
+              "fx": "fire_trail",
               "tint": "#ffffff"
             }
           ]
@@ -698,18 +694,14 @@
         "fx": {
           "trail": [
             {
-              "fx": "piercing_trail",
-              "tint": "#ff8a3d"
-            },
-            {
-              "fx": "status_burn",
+              "fx": "fire_trail",
               "tint": "#ffffff"
             }
           ],
           "line_end": [
             {
-              "fx": "spread_burst",
-              "tint": "#ff8a3d"
+              "fx": "fire_blast",
+              "tint": "#ffffff"
             }
           ]
         }

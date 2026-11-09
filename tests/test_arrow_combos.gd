@@ -105,25 +105,29 @@ func test_every_recipe_fx_exists():
 
 func test_combo_fx_plays_tinted_reuse():
 	var p := Node2D.new()
+	# owner 2026-11-09: the fire line is the PixelFX T2 patch (fire_trail), not recoloured, upright (never turned)
 	var got := ComboFx.play(p, "fire_fan", "trail", Vector2(5, 7), Vector2.DOWN)
 	var r := ""
-	if got.size() != 2: r = "fire_fan trail spawned %d effects, want piercing_trail + status_burn" % got.size()
-	elif got[0].animation != "piercing_trail" or got[0].modulate != Color("#ff8a3d"): r = "trail streak %s tint %s" % [got[0].animation, got[0].modulate]
-	elif got[1].animation != "status_burn" or got[1].modulate != Color.WHITE: r = "flame %s tint %s" % [got[1].animation, got[1].modulate]
-	elif got[0].position != Vector2(5, 7) or got[0].get_parent() != p: r = "streak not placed in the parent at the point"
-	elif not is_equal_approx(got[0].rotation, Vector2.DOWN.angle()) or got[1].rotation != 0.0: r = "only the streak turns along the line (%s, %s)" % [got[0].rotation, got[1].rotation]
+	if got.size() != 1: r = "fire_fan trail spawned %d effects, want one fire_trail patch" % got.size()
+	elif got[0].animation != "fire_trail" or got[0].modulate != Color.WHITE: r = "trail patch %s tint %s" % [got[0].animation, got[0].modulate]
+	elif got[0].position != Vector2(5, 7) or got[0].get_parent() != p: r = "patch not placed in the parent at the point"
+	elif got[0].rotation != 0.0: r = "the fire patch turned along the line (%s): flames stand upright" % got[0].rotation
 	elif not ComboFx.play(p, "fire_fan", "no_such_event", Vector2.ZERO).is_empty(): r = "an unknown event spawned something"
 	elif not ComboFx.play(p, "", "trail", Vector2.ZERO).is_empty(): r = "no combo spawned something"
 	elif not ComboFx.play(null, "fire_fan", "trail", Vector2.ZERO).is_empty(): r = "no parent spawned something"
-	elif p.get_child_count() != 2: r = "%d children, want 2" % p.get_child_count()
+	elif p.get_child_count() != 1: r = "%d children, want 1" % p.get_child_count()
 	if r == "":
 		var g := ComboFx.play(p, "garuda", "mark", Vector2.ZERO)
 		if g.size() != 1 or g[0].animation != "lock_on" or g[0].modulate != Color("#edbb55"): r = "garuda mark should be a gold lock_on"
+	if r == "":
+		var fs := ComboFx.play(p, "frost_shard", "trail", Vector2.ZERO, Vector2.DOWN)
+		if fs.size() != 1 or fs[0].animation != "piercing_trail" or fs[0].modulate != Color("#7fd4ff") or not is_equal_approx(fs[0].rotation, Vector2.DOWN.angle()):
+			r = "frost_shard trail should stay a blue streak turned along the line"
 	p.free()
 	return r
 
-## PerfSaver sheds the decorative extras only (flames, crit glare → its fallback), never the trail streak (it shows
-## where the fire is) or the line-end blast.
+## PerfSaver sheds the decorative extras only (crit glare → its fallback), never the fire trail's patch (it shows
+## where the fire is: the hazard) or the line-end blast (a hit effect).
 func test_combo_fx_perf_saver_sheds_decor_only():
 	var p := Node2D.new()
 	PerfSaver.active = true
@@ -132,11 +136,12 @@ func test_combo_fx_perf_saver_sheds_decor_only():
 	var crit := ComboFx.play(p, "hawk_eye", "crit", Vector2.ZERO)
 	PerfSaver.active = false
 	var r := ""
-	if trail.size() != 1 or trail[0].animation != "piercing_trail": r = "saver on: trail gave %s, want the streak only" % [trail.map(func(s): return s.animation)]
-	elif end.size() != 1 or end[0].animation != "spread_burst": r = "saver on: the line-end blast was shed"
+	if trail.size() != 1 or trail[0].animation != "fire_trail": r = "saver on: trail gave %s, want the fire patch" % [trail.map(func(s): return s.animation)]
+	elif end.size() != 1 or end[0].animation != "fire_blast": r = "saver on: the line-end blast was shed"
 	elif crit.size() != 1 or crit[0].animation != "hit_spark": r = "saver on: crit_hit should fall back to hit_spark"
-	if r == "" and ComboFx.play(p, "brahmastra", "trail", Vector2.ZERO, Vector2.ZERO, false).map(func(s): return String(s.animation)) != ["piercing_trail"]:
-		r = "decor = false must skip the flame"
+	elif PerfSaver.decorative("fire_trail") or PerfSaver.decorative("fire_blast"): r = "fire_trail / fire_blast listed as decorative"
+	if r == "" and ComboFx.play(p, "brahmastra", "trail", Vector2.ZERO, Vector2.ZERO, false).map(func(s): return String(s.animation)) != ["fire_trail"]:
+		r = "decor = false must keep the fire patch (it is the hazard, not decoration)"
 	p.free()
 	return r
 
@@ -350,7 +355,8 @@ func test_halt_ends_trail_and_skips_blast():
 	return r
 
 ## Performance: a trail lays at most FireTrail.MAX_FX effects however long the line (spaced marks, not one per
-## frame), stepping it allocates nothing, and the PerfSaver sheds the flames but never the streak or the damage.
+## frame), stepping it allocates nothing, and the PerfSaver keeps one patch on every mark (the hazard stays readable)
+## and never touches the damage.
 ## Review M2: the monster in the fire is a real Wolf (its apply_trail + tick_burn every frame, DEF factor cached:
 ## built once) and the trail is stepped through its fade to its end.
 func test_trail_fx_bounded():
@@ -365,12 +371,11 @@ func test_trail_fx_bounded():
 		t.setup(Vector2.ZERO, ATK, 2.0, 0.3, 3.0, [d], null, null, 0.0, "brahmastra")
 		for i in 300: t.extend_to(Vector2(i * 4.0, 0))      # a 1200 px line, extended every frame
 		var fx := t.get_children().filter(func(c): return c is FxSprite)
-		var flames := fx.filter(func(c): return c.animation == "status_burn").size()
-		var streaks := fx.filter(func(c): return c.animation == "piercing_trail").size()
+		var patches := fx.filter(func(c): return c.animation == "fire_trail")
 		if fx.size() > FireTrail.MAX_FX: r = "%d effects on one trail, cap %d" % [fx.size(), FireTrail.MAX_FX]
-		elif streaks < 3: r = "only %d streaks on a 1200 px line" % streaks
-		elif saver and flames != 0: r = "saver on: %d flames" % flames
-		elif not saver and flames == 0: r = "saver off: no flames"
+		elif patches.size() != FireTrail.MAX_STREAKS: r = "saver %s: %d patches on a 1200 px line, want one on each of its %d marks" % [saver, patches.size(), FireTrail.MAX_STREAKS]
+		elif patches.size() != fx.size(): r = "effects other than fire patches on the trail: %s" % [fx.map(func(c): return c.animation)]
+		elif not _one_patch_per_mark(t, patches): r = "saver %s: a mark of the line has no patch on it" % saver
 		if r == "":
 			t.finish()
 			t.step(DT)                                    # first contact (and the DEF factor) before counting
@@ -400,9 +405,140 @@ func test_short_trail_still_shows():
 	t.setup(Vector2.ZERO, ATK, 1.0, 0.2, 2.0, [], null, null, 0.0, "fire_fan")
 	t.extend_to(Vector2(12, 0))
 	t.finish()
-	var n := t.get_children().filter(func(c): return c is FxSprite and c.animation == "piercing_trail").size()
+	var n := t.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_trail").size()
 	t.free()
-	return "" if n == 1 else "a 12 px trail shows %d streaks, want 1" % n
+	return "" if n == 1 else "a 12 px trail shows %d fire patches, want 1" % n
+
+## True when every recorded mark of trail t has a patch standing on it (t not in a tree: positions are in its space).
+func _one_patch_per_mark(t: FireTrail, patches: Array) -> bool:
+	for q in t.points():
+		if not patches.any(func(c): return c.position.distance_to(q) < 0.01): return false
+	return true
+
+## Owner 2026-11-09 (T2 sample, PHASE 7): the patches of a line never flicker in sync. Every patch plays the fire_trail
+## loop from its own frame: neighbours 3..11 frames apart (circular), the same frames every run for the same line
+## (deterministic), and another line (another first mark) starts elsewhere; patch_frame stays inside the loop.
+func test_trail_patches_start_at_their_own_frames():
+	var n := int(FxSprite._manifest().fire_trail.frames)
+	var lines: Array = []
+	for dir in [Vector2.RIGHT, Vector2.RIGHT, Vector2.RIGHT.rotated(0.5)]:
+		var t := FireTrail.new()
+		t.setup(Vector2(30, 40), ATK, 1.0, 0.2, 2.0, [], null, null, 0.0, "fire_fan")
+		for i in 56: t.extend_to(Vector2(30, 40) + dir * (i * 4.0))     # 220 px, the piercing range: 5 marks
+		lines.append(t)
+	var frames: Array = []
+	for t in lines:
+		frames.append(t.get_children().filter(func(c): return c is FxSprite).map(func(c): return c.frame))
+	var r := ""
+	if frames[0].size() != 5: r = "a 220 px line has %d patches, want 5" % frames[0].size()
+	elif frames[0] != frames[1]: r = "the same line twice starts its patches at %s and %s (want the same)" % [frames[0], frames[1]]
+	elif frames[0] == frames[2]: r = "two different lines start their patches on the same frames %s" % [frames[0]]
+	for f in frames:
+		for i in f.size() - 1:
+			var d := posmod(int(f[i + 1]) - int(f[i]), n)
+			if r == "" and (mini(d, n - d) < 3 or d > 11): r = "neighbouring patches %d frames apart (%s), want 3..11" % [d, f]
+	if r == "":
+		for seed in [0, 1, -7, 123456789, 4294967295]:
+			for i in FireTrail.MAX_STREAKS:
+				var k := FireTrail.patch_frame(seed, i, n)
+				if k < 0 or k >= n: r = "patch_frame(%d, %d) = %d outside 0..%d" % [seed, i, k, n - 1]
+	for t in lines: t.free()
+	return r
+
+## The whole line fades out over its last FADE s (the patches stay on their marks until the line ends), then the trail
+## is done; before that it is fully visible.
+func test_trail_fades_out_at_its_end():
+	var t := FireTrail.new()
+	t.setup(Vector2.ZERO, ATK, 1.0, 0.2, 2.0, [], null, null, 0.0, "fire_fan")
+	for i in 56: t.extend_to(Vector2(i * 4.0, 0))
+	t.finish()
+	var kids := t.get_child_count()
+	var r := ""
+	var last := 1.0
+	var faded := false
+	for i in int(round(2.0 / DT)) + 5:
+		t.step(DT)
+		if t.done: break
+		if t.left >= FireTrail.FADE and t.modulate.a < 1.0: r = "faded %.2f with %.2f s left (fade starts at %.2f)" % [t.modulate.a, t.left, FireTrail.FADE]
+		if t.modulate.a > last + 1e-6: r = "the fade went back up"
+		last = t.modulate.a
+		faded = faded or (t.modulate.a < 0.5 and t.modulate.a > 0.0)
+		if t.get_child_count() != kids: r = "patches came or went while the line burned"
+		if r != "": break
+	if r == "" and not t.done: r = "the trail did not end after its 2 s"
+	elif r == "" and not faded: r = "never seen half faded"
+	t.free()
+	return r
+
+## FxSprite cache: every patch of every line shares one SpriteFrames, so the fire_trail sheet is loaded once (the first
+## patch ever), never per shot or per patch; the blast's sheet likewise once.
+func test_trail_and_blast_reuse_the_cached_frames():
+	FxSprite.clear_cache()
+	var loads := FxSprite.sheet_loads
+	var lines: Array = []
+	for k in 3:
+		var t := FireTrail.new()
+		t.setup(Vector2.ZERO, ATK, 1.0, 0.2, 2.0, [], null, null, 0.0, "brahmastra")
+		for i in 56: t.extend_to(Vector2.RIGHT.rotated(k * 0.4) * (i * 4.0))
+		lines.append(t)
+	var after_trails := FxSprite.sheet_loads - loads
+	var p := Node2D.new()
+	for k in 3: ComboFx.play(p, "brahmastra", "line_end", Vector2(k * 10, 0))
+	var after_blasts := FxSprite.sheet_loads - loads
+	var sfs := {}
+	for t in lines:
+		for c in t.get_children(): sfs[c.sprite_frames] = true
+	var r := ""
+	if after_trails != 1: r = "3 lines × 5 patches loaded the trail sheet %d times, want 1" % after_trails
+	elif after_blasts != 2: r = "3 blasts loaded %d more sheets, want 1 (the blast's, once)" % (after_blasts - after_trails)
+	elif sfs.size() != 1: r = "the patches use %d SpriteFrames, want 1 shared" % sfs.size()
+	elif p.get_children().map(func(c): return c.sprite_frames).any(func(f): return f != p.get_child(0).sprite_frames): r = "blasts do not share their frames"
+	for t in lines: t.free()
+	p.free()
+	return r
+
+## พรหมาสตร์ in game: each line end plays fire_blast (B2 grenade, one-shot) once, at 1:1 (its 64 px cell = the r32
+## blast's 64 px, as sampled), from its first frame; it frees itself when done; the arrow's end never plays a second
+## one; ศรพัดเพลิง (no blast) plays none. Shown with the PerfSaver on too (a hit effect is never shed).
+func test_line_end_blast_plays_once_and_frees():
+	await tree.process_frame                         # the runner's tree is live (this file runs first: still in _initialize)
+	var r := ""
+	for saver in [false, true]:
+		for keys in [["split", "fire", "multiply"], ["split", "fire"]]:
+			PerfSaver.active = saver
+			_spawned = []
+			var world := Node2D.new()
+			tree.root.add_child(world)
+			var b := _build(keys)
+			var arrows := _fan(b, [])
+			for a in arrows:
+				a.process_mode = Node.PROCESS_MODE_DISABLED        # stepped by hand below
+				world.add_child(a)
+			for i in 60:
+				for a in arrows:
+					if is_instance_valid(a) and not a.spent: a.advance(DT)
+			var blasts := world.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_blast")
+			var want := 3 if keys.size() == 3 else 0
+			if blasts.size() != want: r = "saver %s %s: %d fire_blast, want %d" % [saver, keys, blasts.size(), want]
+			for s in blasts:
+				if r == "" and (s.sprite_frames.get_animation_loop("fire_blast") or not s.is_playing() or s.frame != 0): r = "a blast is not a one-shot playing from frame 0"
+				elif r == "" and s.scale != Vector2.ONE: r = "blast drawn at %s, want 1:1 (64 px = r32)" % s.scale
+				elif r == "" and s.modulate != Color.WHITE: r = "the blast is recoloured %s" % s.modulate
+			if r == "":
+				for a in arrows:
+					if is_instance_valid(a): a._end_line()
+				var again := world.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_blast").size()
+				if again != want: r = "a second line end played %d blasts" % (again - want)
+			if r == "":
+				for s in blasts: s.speed_scale = 40.0
+				for i in 60: await tree.process_frame
+				if blasts.any(func(s): return is_instance_valid(s)): r = "a blast is still there after it ended"
+			world.queue_free()
+			await tree.process_frame
+			if r != "": break
+		if r != "": break
+	PerfSaver.active = false
+	return r
 
 ## Task 4 review I1 / plan Task 5: a trail tick is credited to the press that laid it (build.cast) and leeches that
 ## press's own leech (build.leech) to the shooter; the dummy's tick_status leeches like Wolf.tick_burn.
@@ -463,8 +599,8 @@ func test_homing_trail_follows_the_path():
 	elif Geometry2D.get_closest_point_to_segment(on, path[0], path[path.size() - 1]).distance_to(on) < 25.0: r = "setup: the path point is near the chord"
 	elif _dist_to_path(chord, path) < 25.0 or _dist_to_path(first, path) < 25.0: r = "setup: a probe is near the path"
 	if r == "":
-		var streaks := t.get_children().filter(func(c): return c is FxSprite and c.animation == "piercing_trail")
-		if streaks.size() < 4: r = "%d streaks on a 220 px path, want ≥ 4" % streaks.size()
+		var streaks := t.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_trail")
+		if streaks.size() < 4: r = "%d fire patches on a 220 px path, want ≥ 4" % streaks.size()
 		for s in streaks:
 			if r == "" and _dist_to_path(s.position, path) > 2.0: r = "a trail mark at %s is %.1f px off the arrow's path" % [s.position, _dist_to_path(s.position, path)]
 	if r == "":

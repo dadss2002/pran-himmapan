@@ -1,0 +1,208 @@
+"""Owner review images for the fire picks (T2 fire/campfire trail, B2 grenade line-end blast), from the in-game frames
+that tests/screenshots_m5b_fire_fx.gd writes to /tmp/fire_shots (frames + meta.json). Run after that script:
+    python3 -I tools/fire_fx_review.py
+Writes docs/preview/m5b/fire_t2_b2_*.png: each case at game size (the 1280x720 frame, 1:1) and x3 (nearest), the
+per-patch frame offsets (three moments 0.2 s apart), the r32 ring (dotted, drawn here, not in the game) round the
+middle line's blast, the owner's sample row next to the game at the same scale, and fire_t2_b2_review.png with
+numbered red circles on what the owner should judge. Nothing is drawn by hand: every pixel of fire is the game's.
+"""
+import json, math, os
+from PIL import Image, ImageDraw, ImageFont
+
+SHOTS = "/tmp/fire_shots"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.path.join(ROOT, "docs/preview/m5b")
+SAMPLE_T = "/home/claude/fx_samples/trail_candidates.png"
+SAMPLE_B = "/home/claude/fx_samples/blast_candidates.png"
+UI = 2.0            # screenshot px per root (UI) px: world_to_screen gives root px, the 1280x720 frame is twice that
+R = 32              # พรหมาสตร์ blast_radius (world px)
+FONT = "/usr/share/fonts/opentype/tlwg/Loma-Bold.otf"
+FONT_S = "/usr/share/fonts/opentype/tlwg/Loma.otf"
+INK, PAPER = (235, 232, 222), (24, 24, 30)
+
+meta = json.load(open(os.path.join(SHOTS, "meta.json")))
+f_big, f_small = ImageFont.truetype(FONT, 22), ImageFont.truetype(FONT_S, 17)
+
+
+def shot(case, moment):
+    return Image.open(meta[case]["moments"][moment]["file"]).convert("RGB")
+
+
+def px(p):
+    return (p[0] * UI, p[1] * UI)
+
+
+def world(case):   # screen px per world px
+    return meta[case]["scale"] * UI
+
+
+def crop(im, c, w, h, z=1):
+    x0 = int(round(min(max(c[0] - w / 2, 0), im.width - w)))
+    y0 = int(round(min(max(c[1] - h / 2, 0), im.height - h)))
+    out = im.crop((x0, y0, x0 + w, y0 + h))
+    return (out.resize((w * z, h * z), Image.NEAREST) if z != 1 else out), (x0, y0)
+
+
+def ring(im, c, r, z=1):
+    d = ImageDraw.Draw(im)
+    for a in range(0, 360, 6):
+        t0, t1 = math.radians(a), math.radians(a + 3)
+        d.line((c[0] + r * math.cos(t0), c[1] + r * math.sin(t0), c[0] + r * math.cos(t1), c[1] + r * math.sin(t1)), fill=(255, 255, 255), width=max(1, z))
+
+
+def label(im, text, xy=(8, 6)):
+    d = ImageDraw.Draw(im)
+    w = d.textlength(text, font=f_small)
+    d.rectangle((xy[0] - 4, xy[1] - 2, xy[0] + w + 4, xy[1] + 20), fill=(0, 0, 0))
+    d.text(xy, text, font=f_small, fill=(255, 255, 255))
+
+
+def row(ims, gap=8, bg=PAPER):
+    out = Image.new("RGB", (sum(i.width for i in ims) + gap * (len(ims) - 1), max(i.height for i in ims)), bg)
+    x = 0
+    for i in ims:
+        out.paste(i, (x, 0)); x += i.width + gap
+    return out
+
+
+def col(ims, gap=8, bg=PAPER):
+    out = Image.new("RGB", (max(i.width for i in ims), sum(i.height for i in ims) + gap * (len(ims) - 1)), bg)
+    y = 0
+    for i in ims:
+        out.paste(i, (0, y)); y += i.height + gap
+    return out
+
+
+def save(im, name):
+    p = os.path.join(OUT, name)
+    im.save(p, optimize=True)
+    print("wrote", os.path.relpath(p, ROOT), im.size)
+    return im
+
+
+def centre(pts):
+    return (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
+
+
+def mid_blast(case):
+    b = sorted((px(p) for p in meta[case]["blasts"]), key=lambda p: p[1])
+    return b[len(b) // 2]
+
+
+def trail_case(case, tag):
+    full = save(shot(case, "a"), "fire_t2_b2_%s.png" % tag)
+    pts = [px(p) for p in meta[case]["patches"]]
+    c = centre(pts)
+    near = min(pts, key=lambda p: (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2)
+    x3, _ = crop(full, (near[0], near[1] - 50), 240, 200, 3)
+    label(x3, "%s  x3  (%s)" % (tag, meta[case]["room"]))
+    save(x3, "fire_t2_b2_%s_x3.png" % tag)
+    return full, x3, c
+
+
+def blast_case(case, tag, moments=("f1", "f2", "f5")):
+    full = save(shot(case, "f2"), "fire_t2_b2_%s.png" % tag)
+    c = mid_blast(case)
+    r = R * world(case)
+    panels = []
+    names = {"none": "no blast (same moment)", "f1": "0.07 s", "f2": "0.13 s", "f5": "0.33 s"}
+    for m in moments:
+        z, (x0, y0) = crop(shot(case, m), (c[0], c[1] - 20), 200, 200, 3)
+        ring(z, ((c[0] - x0) * 3, (c[1] - y0) * 3), r * 3, 2)
+        label(z, "%s  %s" % (tag, names[m]))
+        panels.append(z)
+    x3 = save(row(panels), "fire_t2_b2_%s_x3.png" % tag)
+    return full, x3, c
+
+
+def badge(im, xy, n, r=22):
+    d = ImageDraw.Draw(im)
+    d.ellipse((xy[0] - r, xy[1] - r, xy[0] + r, xy[1] + r), fill=(214, 36, 36), outline=(255, 255, 255), width=3)
+    w = d.textlength(str(n), font=f_big)
+    d.text((xy[0] - w / 2, xy[1] - 14), str(n), font=f_big, fill=(255, 255, 255))
+
+
+def circle(im, box, n):
+    d = ImageDraw.Draw(im)
+    d.ellipse(box, outline=(230, 30, 30), width=5)
+    badge(im, (box[0] + 6, box[1] + 6), n)
+
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    tl_full, tl_x3, tl_c = trail_case("trail_light", "trail_light")
+    td_full, td_x3, _ = trail_case("trail_dark", "trail_dark")
+    fa_full, fa_x3, fa_c = trail_case("fade", "fade")
+    # flicker: the light lines at game size, three moments 0.2 s apart (every patch 3 frames on)
+    seq = []
+    for m, t in zip("abc", ("0.0", "0.2", "0.4")):
+        z, _ = crop(shot("trail_light", m), (tl_c[0], tl_c[1] - 40), 560, 330)
+        label(z, "game size, t = +%s s  frames %s" % (t, meta["trail_light"]["moments"][m]["frames"][:5]))
+        seq.append(z)
+    flick = save(row(seq), "fire_t2_b2_flicker.png")
+    bl_full, bl_x3, _ = blast_case("blast_light", "blast_light")
+    bd_full, bd_x3, _ = blast_case("blast_dark", "blast_dark")
+    bm_full, bm_x3, _ = blast_case("blast_monster", "blast_monster", ("none", "f1", "f2", "f5"))
+    sv_full, sv_x3, _ = blast_case("saver", "saver")
+    # sample vs game at the same scale: the owner's T2 / B2 sample rows were drawn 1 sheet px = 1 screenshot px; the game
+    # draws 1 world px = 2.5 screenshot px at 1280x720, so the sample is shown here x2.5 (nearest) next to the game 1:1
+    k = world("trail_light")
+    st = Image.open(SAMPLE_T).convert("RGB").crop((298, 356, 538, 536))          # T2 row, t = 0.4 s (240x180)
+    st = st.resize((round(st.width * k), round(st.height * k)), Image.NEAREST)
+    label(st, "owner's sample T2 (t=0.4 s) enlarged x%.1f = game scale" % k)
+    gt, _ = crop(shot("trail_light", "a"), (tl_c[0], tl_c[1] - 40), st.width, st.height)
+    label(gt, "in game, game size (1:1)")
+    sb = Image.open(SAMPLE_B).convert("RGB").crop((50, 374, 178, 502))           # B2 row, 0.07 s (frame 1, 128x128)
+    sb = sb.resize((round(sb.width * k), round(sb.height * k)), Image.NEAREST)
+    label(sb, "sample B2 (0.07 s) x%.1f" % k)
+    c = mid_blast("blast_light")
+    gb, _ = crop(shot("blast_light", "f1"), (c[0], c[1] - 16), sb.width, sb.height)
+    label(gb, "in game 0.07 s (1:1)")
+    vs = save(col([row([st, gt]), row([sb, gb])]), "fire_t2_b2_vs_sample.png")
+
+    # the review sheet: one panel per thing to judge, a numbered red circle on it
+    W = 1290
+    def fit(im, w=W):
+        return im if im.width <= w else im.resize((w, round(im.height * w / im.width)), Image.NEAREST)
+    p1 = fit(row([tl_x3, td_x3]))
+    circle(p1, (p1.width // 4 - 150, 40, p1.width // 4 + 150, p1.height - 20), 1)
+    p2 = fit(flick)
+    circle(p2, (40, 30, p2.width // 3 - 30, p2.height - 10), 2)
+    p3 = fit(row([fa_x3, crop(fa_full, (fa_c[0], fa_c[1] - 40), 560, 330)[0]]))
+    circle(p3, (60, 60, 600, p3.height - 30), 3)
+    p4 = fit(bl_x3)
+    circle(p4, (p4.width // 3 + 40, 40, 2 * p4.width // 3 - 30, p4.height - 30), 4)
+    p5 = fit(bm_x3)
+    circle(p5, (p5.width // 4 + 30, 20, p5.width // 2 + 10, p5.height - 40), 5)
+    p6 = sv_full.copy()                                      # the whole frame, game size: every patch and blast is there
+    label(p6, "saver on (PerfSaver), game size, blasts at 0.13 s", (300, 690))
+    pts = [px(q) for q in meta["saver"]["patches"]] + [px(q) for q in meta["saver"]["blasts"]]
+    circle(p6, (min(q[0] for q in pts) - 70, min(q[1] for q in pts) - 150, max(q[0] for q in pts) + 90, max(q[1] for q in pts) + 50), 6)
+    p7 = fit(bd_x3)
+    circle(p7, (p7.width // 3 + 40, 40, 2 * p7.width // 3 - 30, p7.height - 30), 7)
+    p8 = fit(vs)
+    circle(p8, (20, 20, p8.width // 2 - 20, p8.height // 2), 8)
+    legend = [
+        "1. หน้าตากองไฟ T2 บนหญ้าสว่าง (ซ้าย) และพื้นเข้ม (ขวา) ซูม ×3 — ทุกกองคือสไปรต์ชีตเดียวกับตัวอย่าง (พิกเซลตรงกันทุกจุด)",
+        "2. กองไฟไม่กะพริบพร้อมกัน: ภาพจริงขนาดเกม 3 ช่วง ห่างกัน 0.2 วิ แต่ละกองเริ่มเฟรมต่างกัน 3–11 เฟรม (ตัวเลขเฟรมที่หัวภาพ)",
+        "3. ตอนเส้นไฟจะดับ: ทั้งเส้นจางลงใน 0.3 วิสุดท้าย (ภาพนี้จางเหลือ 44 %)",
+        "4. ระเบิด B2 เทียบวงดาเมจ r32 (วงจุดขาว วาดเพิ่มในภาพนี้เท่านั้น ไม่มีในเกม) ที่ 0.07 / 0.13 / 0.33 วิ",
+        "5. ระเบิดทับมอนสีเข้ม (หมูป่า): ก่อนระเบิด / 0.07 / 0.13 / 0.33 วิ (ประกายสีเหลืองบนตัวหมูคือ hit spark ของลูกศรที่ทะลุ)",
+        "6. เปิดโหมดประหยัด (PerfSaver): กองไฟทุกกองและระเบิดยังอยู่ครบ เพราะเป็นพื้นที่ดาเมจ",
+        "7. ระเบิดบนพื้นเข้ม (ห้อง c2r0)",
+        "8. ตัวอย่างที่เจ้าของเลือก ขยายให้เท่าสเกลเกม (×2.5) เทียบกับในเกมจริง: ในเกมไฟใหญ่กว่าในภาพตัวอย่าง 2.5 เท่าเมื่อเทียบกับฉาก",
+        "   (ตัวอย่างวางชีตลงบนภาพหน้าจอแบบ 1:1 แต่เกมวาดโลก ×2.5 ที่ 1280×720; สัดส่วนกับความยาวเส้น 220 และวง r32 เท่าเดิม)",
+    ]
+    lh = 30
+    leg = Image.new("RGB", (W, lh * len(legend) + 20), PAPER)
+    d = ImageDraw.Draw(leg)
+    for i, t in enumerate(legend):
+        d.text((12, 10 + i * lh), t, font=f_small, fill=INK)
+    title = Image.new("RGB", (W, 44), PAPER)
+    ImageDraw.Draw(title).text((12, 8), "ไฟใหม่ PixelFX: เส้นไฟ T2 (fire/campfire) + ระเบิดปลายเส้น B2 (explosions/grenade) — ภาพจริงในเกม",
+                               font=f_big, fill=INK)
+    save(col([title, p1, p2, p3, p4, p5, p6, p7, p8, leg]), "fire_t2_b2_review.png")
+
+
+if __name__ == "__main__":
+    main()

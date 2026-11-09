@@ -133,7 +133,7 @@ func _end_line(struck: Node2D = null) -> void:
 		blast(_pos(), r, _cp("blast_frac"), false, null, [struck] if struck != null else [], "line_end")
 		if is_inside_tree():
 			for s in ComboFx.play(get_parent(), combo_id(), "line_end", position):
-				s.scale = Vector2.ONE * (2.0 * r / maxf(1.0, s._cell.x))   # the burst as wide as the blast (r32 → 64 px)
+				s.scale = Vector2.ONE * (2.0 * r / maxf(1.0, s._cell.x))   # as wide as the blast: fire_blast's 64 px cell at r32 = 1:1, as sampled
 
 ## One bounce, from `struck` to `next` (Task 6): the recipe's "bounce" effect at the bounce point, and the lightning
 ## combos' bolts (ศรอสนีกระโดด 1, ศรอสนีพันสาย 2, each bolt_frac of the bouncing arrow's hit) at the nearest others,

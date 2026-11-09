@@ -4,7 +4,8 @@ Third-party work used in the game. The in-game credits page (when it is made) li
 
 ## Visual effects
 - **PixelFX** by Patch and Hugo Duprez (https://github.com/patch-gg/pixelfx, commit a841596), MIT License —
-  hit spark, critical hit, poison mist, burning, frozen, pickup and warp effects (assets/fx/pfx_*.png, made with
+  hit spark, critical hit, poison mist, burning, frozen, pickup and warp effects, the fire trail (campfire) and the
+  fire blast (grenade) of the fire-arrow combos (assets/fx/pfx_*.png, made with
   tools/pixelfx_export.py). Parts adapt Sprite Fusion's effects (Hugo Duprez, MIT) and Hollow Crown (rehan-remade, MIT).
   Full notice: assets/fx/PIXELFX_LICENSE.txt. The Patch Pixel font is not used.
 - The other effects in assets/fx were made with PixelLab.

@@ -885,6 +885,59 @@ func _files_under(dir: String, exts: Array) -> Array:
 
 ## MIT notice kept (LICENSE + NOTICE), in the export, and a line in the game's credits; no Patch Pixel font. The web
 ## export ships the licence, CREDITS.md and the file it points to (assets/audio/CREDITS.md).
+## Owner 2026-11-09 fire picks (spec 2026-11-08-gem-combos.md, samples /home/claude/fx_samples rows T2 / B2): the fire
+## trail patch is T2 fire/campfire (cell 44x49, 45 f @ 15 fps, 3.0 s loop) and the line-end blast B2
+## explosions/grenade (cell 64x62, 9 f @ 15 fps, 0.6 s one-shot, only the blast: 1.667-2.2 s), in the game's fire ramp
+## (status_burn's palette), exactly as exported for the samples: logs cut (no marker blue left), the glow fades before
+## the cell edge (no glow box: edge alpha <= 8), every trail frame a readable flame (>= 400 solid px; measured 505-747),
+## the blast as wide as พรหมาสตร์'s blast (2 x r32 = 64 px, drawn 1:1) and its last 3 frames fading out.
+const FIRE_PICKS := {
+	"fire_trail": {"id": "fire/campfire", "cell": Vector2i(44, 49), "frames": 45, "loop": true, "anchor": Vector2i(22, 44), "sheet": Vector2i(1980, 49), "secs": 3.0},
+	"fire_blast": {"id": "explosions/grenade", "cell": Vector2i(64, 62), "frames": 9, "loop": false, "anchor": Vector2i(32, 52), "sheet": Vector2i(576, 62), "secs": 0.6}}
+func test_fire_picks_match_the_samples():
+	var man := _man()
+	var ramp: Array = man.status_burn.pixelfx.options.palette
+	for id in FIRE_PICKS:
+		var want: Dictionary = FIRE_PICKS[id]
+		if not man.has(id): return "%s missing" % id
+		var e: Dictionary = man[id]
+		if not (e.get("pixelfx") is Dictionary) or String(e.pixelfx.id) != want.id or String(e.pixelfx.commit) != "a841596": return "%s: pixelfx %s" % [id, e.get("pixelfx")]
+		if String(e.sheet) != "pfx_%s.png" % id: return "%s: sheet %s" % [id, e.sheet]
+		if Vector2i(int(e.cell[0]), int(e.cell[1])) != want.cell or int(e.frames) != want.frames or float(e.fps) != 15.0 or bool(e.loop) != want.loop \
+				or Vector2i(int(e.anchor[0]), int(e.anchor[1])) != want.anchor:
+			return "%s: cell %s frames %s fps %s loop %s anchor %s, want %s" % [id, e.cell, e.frames, e.fps, e.loop, e.anchor, want]
+		if absf(float(e.frames) / float(e.fps) - float(want.secs)) > 0.001: return "%s lasts %.2f s, want %.2f" % [id, float(e.frames) / float(e.fps), want.secs]
+		if Array(e.pixelfx.options.palette) != ramp: return "%s: palette %s, want the fire ramp %s" % [id, e.pixelfx.options.palette, ramp]
+		var img := _img(e)
+		if Vector2i(img.get_size()) != want.sheet: return "%s: sheet %s, want %s" % [id, img.get_size(), want.sheet]
+		var cw := int(e.cell[0])
+		var ch := int(e.cell[1])
+		for i in int(e.frames):
+			var f := _frame(img, e, i)
+			for y in ch:
+				for x in cw:
+					var c := f.get_pixel(x, y)
+					if c.a > 0.0 and c.b8 > c.r8 + 40 and c.b8 > c.g8 + 40: return "%s frame %d: marker blue left at %d,%d" % [id, i, x, y]
+					if (x == 0 or y == 0 or x == cw - 1 or y == ch - 1) and c.a8 > 8: return "%s frame %d: alpha %d at the cell edge (glow box)" % [id, i, c.a8]
+			if id == "fire_trail" and _opaque(f) < 400: return "fire_trail frame %d: only %d solid px" % [i, _opaque(f)]
+	var bl: Dictionary = man.fire_blast
+	var r := 0
+	for row in GemCombo.recipes():
+		if row.id == "brahmastra": r = int(row.blast_radius)
+	if int(bl.cell[0]) != 2 * r: return "fire_blast %d px wide, พรหมาสตร์'s blast is %d px" % [bl.cell[0], 2 * r]
+	if not is_equal_approx(float(bl.pixelfx.trim_s[0]), 25.0 / 15.0) or not is_equal_approx(float(bl.pixelfx.trim_s[1]), 33.0 / 15.0): return "fire_blast trim %s" % [bl.pixelfx.trim_s]
+	var bi := _img(bl)
+	var peaks: Array = []
+	for i in int(bl.frames):
+		var f := _frame(bi, bl, i)
+		var m := 0
+		for y in f.get_height():
+			for x in f.get_width(): m = maxi(m, f.get_pixel(x, y).a8)
+		peaks.append(m)
+	if not (peaks[5] == 255 and peaks[6] < peaks[5] and peaks[7] < peaks[6] and peaks[8] < peaks[7] and peaks[8] > 0): return "fire_blast does not fade out over its last 3 frames: %s" % [peaks]
+	if not FileAccess.get_file_as_string(CREDITS).contains("fire trail"): return "credits do not name the fire trail / blast"
+	return ""
+
 func test_licence_and_credits():
 	if not FileAccess.file_exists(LICENCE): return "no " + LICENCE
 	var t := FileAccess.get_file_as_string(LICENCE)

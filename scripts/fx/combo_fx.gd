@@ -5,7 +5,9 @@ class_name ComboFx
 ## ("#ffffff" = no recolour).
 ## PerfSaver: decorative extras (PerfSaver.DECORATIVE: the burning / frozen overlays, the crit glare, the pickup
 ## burst) are shed while the saver is on, or replaced by their fallback (crit_hit → hit_spark); everything else, the
-## fire trail's streak (it shows where the fire burns) and the blasts, always plays.
+## fire trail's patches (they show where the fire burns) and the blasts, always plays.
+## Owner 2026-11-09: fire_fan / brahmastra use new PixelFX fire instead of a reuse: "trail" → fire_trail (T2 campfire
+## patches, FireTrail starts each at its own frame), brahmastra "line_end" → fire_blast (B2 grenade blast, one-shot).
 
 ## Effects that point along a line (their art points east): turned to `dir` when one is given.
 const DIRECTIONAL := ["piercing_trail"]

@@ -15,17 +15,24 @@ extends Node2D
 ## (3 split lines, back-to-back presses) burn once a second at most; a monster standing in one trail gets exactly
 ## round(trail_secs) ticks, as simulated (risks.md B26).
 ## Never saved, never outlives its room: halt() (the warp's dark, Arrow.halt, TestGround) ends it at once (B20).
-## Performance (risks.md B26): the look is at most MAX_STREAKS reused piercing_trail streaks (tinted, one per SPACING px
-## as the line grows, not one per frame) + a flame (status_burn, decorative: shed by the PerfSaver) on every
-## FLAME_EVERY-th mark, so MAX_FX effects per trail; step() allocates nothing. The damage never depends on the effects.
+## Look (owner 2026-11-09, sample T2 in /home/claude/fx_samples/trail_candidates.png): one fire_trail patch (PixelFX
+## fire/campfire, logs cut, assets/fx/pfx_fire_trail.png, 45 f @ 15 fps loop) on every mark, i.e. one per SPACING px of
+## path as the line grows (not one per frame), so at most MAX_FX = MAX_STREAKS effects per trail. Each patch starts its
+## loop at its own frame (patch_frame: PHASE frames on from its neighbour, ± JITTER, from a hash of the line's first mark:
+## random-looking but the same every run), so the line never flickers in sync; the whole line fades out over the last
+## FADE s. PerfSaver: the patches are the hazard the player reads (one per SPACING px segment), so the saver keeps every
+## one of them (fire_trail is not PerfSaver.DECORATIVE); the glow is baked into the sheet (no extra node to shed).
+## Performance (risks.md B26): the patches share one cached SpriteFrames (FxSprite); step() allocates nothing. The
+## damage never depends on the effects.
 ## Task 5 review 2: each trail keeps the bounding box of its path (_lo / _hi, grown as extend_to goes; a finished trail
 ## no longer moves), and a target farther than its hit radius outside that box is skipped before any segment check.
 
 const HOLD := 0.25                 # what one step re-applies (StatusEffects: hold + flight past < 1 tick)
-const SPACING := 44.0              # px between streak marks (piercing_trail is 60 px from tail to head)
+const SPACING := 44.0              # px between marks (a fire_trail patch is 44 px wide: the patches touch)
 const MAX_STREAKS := 6             # 6 × 44 = 264 px ≥ the longest arrow range in balance.json (220; tested)
-const FLAME_EVERY := 2
-const MAX_FX := MAX_STREAKS + MAX_STREAKS / FLAME_EVERY
+const MAX_FX := MAX_STREAKS        # one patch per mark
+const PHASE := 7                   # frames between neighbouring patches' loops (as the owner's sample)
+const JITTER := 2                  # ± frames on top, per patch (deterministic): neighbours differ by 3..11 of 45
 const FADE := 0.3                  # s: the look fades out over the last FADE s
 const Z := -5                      # on the ground: over the map (-10) and exit rings (-9), under everyone (like hazard clouds)
 
@@ -52,6 +59,7 @@ var _radius := 10.0
 var _lo := Vector2.ZERO            # the path's bounding box (from, every extend_to point): _near's early exit
 var _hi := Vector2.ZERO
 var seg_checks := 0                # segment distance checks so far (tests: a far target costs none)
+var _seed := 0                     # from the first mark's position: each line's patches start at their own frames
 
 ## from_p: where the line starts; atk × mult = the arrow's hit; frac / secs_: the recipe's trail_frac / trail_secs;
 ## targets_: the arrow's targets; source_: the shooter (leech); cast_ / leech_: the press's ledger and leech;
@@ -78,7 +86,7 @@ func setup(from_p: Vector2, atk: float, mult: float, frac: float, secs_: float, 
 	made += 1
 
 ## The arrow is now at p: the line follows it. Each time the path flown passes another SPACING px, the point on the
-## path there is recorded and gets a streak, up to MAX_STREAKS. Allocates nothing but the effects.
+## path there is recorded and gets a fire patch, up to MAX_STREAKS. Allocates nothing but the effects.
 func extend_to(p: Vector2) -> void:
 	if finished: return
 	to = p
@@ -101,12 +109,20 @@ func points() -> PackedVector2Array:
 	return _pts.slice(0, _n)
 
 func _mark(p: Vector2, d: Vector2, i: int) -> void:
-	# flames on marks 1, 3, 5 (88, 176, 264 px): the split lines are still close together at the first mark, where
-	# three flames would stack into one column by the hero (seen in docs/preview/m5b/fire_fan_ingame.png)
-	ComboFx.play(self, combo_id, "trail", to_local(p) if is_inside_tree() else p, d, i % FLAME_EVERY == FLAME_EVERY - 1)
+	if i == 0: _seed = hash(Vector2i(p.round()))
+	for s in ComboFx.play(self, combo_id, "trail", to_local(p) if is_inside_tree() else p, d):
+		var n: int = s.sprite_frames.get_frame_count(s.animation)
+		if s.sprite_frames.get_animation_loop(s.animation) and n > 1:
+			s.set_frame_and_progress(patch_frame(_seed, i, n), 0.0)
 
-## The arrow is spent: the line stops growing and burns on for `secs`. A line too short for a mark gets one at its
-## end, so the fire is never invisible.
+## The frame patch i of a line (seed: its first mark) starts its n-frame loop on: PHASE frames on from patch i - 1,
+## ± JITTER from a hash of (seed, i). Deterministic; neighbours are 3..11 frames apart (never in step).
+static func patch_frame(seed: int, i: int, n: int) -> int:
+	var j := posmod(hash(Vector2i(seed, i)), 2 * JITTER + 1) - JITTER
+	return posmod(posmod(seed, n) + i * PHASE + j, n)
+
+## The arrow is spent: the line stops growing and burns on for `secs`. A line too short for a mark gets a patch at
+## its end, so the fire is never invisible.
 func finish() -> void:
 	if finished: return
 	finished = true
