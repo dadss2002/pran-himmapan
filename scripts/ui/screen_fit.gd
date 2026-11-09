@@ -19,7 +19,52 @@ static func camera_zoom(view: Vector2, room: Vector2) -> float:
 	if room.x <= 0.0 or room.y <= 0.0: return 1.0
 	return maxf(1.0, maxf(view.x / room.x, view.y / room.y))
 
-## Full screen on/off (on the web it must come from a tap; iPhone Safari does not allow it).
+## M4d addendum 3: what "เต็มจอ" shows on iPhone web, where Safari has no full-screen call.
+const IOS_TIP := "กดแชร์ → เพิ่มไปยังหน้าจอโฮม"
+## Tests force the iPhone check: -1 = detect, 0 = not iPhone web, 1 = iPhone web.
+static var ios_override := -1
+## Tests force the home-screen check: -1 = detect, 0 = in Safari, 1 = opened from the home screen.
+static var standalone_override := -1
+
+## Running in a browser on iPhone / iPod (owner 2026-11-08: "iPad กดแล้วเต็มจอจริง คำแนะนำเฉพาะ iPhone").
+## iPad (also iPadOS Safari, which says "Macintosh") gets real full screen, so it does not count.
+static func is_ios_web() -> bool:
+	if ios_override >= 0: return ios_override == 1
+	if not OS.has_feature("web"): return false
+	var ua = JavaScriptBridge.eval("navigator.userAgent + '|' + (navigator.maxTouchPoints || 0)", true)
+	return ua is String and ios_user_agent(ua)
+
+## The user-agent rule on its own (unit-tested): iPhone / iPod only ("ua|maxTouchPoints"; the touch count
+## is kept in the format but no longer matters, iPad and iPadOS "Macintosh" are not iPhone).
+static func ios_user_agent(ua_and_touch: String) -> bool:
+	var ua := ua_and_touch.split("|")[0]
+	return ua.contains("iPhone") or ua.contains("iPod")
+
+## Opened from the home screen (navigator.standalone, or display-mode standalone); false off the web.
+static func is_standalone_web() -> bool:
+	if standalone_override >= 0: return standalone_override == 1
+	if not OS.has_feature("web"): return false
+	var v = JavaScriptBridge.eval("!!(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches))", true)
+	return v == true
+
+## Owner 2026-11-08 ("กดสวมใส่ไม่ได้"): Safari's floating bottom bar on iPhone covered the bag's action
+## button. Portrait pause screens (bag, skill · gem) keep this many UI px free at the bottom on iPhone web.
+const IOS_BOTTOM_INSET := 64.0
+
+## Space a portrait pause screen keeps free at the bottom: Safari's bar on iPhone (portrait, not opened
+## from the home screen). 0 elsewhere.
+static func bottom_inset(portrait: bool) -> float:
+	if not portrait or not is_ios_web() or is_standalone_web(): return 0.0
+	return IOS_BOTTOM_INSET
+
+## What "เต็มจอ" does (unit-tested): "tip" on iPhone web in Safari, "none" on iPhone already opened from the
+## home screen (it is full screen already; Safari has no full-screen call), "toggle" everywhere else.
+static func fullscreen_action(iphone_web: bool, standalone: bool) -> String:
+	if not iphone_web: return "toggle"
+	return "none" if standalone else "tip"
+
+## Full screen on/off (on the web it must come from a tap; iPhone Safari does not allow it: the HUD shows
+## IOS_TIP there instead, Hud.press_fullscreen / fullscreen_action).
 static func toggle_fullscreen() -> void:
 	var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)

@@ -1,5 +1,11 @@
 extends RefCounted
-## Touch controls + HUD. Uses the pure handle_* APIs so no input frames are needed.
+## Touch controls + HUD. Uses the pure handle_* APIs so no input frames are needed (the second-finger panel
+## test pushes touches into the root viewport).
+
+var tree: SceneTree
+
+func setup(t: SceneTree) -> void:
+	tree = t
 
 func _joy() -> TouchJoystick:
 	var j := TouchJoystick.new()
@@ -157,4 +163,187 @@ func test_hud_unlocks_spread_at_lv3():
 	if r == "" and not hud.buttons.buttons["skill2"].enabled: r = "spread still locked at Lv3"
 	if r == "" and hud.buttons.buttons["potion_hp"].note != "5": r = "potion count label '%s'" % hud.buttons.buttons["potion_hp"].note
 	hud.free(); hero.free()
+	return r
+
+## A touch (finger `index`) at p (HUD px) pushed into the root viewport; `mouse` first sends the emulated mouse
+## button Godot makes for the one finger it turns into the mouse (device DEVICE_ID_EMULATION).
+func _touch(index: int, p: Vector2, pressed: bool, mouse := false) -> void:
+	if mouse:
+		var mm := InputEventMouseMotion.new()
+		mm.device = InputEvent.DEVICE_ID_EMULATION
+		mm.position = p
+		mm.global_position = p
+		tree.root.push_input(mm, true)
+		var mb := InputEventMouseButton.new()
+		mb.device = InputEvent.DEVICE_ID_EMULATION
+		mb.button_index = MOUSE_BUTTON_LEFT
+		mb.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+		mb.pressed = pressed
+		mb.position = p
+		mb.global_position = p
+		tree.root.push_input(mb, true)
+	var st := InputEventScreenTouch.new()
+	st.index = index
+	st.position = p
+	st.pressed = pressed
+	tree.root.push_input(st, true)
+
+func _tap(index: int, c: Control, mouse := false) -> void:
+	var p := c.get_global_rect().get_center()
+	_touch(index, p, true, mouse)
+	await tree.process_frame
+	_touch(index, p, false, mouse)
+	await tree.process_frame
+
+## Owner report 2026-11-08 (second finger): with the thumb still down (the finger Godot turns into the mouse),
+## another finger's taps work on the bag (tab, close), the ตีบวก window under it is not pressed through, and on
+## the skill · gem screen (close); a one-finger tap (emulated mouse) presses a button exactly once.
+func test_second_finger_on_bag_and_skill_panels():
+	var hero: Hero = load("res://scenes/hero.tscn").instantiate()
+	hero.setup_sprites()
+	hero.set_progress(5, 0)
+	var hud := Hud.new()
+	tree.root.add_child(hud)
+	await tree.process_frame
+	hud.bind(hero)
+	await tree.process_frame
+	var thumb := Vector2(60, 300)
+	var r := ""
+	# The headless window is 64 x 64 px stretched to the 640-wide base, so the icon buttons grow to 480 px to stay
+	# 44 px under a real finger and the map button lands under the thumb (since Task 8 its emulated release would
+	# open the full map). Give the test a real phone-sized window, lay the HUD out as the game does, and make sure
+	# the thumb is clear of every icon button (review M5 of Task 8). The window is put back at the end.
+	var size0 := tree.root.size
+	var scale0 := tree.root.content_scale_size
+	var phone := Vector2i(1280, 720)
+	DisplayServer.window_set_size(phone)
+	tree.root.size = phone
+	tree.root.content_scale_size = ScreenFit.base_for(phone)
+	for i in 3: await tree.process_frame
+	var view := tree.root.get_visible_rect().size
+	hud.buttons.layout(view)
+	hud.layout(view)
+	await tree.process_frame
+	for b in hud.top_right.find_children("*", "BaseButton", true, false):
+		if (b as Control).is_visible_in_tree() and (b as Control).get_global_rect().has_point(thumb):
+			r = "setup: icon button %s under the thumb at %s (view %s)" % [b.name, thumb, view]
+	_touch(0, thumb, true, true)                       # the thumb: Godot's mouse finger
+	hud.open_bag()
+	for i in 2: await tree.process_frame
+	var bag := hud.bag_panel
+	if not bag.is_open(): r = "setup: bag not open"
+	if r == "":
+		var presses := [0]
+		(bag._tab_buttons[2] as Button).pressed.connect(func(): presses[0] += 1)
+		await _tap(1, bag._tab_buttons[2])
+		if bag.tab != 2 or presses[0] != 1: r = "second finger on tab 2: tab %d, pressed %d times" % [bag.tab, presses[0]]
+	if r == "":
+		await _tap(1, bag._close_button)
+		if bag.is_open() or tree.paused: r = "second finger on ✕ did not close the bag"
+	_touch(0, thumb, false, true)                      # thumb up
+	await tree.process_frame
+	if r == "":
+		hud.open_bag()
+		for i in 2: await tree.process_frame
+		var presses := [0]
+		(bag._tab_buttons[1] as Button).pressed.connect(func(): presses[0] += 1)
+		await _tap(0, bag._tab_buttons[1], true)       # one finger alone: the GUI presses it, nothing more
+		if bag.tab != 1 or presses[0] != 1: r = "one-finger tap on tab 1: tab %d, pressed %d times (want once)" % [bag.tab, presses[0]]
+	if r == "":
+		_touch(0, thumb, true, true)
+		hero.inventory.add("ore_himmapan", 5)
+		hero.inventory.gold = 5000
+		bag.select_worn("bow")
+		bag.press_enhance()
+		await tree.process_frame
+		var ep := bag.enhance_panel
+		if not ep.is_open(): r = "setup: ตีบวก window not open"
+		else:
+			# any bag button outside the window (under its dim) must not be pressed by another finger
+			var under: Button = null
+			var stack: Array = [bag._root]
+			while not stack.is_empty() and under == null:
+				var n: Node = stack.pop_back()
+				if n is Button and n.is_visible_in_tree() and not n.disabled and not ep._panel.get_global_rect().intersects(n.get_global_rect()):
+					under = n
+				stack.append_array(n.get_children())
+			if under == null: r = "setup: no bag button outside the ตีบวก window"
+			else:
+				var hits := [0]
+				under.pressed.connect(func(): hits[0] += 1)
+				await _tap(1, under)
+				if hits[0] != 0 or not ep.is_open(): r = "a second finger pressed the bag's %s through the ตีบวก window" % under.name
+			if r == "":
+				await _tap(1, ep._close_button)
+				if ep.is_open(): r = "second finger on the ตีบวก ✕ did not close it"
+		_touch(0, thumb, false, true)
+		await tree.process_frame
+	if bag.is_open(): bag.close()
+	if r == "":
+		_touch(0, thumb, true, true)
+		hud.open_skills()
+		for i in 2: await tree.process_frame
+		var sp := hud.skill_panel
+		if not sp.is_open(): r = "setup: skill screen not open"
+		else:
+			await _tap(1, sp._close_button)
+			if sp.is_open() or tree.paused: r = "second finger on the skill screen's ✕ did not close it"
+		_touch(0, thumb, false, true)
+		await tree.process_frame
+	if hud.skill_panel.is_open(): hud.skill_panel.close()
+	tree.paused = false
+	hud.queue_free()
+	hero.queue_free()
+	DisplayServer.window_set_size(size0)
+	tree.root.size = size0
+	tree.root.content_scale_size = scale0
+	for i in 3: await tree.process_frame
+	return r
+
+## Review I1/M2 (2026-11-09): an iOS touchcancel (a call, a system gesture) over a button is not a tap, and a finger
+## held on a button while the panel shut (or was covered) does not press it after the panel opens again.
+func test_touch_taps_cancel_and_shut_panel():
+	var root := Control.new()
+	tree.root.add_child(root)
+	var b := Button.new()
+	b.position = Vector2(100, 100)
+	b.size = Vector2(80, 44)
+	root.add_child(b)
+	await tree.process_frame
+	var presses := [0]
+	b.pressed.connect(func(): presses[0] += 1)
+	var t := TouchTaps.new()
+	var at := b.get_global_rect().get_center()
+	var mk := func(i: int, p: Vector2, down: bool, cancel := false) -> InputEventScreenTouch:
+		var st := InputEventScreenTouch.new()
+		st.index = i
+		st.position = p
+		st.pressed = down
+		st.canceled = cancel
+		return st
+	var emu := InputEventMouseButton.new()
+	emu.device = InputEvent.DEVICE_ID_EMULATION
+	emu.pressed = true
+	var r := ""
+	t.feed(emu, root, TouchTaps.EVERYWHERE)                       # the thumb is Godot's mouse finger
+	t.feed(mk.call(0, Vector2(5, 5), true), root, TouchTaps.EVERYWHERE)
+	t.feed(mk.call(1, at, true), root, TouchTaps.EVERYWHERE)
+	t.feed(mk.call(1, at, false, true), root, TouchTaps.EVERYWHERE)  # touchcancel over the button
+	if presses[0] != 0: r = "a cancelled touch pressed the button %d times" % presses[0]
+	if r == "":
+		t.feed(mk.call(1, at, true), root, TouchTaps.EVERYWHERE)
+		t.feed(mk.call(2, Vector2(300, 300), true), root, TouchTaps.EVERYWHERE, false)   # panel shut meanwhile
+		t.feed(mk.call(1, at, false), root, TouchTaps.EVERYWHERE)    # reopened, finger 1 lifts
+		if presses[0] != 0: r = "a finger held across a shut panel pressed the button on reopen"
+	if r == "":
+		t.feed(mk.call(1, at, true), root, TouchTaps.EVERYWHERE)
+		t.reset()                                                      # close() forgets fingers
+		t.feed(mk.call(1, at, false), root, TouchTaps.EVERYWHERE)
+		if presses[0] != 0: r = "a finger held across close() pressed the button"
+	if r == "":
+		t.feed(mk.call(1, at, true), root, TouchTaps.EVERYWHERE)
+		t.feed(mk.call(1, at, false), root, TouchTaps.EVERYWHERE)    # a real second-finger tap still works
+		if presses[0] != 1: r = "a normal second-finger tap pressed %d times (want 1)" % presses[0]
+	root.queue_free()
+	await tree.process_frame
 	return r

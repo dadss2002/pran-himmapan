@@ -6,11 +6,17 @@ extends CharacterBody2D
 signal died(wolf: Wolf)
 
 const MANIFEST := "res://assets/wolf/manifest.json"
-const HURT_POINT := Vector2(0, -14)
+const HURT_POINT := Vector2(0, -14)       # at full size; hurt_point() scales it (M4d addendum 4)
+const TAG_Y := -52.0                      # the elite tag over the head at full size
+## M4d addendum 4 (monsters x0.85): numbers measured from the monster's own body (melee reach, lunge hit,
+## ring / mist radius) are scaled with it; aggro, leash, wander, speeds, lunge distance and throw range not.
+const BODY_KEYS := ["bite_range", "bite_hit_range", "lunge_hit_radius", "ring_radius", "cloud_radius"]
 
 var level := 1
 var pack: WolfPack
 var home := Vector2.ZERO
+var spawn_at := Vector2.INF        # M4d addendum 4: its pile spawn point (respawns there); INF = old jitter
+var pile := -1                     # which pile of its pack it belongs to (-1 = the whole pack is one pile)
 var state := "idle"
 var facing := 0
 var hp: int:
@@ -55,6 +61,7 @@ func setup() -> void:
 	if shape == null: shape = $Feet
 	body.sprite_frames = SpriteSet.build(manifest_path())
 	body.centered = false
+	_apply_size()
 	_anchors = SpriteSet.anchors(manifest_path())
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/flash.gdshader")
@@ -65,6 +72,26 @@ func setup() -> void:
 	add_to_group("enemies")
 	_wander_to = home
 	_refresh(true)
+
+## M4d addendum 4: every monster (bosses too) is drawn and collides at Balance "monster_scale" (0.85).
+static func size_scale() -> float:
+	return Balance.num("monster_scale") if Balance.has("monster_scale") else 1.0
+
+## Sprite, collision box (its own copy of the scene's shape) and its offset at size_scale(); the anchor
+## offset is in sprite pixels, so the feet stay on the same point.
+func _apply_size() -> void:
+	var s := size_scale()
+	body.scale = Vector2(s, s)
+	if shape.shape is RectangleShape2D and not shape.has_meta("scaled"):
+		var r: RectangleShape2D = shape.shape.duplicate()
+		r.size *= s
+		shape.shape = r
+		shape.position *= s
+		shape.set_meta("scaled", true)
+
+## Width of the collision box (px) after the size scale: "1 body" for pile spacing and pushing apart.
+func body_width() -> float:
+	return (shape.shape as RectangleShape2D).size.x if shape and shape.shape is RectangleShape2D else 0.0
 
 var status := StatusEffects.new()
 const STATUS_FX_SCALE := 1.5
@@ -92,6 +119,7 @@ func set_elite(on: bool) -> void:
 		_tag = ELITE_TAG.new()
 		_tag.monster = self
 		add_child(_tag)
+		_tag.position = Vector2(0, TAG_Y * size_scale())   # over the smaller head (addendum 4)
 	if _tag: _tag.visible = on
 	if health and is_alive(): health.setup(stats().hp)
 
@@ -102,18 +130,18 @@ func manifest_path() -> String:
 
 ## Whether the idle wolf starts a chase with the hero this far away.
 func _wants_aggro(dist: float) -> bool:
-	var walled_off := pack != null and pack.unreachable_at.distance_to(_hpos()) < 24.0
+	var walled_off := pack != null and pack.unreachable_for(self).distance_to(_hpos()) < 24.0
 	var calm := pack != null and pack.calm > 0.0
 	return dist <= n("aggro") and not walled_off and not calm
 
-## The idle wolf saw the hero: the whole pack joins in.
+## The idle wolf saw the hero: its pile joins in (the whole pack when it is one pile).
 func _start_aggro() -> void:
-	if pack: pack.alert(_hero)
+	if pack: pack.alert(_hero, self)
 	else: start_chase(_hero)
 
-## Hit while idle: the whole pack joins in.
+## Hit while idle: its pile joins in.
 func _on_provoked() -> void:
-	if pack and _hero: pack.alert(_hero)
+	if pack and _hero: pack.alert(_hero, self)
 
 ## States that need a live hero (otherwise go home).
 func _fight_states() -> Array:
@@ -130,7 +158,8 @@ func apply_status(kind: String, value := 0.0, leech := 0.0, source: Object = nul
 	elif kind == "slow": status.apply_slow()
 
 func n(key: String) -> float:
-	return Balance.num("wolf." + key)
+	var v := Balance.num("wolf." + key)
+	return v * size_scale() if key in BODY_KEYS else v
 
 # ---------- queries used by the hero / arrows ----------
 
@@ -138,7 +167,11 @@ func is_alive() -> bool:
 	return state != "dead"
 
 func hurt_point() -> Vector2:
-	return _pos() + HURT_POINT
+	return _pos() + HURT_POINT * size_scale()
+
+## How close an arrow must pass to hurt_point() to hit: shot.arrow_hit_radius on the smaller body (addendum 4).
+func hurt_radius() -> float:
+	return Balance.num("shot.arrow_hit_radius") * size_scale()
 
 func telegraph_visible() -> bool:
 	return _telegraph != null and _telegraph.visible
@@ -149,7 +182,10 @@ func telegraph_visible() -> bool:
 func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, crit_mult := -1.0) -> int:
 	if not is_alive(): return 0
 	var r := Combat.roll_damage(atk, mult, stats().def, true, crit_chance, crit_mult)
-	health.take_hit(r.amount, r.crit)
+	var lands := not health.is_dead() and not health.is_invulnerable()
+	if lands: Sfx.play("crit_hit" if r.crit else "arrow_hit", _pos())
+	health.take_hit(r.amount, r.crit)              # a killing hit cries "die" in _on_died
+	if lands and is_alive(): Sfx.play_monster(sound_kind(), "hurt")
 	if not is_alive(): return r.amount
 	_flash = n("hit_flash")
 	if state != "bite" and not elite:          # elites do not get knocked back (M3h)
@@ -170,7 +206,9 @@ func revive() -> void:
 	roll_elite()
 	health.setup(stats().hp)
 	status.clear()
-	_set_pos(home + Vector2(randf_range(-16, 16), randf_range(-12, 12)))
+	# M4d addendum 4: a piled monster comes back on its own spawn point (open ground, apart from its pile)
+	if spawn_at != Vector2.INF: _set_pos(spawn_at)
+	else: _set_pos(home + Vector2(randf_range(-16, 16), randf_range(-12, 12)))
 	state = "idle"
 	_t = 0.0
 	_bite_cd = 0.0
@@ -181,6 +219,40 @@ func revive() -> void:
 	else: shape.disabled = false
 	_refresh(true)
 
+## Task 4 (M4c §1: walking between rooms keeps every room as you left it): what RoomReset keeps of this monster
+## when the hero leaves its room. alive, where it stood, elite, and whether it was busy (anything but idle:
+## chasing, attacking, fleeing, walking home). HP, statuses and cooldowns are not kept (restore_kept).
+func kept_state() -> Dictionary:
+	return {"alive": is_alive(), "pos": _pos(), "elite": elite, "busy": is_alive() and state != "idle"}
+
+## Task 4: back in a kept room. A dead monster stays dead, unseen, with no death cry, loot or EXP (its pack
+## restores its respawn time). A living one stands where it was with its elite mark; HP back to full and
+## statuses cleared, as when it loses the hero now (_go_home heals); one that was busy walks home ("return"),
+## as a fighting monster does now once the hero is gone.
+func restore_kept(st: Dictionary) -> void:
+	if not bool(st.get("alive", true)):
+		_end_lunge()
+		status.clear()
+		_update_status_fx()
+		set_elite(bool(st.get("elite", false)))
+		health.hp = 0
+		state = "dead"
+		_t = 0.0
+		velocity = Vector2.ZERO
+		visible = false
+		body.modulate.a = 0.0
+		if is_inside_tree(): shape.set_deferred("disabled", true)
+		else: shape.disabled = true
+		_refresh(true)
+		return
+	revive()                              # full HP, statuses and cooldowns cleared, idle on its spawn point
+	set_elite(bool(st.get("elite", false)))
+	_set_pos(st.pos)
+	if bool(st.get("busy", false)) and _pos().distance_to(home) >= 4.0:
+		state = "return"
+		_t = 0.0
+		_refresh(true)
+
 ## Flames / ice crystals at the feet while burning / slowed (vfx_workbench strips).
 func _update_status_fx() -> void:
 	if not is_inside_tree(): return
@@ -190,13 +262,20 @@ func _update_status_fx() -> void:
 func _toggle_fx(fx: FxSprite, fx_name: String, on: bool) -> FxSprite:
 	if on and fx == null:
 		fx = FxSprite.make(fx_name, true)
-		fx.scale = Vector2.ONE * STATUS_FX_SCALE   # the effects were drawn small; match the 80 px wolf
+		fx.scale = Vector2.ONE * STATUS_FX_SCALE * size_scale()   # drawn small; match the (scaled) body
 		add_child(fx)
 		fx.play(fx_name)
 	elif not on and fx != null:
 		fx.queue_free()
 		fx = null
 	return fx
+
+## Sound spec (receive_hit): an arrow hit plays arrow_hit, a critical crit_hit instead; the monster cries
+## "hurt", or, on the killing hit, only its "die" cry (_on_died). Burn ticks are not hits: no hit sound, but a
+## burn kill still cries "die". The kind whose cries this monster uses (assets/audio/monsters/<kind>_*).
+func sound_kind() -> String:
+	var k = get("kind")
+	return String(k) if k != null else "wolf"
 
 func _on_died() -> void:
 	status.clear()
@@ -207,6 +286,7 @@ func _on_died() -> void:
 	velocity = Vector2.ZERO
 	if is_inside_tree(): shape.set_deferred("disabled", true)
 	else: shape.disabled = true
+	Sfx.play_monster(sound_kind(), "die")
 	died.emit(self)
 	_refresh(true)
 
@@ -342,7 +422,7 @@ func _chase(delta: float) -> void:
 	if _no_route:
 		# no way round (hero walled in or across water): go home healed, and don't re-aggro on
 		# the same spot, so a walled-off hero can't farm the pack
-		if pack: pack.unreachable_at = _hpos()
+		if pack: pack.mark_unreachable(self, _hpos())
 		_go_home()
 		return
 	if to.length() < 1.0: to = _hpos() - _pos()

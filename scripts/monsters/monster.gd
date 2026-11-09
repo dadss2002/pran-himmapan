@@ -34,7 +34,8 @@ func cfg(key: String):
 	return v
 
 func n(key: String) -> float:
-	return float(cfg(key))
+	var v := float(cfg(key))
+	return v * size_scale() if key in BODY_KEYS else v
 
 func temper() -> String:
 	return String(cfg("temper"))
@@ -200,7 +201,7 @@ func _chase_ring(delta: float) -> void:
 		return
 	var aim := _steer(_hpos(), delta) - _pos()
 	if _no_route:
-		if pack: pack.unreachable_at = _hpos()
+		if pack: pack.mark_unreachable(self, _hpos())
 		_go_home()
 		return
 	_move(aim.normalized() * n("run"), minf(delta, aim.length() / maxf(n("run"), 1.0)))
@@ -217,7 +218,7 @@ func _chase_throw(delta: float) -> void:
 	if d > n("keep_max"):
 		var aim := _steer(_hpos(), delta) - _pos()
 		if _no_route:
-			if pack: pack.unreachable_at = _hpos()
+			if pack: pack.mark_unreachable(self, _hpos())
 			_go_home()
 			return
 		_move(aim.normalized() * n("run"), delta)
@@ -233,7 +234,7 @@ func _chase_throw(delta: float) -> void:
 func _throw() -> void:
 	if not is_inside_tree(): return
 	var f: Node2D = FRUIT_SCENE.new()
-	f.setup(_pos() + Vector2(0, -16), _hpos() + Vector2(0, -14), n("fruit_speed"), n("fruit_range"),
+	f.setup(_pos() + Vector2(0, -16) * size_scale(), _hpos() + Vector2(0, -14), n("fruit_speed"), n("fruit_range"),
 		stats().atk, n("throw_mult"), _hero, pack.blocked if pack else Callable())
 	get_parent().add_child(f)
 

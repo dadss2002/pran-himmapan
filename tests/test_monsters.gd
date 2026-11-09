@@ -212,33 +212,57 @@ func test_deer_drops_double_gold():
 	return "" if t == "kongkoi" else "kongkoi loot table %s" % t
 
 ## Spec M3g §2: which monsters live in which room (kind: count, lowest level); 2 kinds, 15-25 each.
+## M4b: w1, e2, w3 were removed; their sets live on in e0's monster_sets (level order w1, e0, e2, w3).
 func test_rooms_hold_the_spec_monsters():
 	var want := {
 		"c1r1": {"deer": 8, "boar": 8}, "c1r0": {"wolf": 10, "deer": 6}, "c0r1": {"boar": 10, "deer": 6},
-		"w1": {"boar": 10, "wolf": 8}, "c0r0": {"boar": 10, "macaque": 6}, "c2r1": {"boar": 10, "macaque": 8},
+		"c0r0": {"boar": 10, "macaque": 6}, "c2r1": {"boar": 10, "macaque": 8},
 		"c2r2": {"wolf": 10, "macaque": 6}, "c2r0": {"deer": 8, "macaque": 8}, "c0r2": {"shroom": 10, "viper": 6},
-		"e0": {"wolf": 12, "macaque": 8}, "c1r2": {"wolf": 12, "shroom": 8}, "e2": {"shroom": 12, "wolf": 10},
+		"e0": {"wolf": 12, "macaque": 8}, "c1r2": {"wolf": 12, "shroom": 8},
 		"c0r3": {"viper": 10, "kongkoi": 6}, "c1r3": {"viper": 10, "shroom": 10},
-		"c2r3": {"kongkoi": 10, "viper": 8}, "w3": {"kongkoi": 12, "macaque": 8},
+		"c2r3": {"kongkoi": 10, "viper": 8},
+		# M4d addendum (2026-11-08): the crossroads; their level comes from the session layout only
+		"x1": {"wolf": 10, "boar": 8}, "x2": {"macaque": 10, "kongkoi": 8}, "x3": {"shroom": 10, "viper": 8},
 	}
-	var lv := {"c1r1": 1, "c1r0": 1, "c0r1": 2, "w1": 2, "c0r0": 3, "c2r1": 3, "c2r2": 3, "c2r0": 4,
-		"c0r2": 4, "e0": 4, "c1r2": 5, "e2": 6, "c0r3": 7, "c1r3": 8, "c2r3": 9, "w3": 8}
+	var lv := {"c1r1": 1, "c1r0": 1, "c0r1": 2, "c0r0": 3, "c2r1": 3, "c2r2": 3, "c2r0": 4,
+		"c0r2": 4, "e0": 4, "c1r2": 5, "c0r3": 7, "c1r3": 8, "c2r3": 9}
+	var sets_want := [[{"boar": 10, "wolf": 8}, 2], [{"wolf": 12, "macaque": 8}, 4],
+		[{"shroom": 12, "wolf": 10}, 6], [{"kongkoi": 12, "macaque": 8}, 8]]
 	var rooms := RoomSet.open()
+	for id in rooms.ids():
+		if not want.has(id): return "room %s not in the spec" % id
 	for id in want:
-		var got := {}
-		var low := 99
-		var high := 0
-		var total := 0
-		for m in rooms.room(id).get("monsters", []):
-			got[m.kind] = got.get(m.kind, 0) + int(m.count)
-			total += int(m.count)
-			low = mini(low, int(m.level))
-			high = maxi(high, int(m.level))
-			if int(m.count) > 6: return "%s has a group of %d (max 6)" % [id, m.count]
-		if got != want[id]: return "%s has %s (spec %s)" % [id, got, want[id]]
-		if total < 15 or total > 25: return "%s has %d monsters (15-25)" % [id, total]
-		if low != lv[id]: return "%s lowest level %d (spec %d)" % [id, low, lv[id]]
-		if (id == "c2r3" or id == "w3") and high != 10: return "%s has no Lv10 kongkoi" % id
+		if not rooms.has(id): return "%s missing" % id
+		var list: Array = rooms.room(id).get("monsters", [])
+		# x rooms: no +1 group (both kinds share one base level), so every group spawns at the layout level
+		var base := int(list[0].level) if id.begins_with("x") and not list.is_empty() else int(lv.get(id, 0))
+		var e := _check_list(id, list, want[id], base, id == "c2r3")
+		if e != "": return e
+		if id.begins_with("x"):
+			for m in list:
+				if int(m.level) != base: return "%s %s base Lv%d, first group Lv%d (want one level)" % [id, m.kind, m.level, base]
+	var sets: Array = rooms.room("e0").get("monster_sets", [])
+	if sets.size() != 4: return "e0 has %d monster sets (spec 4: w1, e0, e2, w3)" % sets.size()
+	for i in 4:
+		var e := _check_list("e0 set %d" % i, sets[i], sets_want[i][0], sets_want[i][1], i == 3)
+		if e != "": return e
+	return ""
+
+func _check_list(id: String, list: Array, want: Dictionary, lv: int, lv10: bool) -> String:
+	var got := {}
+	var low := 99
+	var high := 0
+	var total := 0
+	for m in list:
+		got[m.kind] = got.get(m.kind, 0) + int(m.count)
+		total += int(m.count)
+		low = mini(low, int(m.level))
+		high = maxi(high, int(m.level))
+		if int(m.count) > 6: return "%s has a group of %d (max 6)" % [id, m.count]
+	if got != want: return "%s has %s (spec %s)" % [id, got, want]
+	if total < 15 or total > 25: return "%s has %d monsters (15-25)" % [id, total]
+	if low != lv: return "%s lowest level %d (spec %d)" % [id, low, lv]
+	if lv10 and high != 10: return "%s has no Lv10 kongkoi" % id
 	return ""
 
 ## M3g §1: respawn 9 s; gold and drop chances x0.5 per kill.
@@ -362,18 +386,232 @@ func test_group_calm_during_fade():
 	return "" if after != "idle" else "wolf never noticed the hero after the fade"
 
 ## Review fix: no group that attacks first has its home within its aggro range of a warp arrival.
+## M4d addendum 2: a room marked "near_arrival_ok" in data (x1, x2: hand-placed homes; monsters are calm 1 s
+## after arrival) only has to keep every group NEAR_ARRIVAL_MIN px from each arrival; addendum 3: measured for
+## every spawn point of the group's ring (test_near_arrival_spawn_points), not only the home.
+const NEAR_ARRIVAL_MIN := 48.0
 func test_no_aggressive_home_by_an_arrival():
 	var rooms := RoomSet.open()
 	var bad := []
 	for id in rooms.ids():
-		for m in rooms.room(id).get("monsters", []):
+		var near_ok := bool(rooms.room(id).get("near_arrival_ok", false))
+		var lists: Array = [rooms.room(id).get("monsters", [])]
+		lists.append_array(rooms.room(id).get("monster_sets", []))
+		for m in lists.reduce(func(acc, l): return acc + l, []):
+			if near_ok:
+				var home0 := Vector2(m.at[0], m.at[1])
+				for w in rooms.exits(id):
+					var d0 := rooms.arrival(id, w.id).distance_to(home0)
+					if d0 < NEAR_ARRIVAL_MIN: bad.append("%s %s by %s arrival: %d px (min %d)" % [id, m.kind, w.id, d0, NEAR_ARRIVAL_MIN])
+				continue
 			var k := String(m.kind)
 			var t := "aggressive" if k == "wolf" else String(Balance._lookup("monsters.%s.temper" % k))
 			if t != "aggressive" and t != "ambush": continue
 			var path := "monsters.%s.aggro" % k
 			var aggro := Balance.num(path) if Balance.has(path) else Balance.num("wolf.aggro")
 			var home := Vector2(m.at[0], m.at[1])
-			for w in rooms.room(id).warps:
+			for w in rooms.exits(id):           # M4d: every painted exit (any may be a warp this session)
 				var d := rooms.arrival(id, w.id).distance_to(home)
 				if d <= aggro: bad.append("%s %s by %s arrival: %d px (aggro %d)" % [id, k, w.id, d, aggro])
 	return "" if bad.is_empty() else ", ".join(bad)
+
+## M4d addendum 3: in a near_arrival_ok room (x1, x2) every spawn point of every group (PaintedLayout.ring,
+## radius wolf.pack_ring) is at least NEAR_ARRIVAL_MIN px from every arrival (review: an x2 macaque point was 45).
+func test_near_arrival_spawn_points():
+	var rooms := RoomSet.open()
+	var bad := []
+	var checked := 0
+	for id in rooms.ids():
+		if not bool(rooms.room(id).get("near_arrival_ok", false)): continue
+		var lists: Array = [rooms.room(id).get("monsters", [])]
+		lists.append_array(rooms.room(id).get("monster_sets", []))
+		for list in lists:
+			for m in list:
+				for q in PaintedLayout.ring(Vector2(m.at[0], m.at[1]), int(m.count)):
+					checked += 1
+					for w in rooms.exits(id):
+						var d := rooms.arrival(id, w.id).distance_to(q)
+						if d < NEAR_ARRIVAL_MIN:
+							bad.append("%s %s x%d at %s: spawn point %s is %.1f px from the %s arrival" % [id, m.kind, m.count, m.at, q.round(), d, w.id])
+	if checked < 30: return "only %d spawn points checked (x1 and x2 should give 36)" % checked
+	return "" if bad.is_empty() else ", ".join(bad)
+
+## Review fix (M4d addendum 2, x2): its monsters spawn on the grass round the rise, not on the dirt paths:
+## no x2 spawn point has more than a quarter of the 7x7 pixels round it in path-dirt colours.
+func test_x2_spawn_points_on_grass():
+	var img := Image.load_from_file(ProjectSettings.globalize_path("res://assets/map/painted/raw/x2.png"))
+	if img == null or img.is_empty(): return "x2.png did not load"
+	var rooms := RoomSet.open()
+	var bad := []
+	for m in rooms.room("x2").monsters:
+		for q in PaintedLayout.ring(Vector2(m.at[0], m.at[1]), int(m.count)):
+			var p: Vector2 = q
+			var dirt := 0
+			for dy in range(-3, 4):
+				for dx in range(-3, 4):
+					if _is_path_dirt(img.get_pixel(int(p.x) + dx, int(p.y) + dy)): dirt += 1
+			if dirt > 12: bad.append("%s at %s: spawn point %s on the path (%d/49 dirt pixels)" % [m.kind, m.at, p.round(), dirt])
+	return "" if bad.is_empty() else ", ".join(bad)
+
+## The painted dirt path's colours (light/dark brown): hue 15-46 deg, saturation 0.18-0.6, value >= 0.33.
+func _is_path_dirt(c: Color) -> bool:
+	var h := c.h * 360.0
+	return h >= 15.0 and h <= 46.0 and c.s >= 0.18 and c.s <= 0.6 and c.v >= 0.33
+
+## M4d addendum 2: every monster spawn point (each group's spawn ring, PaintedLayout.ring) is on open ground
+## (a hero-sized body fits, and it can be walked to from the room's spawn) in every room, e0's sets included.
+func test_every_spawn_ring_on_open_ground():
+	var rooms := RoomSet.open()
+	var bad := []
+	for id in rooms.ids():
+		var l := rooms.layout(id)
+		var open := _open_from(l, l.hero_spawn)
+		var lists: Array = [rooms.room(id).get("monsters", [])]
+		lists.append_array(rooms.room(id).get("monster_sets", []))
+		for list in lists:
+			for m in list:
+				for q in PaintedLayout.ring(Vector2(m.at[0], m.at[1]), int(m.count)):
+					var p: Vector2 = q
+					var c := Vector2i(int(p.x) / l.cell, int(p.y) / l.cell)
+					if p.x < 0 or p.y < 0 or not open.has(c):
+						bad.append("%s %s x%d at %s: spawn point %s" % [id, m.kind, m.count, m.at, p.round()])
+	return "" if bad.is_empty() else ", ".join(bad)
+
+## Cells a hero-sized body can walk to from `from` (4-way over PaintedLayout.roomy cells).
+func _open_from(l: PaintedLayout, from: Vector2) -> Dictionary:
+	var start := Vector2i(int(from.x) / l.cell, int(from.y) / l.cell)
+	var seen := {}
+	if not l.roomy(start.x, start.y): return seen
+	seen[start] = true
+	var todo: Array[Vector2i] = [start]
+	while not todo.is_empty():
+		var c: Vector2i = todo.pop_back()
+		for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = c + o
+			if seen.has(n) or n.x < 0 or n.y < 0 or n.x >= l.cols or n.y >= l.rows or not l.roomy(n.x, n.y): continue
+			seen[n] = true
+			todo.append(n)
+	return seen
+
+## M4d addendum 2: x1's groups sit in the four corners of the meadow and x2's on the grass around the rise,
+## spread out (no two homes closer than ~90 px) and off the middle of the room (the crossing / the plateau).
+func test_x1_x2_groups_spread():
+	var rooms := RoomSet.open()
+	for id in ["x1", "x2"]:
+		var ms: Array = rooms.room(id).get("monsters", [])
+		if ms.size() != 4: return "%s has %d groups (want 4)" % [id, ms.size()]
+		var mid := rooms.layout(id).size_px() / 2.0
+		var quads := {}
+		for i in ms.size():
+			var a := Vector2(ms[i].at[0], ms[i].at[1])
+			if a.distance_to(mid) < 100.0: return "%s %s home %s is in the middle of the room" % [id, ms[i].kind, a]
+			quads[Vector2i(signi(int(a.x - mid.x)), signi(int(a.y - mid.y)))] = true
+			for j in range(i + 1, ms.size()):
+				var d := a.distance_to(Vector2(ms[j].at[0], ms[j].at[1]))
+				if d < 88.0: return "%s homes %s and %s only %d px apart" % [id, a, ms[j].at, d]
+		if id == "x1" and quads.size() != 4: return "x1 groups use %d corners of the meadow (want 4)" % quads.size()
+	return ""
+
+## M4d addendum 4: every monster x0.85 (balance "monster_scale"): sprite, collision box, hurt point / arrow
+## radius, body-centred reach (bite / bite hit / lunge hit / ring / mist radius) and the elite tag; aggro,
+## leash, wander, speeds, lunge distance and throw range unchanged.
+func test_monsters_scaled_085():
+	if Balance.num("monster_scale") != 0.85: return "monster_scale %s (spec 0.85)" % Balance.num("monster_scale")
+	var world: Node2D = await _world()
+	var r := ""
+	for k in ["wolf"] + Array(Monster.KINDS):
+		var p := _pack(world, k, Vector2(300, 300), 3, 1)
+		await tree.physics_frame
+		var m: Wolf = p.wolves[0]
+		m.set_elite(true)
+		var raw := func(key: String) -> float:
+			var path := "monsters.%s.%s" % [k, key]
+			return Balance.num(path) if k != "wolf" and Balance.has(path) else Balance.num("wolf." + key)
+		var box: Vector2 = (m.shape.shape as RectangleShape2D).size
+		if not box.is_equal_approx(Vector2(22, 12) * 0.85): r = "%s collision box %s (want 0.85 x 22x12)" % [k, box]
+		elif not m.shape.position.is_equal_approx(Vector2(0, -5) * 0.85): r = "%s box offset %s" % [k, m.shape.position]
+		elif not m.body.scale.is_equal_approx(Vector2(0.85, 0.85)): r = "%s sprite scale %s" % [k, m.body.scale]
+		elif not (m.hurt_point() - m.global_position).is_equal_approx(Vector2(0, -14) * 0.85): r = "%s hurt point %s" % [k, m.hurt_point() - m.global_position]
+		elif absf(m.hurt_radius() - Balance.num("shot.arrow_hit_radius") * 0.85) > 0.001: r = "%s arrow hit radius %s" % [k, m.hurt_radius()]
+		elif absf(m.body_width() - 22.0 * 0.85) > 0.001: r = "%s body width %s" % [k, m.body_width()]
+		elif not m._tag.position.is_equal_approx(Vector2(0, -52) * 0.85): r = "%s elite tag at %s" % [k, m._tag.position]
+		if r == "":
+			for key in Wolf.BODY_KEYS:
+				var want: float = raw.call(key) * 0.85 if Balance.has("wolf." + key) or Balance.has("monsters.%s.%s" % [k, key]) else 0.0
+				if Balance.has("wolf." + key) or Balance.has("monsters.%s.%s" % [k, key]):
+					if absf(m.n(key) - want) > 0.001: r = "%s %s %.2f (want 0.85 x %.1f)" % [k, key, m.n(key), raw.call(key)]
+			for key in ["aggro", "leash", "wander_speed", "wander_radius", "run", "lunge_distance", "lunge_min", "lunge_max", "fruit_range", "fruit_speed", "keep_min", "keep_max", "flee_speed", "chase_slot"]:
+				if Balance.has("wolf." + key) or Balance.has("monsters.%s.%s" % [k, key]):
+					if absf(m.n(key) - raw.call(key)) > 0.001: r = "%s %s changed to %.2f (want %.1f)" % [k, key, m.n(key), raw.call(key)]
+		p.free()
+		if r != "": break
+	_done(world)
+	return r
+
+## Addendum 4: a wolf's bite now reaches 0.85 x bite_hit_range: a hero just past it is not bitten.
+func test_scaled_bite_reach_in_tree():
+	Combat.rng.seed = 3
+	var world: Node2D = await _world()
+	var reach := Balance.num("wolf.bite_hit_range") * 0.85
+	var h := _hero(world, Vector2(300, 300))
+	var p := _pack(world, "wolf", Vector2(300, 300), 1, 1)
+	await tree.physics_frame
+	var w: Wolf = p.wolves[0]
+	w.global_position = Vector2(300 - Balance.num("wolf.bite_range") * 0.85 + 1.0, 300)
+	w.start_chase(h)
+	var hp0 := h.health.hp
+	await _tick(p, h, 2)
+	var st := w.state
+	h.global_position = Vector2(w.global_position.x + reach + 2.0, 300)   # step just out of the smaller reach
+	await _tick(p, h, 30)
+	var lost := hp0 - h.health.hp
+	_done(world)
+	if st != "bite": return "wolf %s inside its 0.85 bite range" % st
+	return "" if lost == 0 else "bitten from %.1f px (reach %.1f)" % [reach + 2.0, reach]
+
+## Addendum 4: two monsters pushed onto one spot move apart within 1 s, no faster than monster_push.speed,
+## without crossing a wall and without moving the hero standing on them.
+func test_monsters_push_apart_not_through_walls():
+	if Balance.num("monster_push.speed") != 40.0: return "push speed %s (spec <= 40)" % Balance.num("monster_push.speed")
+	var world: Node2D = await _world()
+	var wall := StaticBody2D.new()
+	var cs := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(20, 200)
+	cs.shape = rect
+	wall.add_child(cs)
+	wall.position = Vector2(318, 300)          # left face at x = 308
+	world.add_child(wall)
+	var h := _hero(world, Vector2(300, 300))
+	var a := _pack(world, "boar", Vector2(300, 300), 1, 1)    # passive: they stay idle by the hero
+	var b := _pack(world, "boar", Vector2(300, 300), 1, 1)    # two packs: pushing works across packs too
+	await tree.physics_frame
+	var ma: Wolf = a.wolves[0]
+	var mb: Wolf = b.wolves[0]
+	ma.global_position = Vector2(296, 300)     # box edges 9.35 px from the centre: clear of the wall face
+	mb.global_position = Vector2(296.5, 300)
+	ma._wander_to = ma.global_position
+	mb._wander_to = mb.global_position
+	var fast := [0.0]
+	var crossed := [false]
+	var prev := [ma.global_position, mb.global_position]
+	var bw := ma.body_width()
+	var apart_at := [-1]
+	for f in 60:
+		await tree.physics_frame
+		h.step(DT, Vector2.ZERO)
+		a.step_all(DT, h)
+		b.step_all(DT, h)
+		ma._wander_to = ma.global_position          # keep them from wandering: only the push moves them
+		mb._wander_to = mb.global_position
+		fast[0] = maxf(fast[0], maxf(ma.global_position.distance_to(prev[0]), mb.global_position.distance_to(prev[1])) / DT)
+		prev = [ma.global_position, mb.global_position]
+		if mb.global_position.x + bw * 0.5 > 308.5 or ma.global_position.x + bw * 0.5 > 308.5: crossed[0] = true
+		if apart_at[0] < 0 and ma.global_position.distance_to(mb.global_position) >= bw - 0.5: apart_at[0] = f
+	var hero_at := h.global_position
+	var d := ma.global_position.distance_to(mb.global_position)
+	_done(world)
+	if apart_at[0] < 0: return "still %.1f px apart after 1 s (body width %.1f)" % [d, bw]
+	if fast[0] > 40.0 * 1.05: return "pushed at %.1f px/s (max 40)" % fast[0]
+	if crossed[0]: return "a monster went into the wall"
+	return "" if hero_at == Vector2(300, 300) else "the hero was moved to %s" % hero_at

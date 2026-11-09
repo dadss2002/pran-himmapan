@@ -5,7 +5,7 @@ const TMP := "user://test_save.json"
 const TMP_BAD := "user://test_save.bad.json"
 
 func _cleanup() -> void:
-	for p in [TMP, TMP_BAD]:
+	for p in [TMP, SaveGame.marker_path(TMP)] + _bads():     # no marker: hand-written old files count as pre-signing
 		if FileAccess.file_exists(p): DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 
 func test_stacking_and_overflow():
@@ -63,7 +63,7 @@ func test_save_v2_roundtrip_with_items():
 	var inv := Inventory.new()
 	inv.add_item({"base": "ring", "rarity": "epic", "level": 3, "opts": [{"k": "crit", "v": 0.012}, {"k": "hp", "v": 9}, {"k": "mp_regen", "v": 0.4}]})
 	var eq := {"bow": Gear.new_item("bow_bamboo"), "armor": null, "ring": null, "necklace": Gear.new_item("necklace")}
-	SaveGame.save({"level": 3, "exp": 5, "inventory": inv.to_dict(), "equipped": eq}, TMP)
+	_save_signed({"level": 3, "exp": 5, "inventory": inv.to_dict(), "equipped": eq}, TMP)
 	var s := SaveGame.load_or_new(TMP)
 	_cleanup()
 	if s.version != SaveGame.VERSION: return "version %s" % s.version
@@ -86,7 +86,7 @@ func test_v1_save_migrates_to_start_kit():
 func test_bad_item_in_save_starts_fresh():
 	_cleanup()
 	var eq := {"bow": {"base": "armor_trainee", "rarity": "common", "level": 1, "opts": []}, "armor": null, "ring": null, "necklace": null}
-	SaveGame.save({"level": 3, "exp": 0, "inventory": Inventory.new().to_dict(), "equipped": eq}, TMP)
+	_save_signed({"level": 3, "exp": 0, "inventory": Inventory.new().to_dict(), "equipped": eq}, TMP)
 	var s := SaveGame.load_or_new(TMP)
 	var kept := FileAccess.file_exists(TMP_BAD)
 	_cleanup()
@@ -108,16 +108,19 @@ func test_new_game_has_start_kit():
 	inv.from_dict(s.inventory)
 	return "" if inv.count_of("potion_hp") == 5 and inv.count_of("potion_mp") == 3 else "start kit %s" % [inv.to_dict()]
 
-func test_load_caps_exp_below_next_level():
+## Save hardening Q3 a (owner 2026-11-09): EXP at or past the next level fails the whole save (it used to be
+## clamped to next - 1).
+func test_load_refuses_exp_past_next_level():
 	_cleanup()
-	SaveGame.save({"level": 2, "exp": 99999, "inventory": Inventory.new().to_dict()}, TMP)
+	_save_signed({"level": 2, "exp": 99999, "inventory": Inventory.new().to_dict()}, TMP)
 	var s := SaveGame.load_or_new(TMP)
+	var kept := FileAccess.file_exists(TMP_BAD)
 	_cleanup()
-	return "" if s.level == 2 and s.exp == Progression.exp_to_next(2) - 1 else "loaded %s" % s
+	return "" if s.level == 1 and s.exp == 0 and kept else "EXP 99999 at Lv2 should be refused, loaded %s" % s
 
 func test_load_bad_slots_starts_fresh():
 	_cleanup()
-	SaveGame.save({"level": 3, "exp": 0, "inventory": {"gold": 5, "slots": [{"id": 7}, "junk"]}}, TMP)
+	_save_signed({"level": 3, "exp": 0, "inventory": {"gold": 5, "slots": [{"id": 7}, "junk"]}}, TMP)
 	var s := SaveGame.load_or_new(TMP)
 	var kept := FileAccess.file_exists(TMP_BAD)
 	_cleanup()
@@ -126,7 +129,7 @@ func test_load_bad_slots_starts_fresh():
 
 func _save_with(eq: Dictionary, slots: Array) -> Dictionary:
 	_cleanup()
-	SaveGame.save({"level": 3, "exp": 0, "inventory": {"gold": 0, "slots": slots}, "equipped": eq}, TMP)
+	_save_signed({"level": 3, "exp": 0, "inventory": {"gold": 0, "slots": slots}, "equipped": eq}, TMP)
 	var s := SaveGame.load_or_new(TMP)
 	_cleanup()
 	return s
@@ -139,14 +142,17 @@ func test_save_needs_a_bow_and_item_entries():
 	elif _save_with(SaveGame.start_equipped(), [{"id": "ring", "count": 5}]).level != 1: r = "gear id without item data should be rejected"
 	return r
 
-func test_save_clamps_item_level_and_options():
+## Save hardening Q3 a (owner 2026-11-09): an item level above the highest drop level or an option above its Lv10
+## top fails the whole save (they used to be clamped to 10 / 0.05).
+func test_save_refuses_item_level_and_options_out_of_range():
 	var eq := SaveGame.start_equipped()
-	eq.ring = {"base": "ring", "rarity": "good", "level": 99, "opts": [{"k": "crit", "v": 9.0}]}
-	var s := _save_with(eq, [])
+	eq.ring = {"base": "ring", "rarity": "good", "level": 99, "opts": [{"k": "crit", "v": 0.03}]}
 	var r := ""
-	if s.level != 3: r = "should load, got %s" % s
-	elif s.equipped.ring.level != 10: r = "ring level %s, want clamped to 10" % s.equipped.ring.level
-	elif absf(float(s.equipped.ring.opts[0].v) - 0.05) > 1e-6: r = "crit %.3f, want clamped to the Lv10 max 0.05" % s.equipped.ring.opts[0].v
+	if _save_with(eq, []).level != 1: r = "ring level 99 should be refused"
+	eq.ring = {"base": "ring", "rarity": "good", "level": 10, "opts": [{"k": "crit", "v": 9.0}]}
+	if r == "" and _save_with(eq, []).level != 1: r = "crit 9.0 should be refused"
+	eq.ring = {"base": "ring", "rarity": "good", "level": 10, "opts": [{"k": "crit", "v": 0.05}]}
+	if r == "" and _save_with(eq, []).level != 3: r = "a Lv10 ring with crit at its top 0.05 should load"
 	eq.ring = {"base": "ring", "rarity": "rare", "level": 3, "opts": [{"k": "hp", "v": 5}, {"k": "hp", "v": 5}]}
 	if r == "" and _save_with(eq, []).level != 1: r = "duplicate option keys should be rejected"
 	return r
@@ -205,11 +211,11 @@ func test_save_v3_roundtrip():
 	var eq := SaveGame.start_equipped()
 	eq.bow["plus"] = 4
 	var skills := {"piercing": [_g("multiply"), null], "spread": [null]}
-	SaveGame.save({"level": 5, "exp": 0, "inventory": inv.to_dict(), "equipped": eq, "skills": skills}, TMP)
+	_save_signed({"level": 5, "exp": 0, "inventory": inv.to_dict(), "equipped": eq, "skills": skills}, TMP)
 	var s := SaveGame.load_or_new(TMP)
 	_cleanup()
 	var r := ""
-	if s.version != 3: r = "version %s" % s.version
+	if s.version != SaveGame.VERSION: r = "version %s" % s.version
 	elif s.equipped.bow.plus != 4: r = "plus lost: %s" % s.equipped.bow
 	elif s.skills.piercing[0].type != "multiply" or s.skills.piercing[0].level != 3 or s.skills.piercing[1] != null: r = "sockets %s" % [s.skills]
 	else:
@@ -245,9 +251,29 @@ func test_bad_gem_rejected():
 		_cleanup()
 		var eq := SaveGame.start_equipped()
 		if c.has("plus"): eq.bow["plus"] = c.plus
-		SaveGame.save({"level": 3, "exp": 0, "inventory": {"gold": 0, "slots": c.get("inv", [])}, "equipped": eq, "skills": c.get("skills", {})}, TMP)
+		_save_signed({"level": 3, "exp": 0, "inventory": {"gold": 0, "slots": c.get("inv", [])}, "equipped": eq, "skills": c.get("skills", {})}, TMP)
 		var s := SaveGame.load_or_new(TMP)
 		var kept := FileAccess.file_exists(TMP_BAD)
 		_cleanup()
 		if s.level != 1 or not kept: return "should start fresh: %s" % [c]
 	return ""
+
+## Every refused-save copy (<name>.bad.json, <name>.bad.N.json).
+func _bads() -> Array:
+	var out := []
+	for n in SaveGame.BAD_KEEP: out.append(SaveGame.bad_path(TMP, n))
+	return out
+
+## Writes `st` signed exactly as SaveGame.save() does, but without save()'s range check (review 3b8d147 #2: save()
+## now refuses to write an out-of-range state). These tests need a signed file holding a bad value, to check that
+## load_or_new() refuses it — the same file a key holder could make (risk S9).
+func _save_signed(st: Dictionary, path: String) -> void:
+	var data := st.duplicate(true)
+	data["version"] = SaveGame.VERSION
+	if not data.has("equipped"): data["equipped"] = SaveGame.start_equipped()
+	if not data.has("skills"): data["skills"] = {}
+	var plain = JSON.parse_string(JSON.stringify(data))
+	plain["sig"] = SaveGame.signature(plain)
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(JSON.stringify(plain))
+	f.close()

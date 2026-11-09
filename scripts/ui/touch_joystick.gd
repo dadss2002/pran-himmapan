@@ -48,7 +48,12 @@ func reset() -> void:
 func alpha() -> float:
 	return ACTIVE_ALPHA if active else IDLE_ALPHA
 
+## Task 5: a touch for which this returns true never starts the joystick (the HUD sets it: a tap on the open
+## waypoint list, which may sit in the left half, must not walk the hero off the stone).
+var ignore_at: Callable
+
 func in_zone(pos: Vector2) -> bool:
+	if ignore_at.is_valid() and ignore_at.call(pos): return false
 	return pos.x < view_size.x * 0.5 and pos.y > TOP_BAR
 
 func handle_touch(index: int, pos: Vector2, pressed: bool) -> void:

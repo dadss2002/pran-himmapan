@@ -1,81 +1,12 @@
 {
- "note": "Hand data for tools/painted_rooms.py. Room-local pixels (688x384). links: room:side pairs (side = north/south/east/west); a warp sits on the open ground nearest that edge's middle, or nearest hints[side]. edits: walk/block pixel rects. monsters: kind/level/count (M3g); groups of <=6 are placed by the tool unless 'at' is given.",
+ "note": "Hand data for tools/painted_rooms.py. Room-local pixels (each room is its picture size, 512x512 since M4b). exits (M4d): the sides where the picture's path reaches the middle of the edge; the tool writes an exit point (warp spot) on the open ground nearest that edge's middle, or nearest hints[side]. Which exits are joined is decided every game session by RoomLayout (scripts/rules/room_layout.gd; its FALLBACK_LINKS are the fixed M4b links, used only when no random layout passes its checks); an exit left unjoined is a dead end with no warp. edits: walk/block pixel rects. monsters: kind/level/count (M3g); in play a forest room's groups use the level of its distance from c1r1 in the session layout (scripts/rules/room_levels.gd, M4d addendum), a group 1 level above the room's first group keeps +1, so 'level' here only marks that +1 (x1..x3 use 5 as a placeholder base); groups of <=6 are placed by the tool unless 'at' is given. name: the room's Thai name (exit labels, M4c); arena: true for a boss arena (red exit label). monster_sets (e0): the arena sets in level order (w1, e0, e2, w3 of M3f); 'monsters' is the default set. grid: the room's place on the debug sheet (c?r? rooms use their id). near_arrival_ok (M4d addendum 2; x1, x2): the room's groups are placed by hand ('at') closer to the warp arrivals than their aggro range (monsters are calm 1 s on arrival), but no spawn point nearer than 48 px (addendum 3: every point of the spawn ring, not only the home); the tool moves an 'at' home to the nearest cell whose whole spawn ring (radius wolf.pack_ring) is on open ground and, in these rooms, at least 48 px from every arrival. Monster piles (M4d follow-up 3): after tools/painted_rooms.py changes data/rooms.json (or monster aggro/temper/collision or MonsterPiles rules change), rebake data/piles_bank.json with: godot --headless --script tools/bake_piles.gd (about 1-2 min); a stale bank makes the game place piles live (slow first entry) and tests/test_monster_piles.gd fail. waypoint (M4c §2, Task 5): the waypoint stone's base point [x, y] (bottom middle of its 32x16 px footprint, x and y on the 8 px grid); the tool blocks the footprint [x-16, x+16) x [y-16, y) so the hero walks around it, and the hero's landing next to it (RoomSet.waypoint_landing: the open cell nearest [x, y+20]) counts as an arrival for monster placement (built homes here, piles in the game and bank).",
  "start": "c1r1",
- "links": [
-  [
-   "c0r0:south",
-   "c0r1:north"
-  ],
-  [
-   "c0r1:south",
-   "c0r2:north"
-  ],
-  [
-   "c0r2:south",
-   "c0r3:north"
-  ],
-  [
-   "c0r1:east",
-   "c1r1:west"
-  ],
-  [
-   "c1r0:south",
-   "c1r1:north"
-  ],
-  [
-   "c1r1:east",
-   "c2r1:west"
-  ],
-  [
-   "c2r0:south",
-   "c2r1:north"
-  ],
-  [
-   "c2r1:south",
-   "c2r2:north"
-  ],
-  [
-   "c0r2:east",
-   "c1r2:west"
-  ],
-  [
-   "c1r2:south",
-   "c1r3:north"
-  ],
-  [
-   "c1r3:east",
-   "c2r3:west"
-  ],
-  [
-   "w1:east",
-   "c0r1:west"
-  ],
-  [
-   "e0:west",
-   "c2r0:east"
-  ],
-  [
-   "w3:east",
-   "c0r3:west"
-  ],
-  [
-   "e2:west",
-   "c2r2:east"
-  ]
- ],
  "rooms": {
   "c0r0": {
-   "edits": [
-    {
-     "op": "walk",
-     "rect": [
-      372,
-      0,
-      76,
-      384
-     ],
-     "why": "stone road incl. stairs"
-    }
+   "name": "ลานบ่อน้ำเก่า",
+   "exits": [
+    "east",
+    "south"
    ],
    "monsters": [
     {
@@ -88,20 +19,67 @@
      "level": 3,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      128,
+      128,
+      72,
+      54
+     ],
+     "why": "well"
+    },
+    {
+     "op": "block",
+     "rect": [
+      322,
+      128,
+      72,
+      66
+     ],
+     "why": "fallen stone lantern"
+    },
+    {
+     "op": "block",
+     "rect": [
+      113,
+      300,
+      108,
+      66
+     ],
+     "why": "low ruin wall"
+    },
+    {
+     "op": "block",
+     "rect": [
+      24,
+      268,
+      90,
+      82
+     ],
+     "why": "rocks and stumps, west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      70,
+      205,
+      40,
+      45
+     ],
+     "why": "stone wall stub, west"
+    }
    ]
   },
   "c0r1": {
-   "edits": [
-    {
-     "op": "walk",
-     "rect": [
-      372,
-      0,
-      76,
-      384
-     ],
-     "why": "stone road incl. stairs"
-    }
+   "name": "ทางหินโบราณ",
+   "exits": [
+    "north",
+    "east",
+    "south",
+    "west"
    ],
    "monsters": [
     {
@@ -114,28 +92,68 @@
      "level": 2,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      342,
+      284,
+      40,
+      36
+     ],
+     "why": "boulder"
+    },
+    {
+     "op": "block",
+     "rect": [
+      316,
+      326,
+      60,
+      44
+     ],
+     "why": "boulder"
+    },
+    {
+     "op": "block",
+     "rect": [
+      86,
+      302,
+      38,
+      42
+     ],
+     "why": "rock"
+    },
+    {
+     "op": "block",
+     "rect": [
+      136,
+      316,
+      44,
+      38
+     ],
+     "why": "fallen stone"
+    }
    ]
   },
   "c0r2": {
+   "name": "บึงในป่า",
+   "waypoint": [
+    384,
+    296
+   ],
+   "exits": [
+    "north",
+    "east",
+    "south"
+   ],
    "fx": [
     {
      "id": "water_ripple",
      "at": [
-      212,
-      272
+      60,
+      260
      ]
-    }
-   ],
-   "edits": [
-    {
-     "op": "walk",
-     "rect": [
-      372,
-      0,
-      76,
-      384
-     ],
-     "why": "stone road incl. stairs"
     }
    ],
    "monsters": [
@@ -152,6 +170,11 @@
    ]
   },
   "c0r3": {
+   "name": "ฐานวิหารร้าง",
+   "exits": [
+    "north",
+    "west"
+   ],
    "monsters": [
     {
      "kind": "viper",
@@ -163,9 +186,85 @@
      "level": 7,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      290,
+      106,
+      32,
+      40
+     ],
+     "why": "statue"
+    },
+    {
+     "op": "block",
+     "rect": [
+      382,
+      160,
+      30,
+      40
+     ],
+     "why": "statue"
+    },
+    {
+     "op": "block",
+     "rect": [
+      400,
+      300,
+      46,
+      52
+     ],
+     "why": "rock pile"
+    },
+    {
+     "op": "block",
+     "rect": [
+      312,
+      76,
+      16,
+      92
+     ],
+     "why": "temple platform rim, west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      328,
+      72,
+      130,
+      14
+     ],
+     "why": "temple platform rim, north"
+    },
+    {
+     "op": "block",
+     "rect": [
+      444,
+      86,
+      16,
+      100
+     ],
+     "why": "temple platform rim, east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      280,
+      78,
+      40,
+      24
+     ],
+     "why": "grass pocket by the platform"
+    }
    ]
   },
   "c1r0": {
+   "name": "ลานเสาหิน",
+   "exits": [
+    "south"
+   ],
    "monsters": [
     {
      "kind": "wolf",
@@ -177,12 +276,104 @@
      "level": 2,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      196,
+      118,
+      50,
+      40
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      270,
+      118,
+      50,
+      40
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      335,
+      96,
+      50,
+      61
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      382,
+      165,
+      45,
+      62
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      100,
+      158,
+      40,
+      68
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      40,
+      380,
+      60,
+      64
+     ],
+     "why": "fallen column"
+    },
+    {
+     "op": "block",
+     "rect": [
+      90,
+      345,
+      55,
+      60
+     ],
+     "why": "fallen column"
+    },
+    {
+     "op": "block",
+     "rect": [
+      140,
+      322,
+      50,
+      45
+     ],
+     "why": "fallen column"
+    }
    ]
   },
   "c1r1": {
+   "name": "ศาลหินเริ่มต้น",
+   "waypoint": [
+    344,
+    304
+   ],
+   "exits": [
+    "north",
+    "east",
+    "west"
+   ],
    "spawn": [
-    350,
-    280
+    260,
+    373
    ],
    "monsters": [
     {
@@ -195,9 +386,126 @@
      "level": 1,
      "count": 8
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      197,
+      222,
+      16,
+      48
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      220,
+      205,
+      20,
+      38
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      244,
+      220,
+      18,
+      15
+     ],
+     "why": "stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      266,
+      194,
+      32,
+      54
+     ],
+     "why": "trilithon"
+    },
+    {
+     "op": "block",
+     "rect": [
+      296,
+      242,
+      14,
+      38
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      314,
+      215,
+      24,
+      53
+     ],
+     "why": "lantern shrine"
+    },
+    {
+     "op": "block",
+     "rect": [
+      201,
+      272,
+      20,
+      28
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      228,
+      270,
+      22,
+      40
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      272,
+      272,
+      20,
+      36
+     ],
+     "why": "standing stone"
+    },
+    {
+     "op": "block",
+     "rect": [
+      320,
+      330,
+      60,
+      45
+     ],
+     "why": "boulder"
+    },
+    {
+     "op": "block",
+     "rect": [
+      195,
+      140,
+      36,
+      30
+     ],
+     "why": "boulder"
+    }
    ]
   },
   "c1r2": {
+   "name": "ลำธารวงเห็ด",
+   "exits": [
+    "south",
+    "west"
+   ],
    "monsters": [
     {
      "kind": "wolf",
@@ -209,15 +517,62 @@
      "level": 5,
      "count": 8
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      305,
+      355,
+      95,
+      40
+     ],
+     "why": "fallen log"
+    },
+    {
+     "op": "block",
+     "rect": [
+      55,
+      335,
+      65,
+      50
+     ],
+     "why": "mossy log"
+    },
+    {
+     "op": "block",
+     "rect": [
+      10,
+      195,
+      40,
+      30
+     ],
+     "why": "log"
+    },
+    {
+     "op": "block",
+     "rect": [
+      310,
+      150,
+      60,
+      40
+     ],
+     "why": "stump and rocks"
+    }
    ]
   },
   "c1r3": {
+   "name": "หนองน้ำ",
+   "exits": [
+    "north",
+    "east"
+   ],
    "fx": [
     {
      "id": "water_ripple",
      "at": [
-      212,
-      272
+      158,
+      363
      ]
     }
    ],
@@ -235,6 +590,15 @@
    ]
   },
   "c2r0": {
+   "name": "ปรางค์ร้าง",
+   "waypoint": [
+    416,
+    216
+   ],
+   "exits": [
+    "east",
+    "south"
+   ],
    "monsters": [
     {
      "kind": "deer",
@@ -246,9 +610,91 @@
      "level": 4,
      "count": 8
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      195,
+      30,
+      130,
+      238
+     ],
+     "why": "prang"
+    },
+    {
+     "op": "block",
+     "rect": [
+      168,
+      135,
+      25,
+      65
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      338,
+      145,
+      25,
+      55
+     ],
+     "why": "stele"
+    },
+    {
+     "op": "block",
+     "rect": [
+      320,
+      195,
+      60,
+      45
+     ],
+     "why": "fallen blocks"
+    },
+    {
+     "op": "block",
+     "rect": [
+      330,
+      240,
+      20,
+      40
+     ],
+     "why": "pillar"
+    },
+    {
+     "op": "block",
+     "rect": [
+      165,
+      265,
+      40,
+      35
+     ],
+     "why": "fallen block"
+    },
+    {
+     "op": "block",
+     "rect": [
+      315,
+      330,
+      65,
+      48
+     ],
+     "why": "boulder"
+    }
    ]
   },
   "c2r1": {
+   "name": "ทางแยกขอนไม้",
+   "waypoint": [
+    176,
+    440
+   ],
+   "exits": [
+    "north",
+    "south",
+    "west"
+   ],
    "monsters": [
     {
      "kind": "boar",
@@ -260,9 +706,56 @@
      "level": 3,
      "count": 8
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      318,
+      328,
+      65,
+      45
+     ],
+     "why": "boulder"
+    },
+    {
+     "op": "block",
+     "rect": [
+      30,
+      155,
+      50,
+      40
+     ],
+     "why": "rock"
+    },
+    {
+     "op": "block",
+     "rect": [
+      288,
+      166,
+      74,
+      64
+     ],
+     "why": "hollow log, west end"
+    },
+    {
+     "op": "block",
+     "rect": [
+      436,
+      244,
+      36,
+      48
+     ],
+     "why": "rocks east of the log"
+    }
    ]
   },
   "c2r2": {
+   "name": "ป่าไผ่",
+   "exits": [
+    "north",
+    "east"
+   ],
    "monsters": [
     {
      "kind": "wolf",
@@ -274,17 +767,24 @@
      "level": 4,
      "count": 6
     }
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      290,
+      40,
+      60,
+      70
+     ],
+     "why": "shrine"
+    }
    ]
   },
   "c2r3": {
-   "fx": [
-    {
-     "id": "water_ripple",
-     "at": [
-      522,
-      178
-     ]
-    }
+   "name": "ลานหญ้ากลางป่า",
+   "exits": [
+    "west"
    ],
    "monsters": [
     {
@@ -302,33 +802,40 @@
      "level": 9,
      "count": 8
     }
-   ]
-  },
-  "w1": {
-   "grid": [
-    -1,
-    1
    ],
-   "name": "ลานหญ้าตะวันตก",
-   "monsters": [
+   "edits": [
     {
-     "kind": "boar",
-     "level": 2,
-     "count": 10
+     "op": "block",
+     "rect": [
+      342,
+      282,
+      60,
+      48
+     ],
+     "why": "dark stump"
     },
     {
-     "kind": "wolf",
-     "level": 3,
-     "count": 8
+     "op": "block",
+     "rect": [
+      316,
+      328,
+      70,
+      60
+     ],
+     "why": "mossy boulder"
     }
    ]
   },
   "e0": {
+   "name": "ลานเนินตะวันออก",
+   "exits": [
+    "west"
+   ],
+   "arena": true,
    "grid": [
     3,
     0
    ],
-   "name": "ลานเนินตะวันออก",
    "monsters": [
     {
      "kind": "wolf",
@@ -340,49 +847,597 @@
      "level": 4,
      "count": 8
     }
-   ]
-  },
-  "w3": {
-   "grid": [
-    -1,
-    3
    ],
-   "name": "ลานหินตะวันตก",
-   "monsters": [
+   "monster_sets": [
+    [
+     {
+      "kind": "boar",
+      "level": 2,
+      "count": 10
+     },
+     {
+      "kind": "wolf",
+      "level": 3,
+      "count": 8
+     }
+    ],
+    [
+     {
+      "kind": "wolf",
+      "level": 5,
+      "count": 12
+     },
+     {
+      "kind": "macaque",
+      "level": 4,
+      "count": 8
+     }
+    ],
+    [
+     {
+      "kind": "shroom",
+      "level": 6,
+      "count": 12
+     },
+     {
+      "kind": "wolf",
+      "level": 7,
+      "count": 10
+     }
+    ],
+    [
+     {
+      "kind": "kongkoi",
+      "level": 9,
+      "count": 10
+     },
+     {
+      "kind": "kongkoi",
+      "level": 10,
+      "count": 2
+     },
+     {
+      "kind": "macaque",
+      "level": 8,
+      "count": 8
+     }
+    ]
+   ],
+   "edits": [
     {
-     "kind": "kongkoi",
-     "level": 9,
-     "count": 10
+     "op": "walk",
+     "rect": [
+      180,
+      185,
+      230,
+      150
+     ],
+     "why": "scorched centre of the arena (dark ground read as blocked)"
     },
     {
-     "kind": "kongkoi",
-     "level": 10,
-     "count": 2
+     "op": "block",
+     "rect": [
+      356,
+      140,
+      92,
+      52
+     ],
+     "why": "fallen log top right"
     },
     {
-     "kind": "macaque",
-     "level": 8,
-     "count": 8
+     "op": "block",
+     "rect": [
+      74,
+      326,
+      92,
+      60
+     ],
+     "why": "fallen log bottom left"
+    },
+    {
+     "op": "block",
+     "rect": [
+      255,
+      362,
+      145,
+      48
+     ],
+     "why": "fallen log and rocks at the bottom"
     }
    ]
   },
-  "e2": {
-   "grid": [
-    3,
-    2
+  "x1": {
+   "name": "ทุ่งต้นไม้ตาย",
+   "exits": [
+    "north",
+    "east",
+    "south",
+    "west"
    ],
-   "name": "ลานป่าทึบตะวันออก",
-   "note": "art: w1 flipped and darkened (owner 2026-11-07 preferred the painted look over the composed try, data/compose/e2_try.json)",
    "monsters": [
     {
-     "kind": "shroom",
-     "level": 6,
-     "count": 12
+     "kind": "wolf",
+     "level": 5,
+     "count": 5,
+     "at": [
+      360,
+      176
+     ]
     },
     {
      "kind": "wolf",
-     "level": 7,
+     "level": 5,
+     "count": 5,
+     "at": [
+      100,
+      324
+     ]
+    },
+    {
+     "kind": "boar",
+     "level": 5,
+     "count": 4,
+     "at": [
+      136,
+      220
+     ]
+    },
+    {
+     "kind": "boar",
+     "level": 5,
+     "count": 4,
+     "at": [
+      380,
+      300
+     ]
+    }
+   ],
+   "grid": [
+    0,
+    4
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      96,
+      76,
+      84,
+      108
+     ],
+     "why": "dead tree"
+    },
+    {
+     "op": "block",
+     "rect": [
+      320,
+      326,
+      120,
+      92
+     ],
+     "why": "rock pile"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      232,
+      464,
+      56,
+      44
+     ],
+     "why": "south end of the dirt path (reddish dirt read as blocked)"
+    }
+   ],
+   "near_arrival_ok": true
+  },
+  "x2": {
+   "name": "เนินหินกลางป่า",
+   "exits": [
+    "north",
+    "east",
+    "south",
+    "west"
+   ],
+   "monsters": [
+    {
+     "kind": "macaque",
+     "level": 5,
+     "count": 5,
+     "at": [
+      76,
+      316
+     ]
+    },
+    {
+     "kind": "macaque",
+     "level": 5,
+     "count": 5,
+     "at": [
+      332,
+      388
+     ]
+    },
+    {
+     "kind": "kongkoi",
+     "level": 5,
+     "count": 4,
+     "at": [
+      244,
+      372
+     ]
+    },
+    {
+     "kind": "kongkoi",
+     "level": 5,
+     "count": 4,
+     "at": [
+      116,
+      156
+     ]
+    }
+   ],
+   "grid": [
+    1,
+    4
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      112,
+      180,
+      28,
+      110
+     ],
+     "why": "stone ring wall, west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      128,
+      150,
+      36,
+      32
+     ],
+     "why": "stone ring wall, north-west bend"
+    },
+    {
+     "op": "block",
+     "rect": [
+      112,
+      280,
+      118,
+      66
+     ],
+     "why": "stone ring wall and stump, south-west (the steps stay open)"
+    },
+    {
+     "op": "block",
+     "rect": [
+      290,
+      292,
+      118,
+      54
+     ],
+     "why": "stone ring wall and standing stone, south-east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      368,
+      160,
+      48,
+      135
+     ],
+     "why": "stone ring wall, east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      340,
+      140,
+      40,
+      30
+     ],
+     "why": "stone ring wall, north-east bend"
+    },
+    {
+     "op": "block",
+     "rect": [
+      140,
+      148,
+      70,
+      60
+     ],
+     "why": "boulders on the rise, north-west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      196,
+      122,
+      30,
+      60
+     ],
+     "why": "standing stone, north"
+    },
+    {
+     "op": "block",
+     "rect": [
+      276,
+      130,
+      100,
+      62
+     ],
+     "why": "boulders on the rise, north-east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      180,
+      244,
+      40,
+      58
+     ],
+     "why": "standing stone on the rise"
+    },
+    {
+     "op": "block",
+     "rect": [
+      292,
+      220,
+      30,
+      28
+     ],
+     "why": "round stone on the rise"
+    },
+    {
+     "op": "block",
+     "rect": [
+      148,
+      240,
+      28,
+      22
+     ],
+     "why": "rock on the rise"
+    },
+    {
+     "op": "block",
+     "rect": [
+      400,
+      302,
+      50,
+      44
+     ],
+     "why": "rocks and stump, east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      44,
+      346,
+      32,
+      28
+     ],
+     "why": "rock, south-west"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      136,
+      104,
+      48,
+      36
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      104,
+      120,
+      48,
+      40
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      84,
+      140,
+      48,
+      44
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      64,
+      168,
+      48,
+      44
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      52,
+      196,
+      48,
+      36
+     ],
+     "why": "dirt path round the rise, north-west (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      328,
+      96,
+      56,
+      40
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      368,
+      116,
+      48,
+      40
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      392,
+      144,
+      56,
+      48
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      400,
+      176,
+      56,
+      48
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      424,
+      208,
+      88,
+      56
+     ],
+     "why": "dirt path round the rise, north-east (dark dirt read as blocked)"
+    }
+   ],
+   "near_arrival_ok": true
+  },
+  "x3": {
+   "name": "สะพานไม้ข้ามลำธาร",
+   "exits": [
+    "north",
+    "east",
+    "south",
+    "west"
+   ],
+   "monsters": [
+    {
+     "kind": "shroom",
+     "level": 5,
      "count": 10
+    },
+    {
+     "kind": "viper",
+     "level": 5,
+     "count": 8
+    }
+   ],
+   "grid": [
+    2,
+    4
+   ],
+   "edits": [
+    {
+     "op": "block",
+     "rect": [
+      128,
+      236,
+      96,
+      100
+     ],
+     "why": "stream and stone bank, west of the bridge"
+    },
+    {
+     "op": "block",
+     "rect": [
+      0,
+      262,
+      128,
+      100
+     ],
+     "why": "stream and stone bank, west"
+    },
+    {
+     "op": "block",
+     "rect": [
+      116,
+      336,
+      48,
+      36
+     ],
+     "why": "rocks in the stream"
+    },
+    {
+     "op": "block",
+     "rect": [
+      288,
+      236,
+      64,
+      100
+     ],
+     "why": "stream and stone bank, east of the bridge"
+    },
+    {
+     "op": "block",
+     "rect": [
+      352,
+      252,
+      160,
+      118
+     ],
+     "why": "stream, rocks and reeds, east"
+    },
+    {
+     "op": "block",
+     "rect": [
+      208,
+      140,
+      26,
+      24
+     ],
+     "why": "rock"
+    },
+    {
+     "op": "block",
+     "rect": [
+      362,
+      132,
+      26,
+      20
+     ],
+     "why": "rock"
+    },
+    {
+     "op": "block",
+     "rect": [
+      328,
+      436,
+      30,
+      28
+     ],
+     "why": "rock"
+    },
+    {
+     "op": "walk",
+     "rect": [
+      224,
+      226,
+      64,
+      132
+     ],
+     "why": "the bridge (the only way over the stream)"
     }
    ]
   }

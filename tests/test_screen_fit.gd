@@ -13,17 +13,25 @@ func test_base_view_by_orientation():
 	return ""
 
 func test_camera_covers_the_room():
-	var room := Vector2(688, 384)
 	var cases := [
-		[Vector2(360, 779), 779.0 / 384.0],    # portrait phone: room height fills the screen
-		[Vector2(779, 360), 779.0 / 688.0],    # landscape phone: room width fills the screen
-		[Vector2(640, 360), 1.0],              # 16:9: the room is already bigger than the view
+		# M4b rooms, 512x512
+		[Vector2(512, 512), Vector2(360, 779), 779.0 / 512.0],    # portrait phone: room height fills the screen
+		[Vector2(512, 512), Vector2(779, 360), 779.0 / 512.0],    # landscape phone: room width fills the screen
+		[Vector2(512, 512), Vector2(640, 360), 1.25],             # 16:9 base view: width fills, camera scrolls up/down
+		# pre-M4b rooms, 688x384
+		[Vector2(688, 384), Vector2(360, 779), 779.0 / 384.0],
+		[Vector2(688, 384), Vector2(779, 360), 779.0 / 688.0],
+		[Vector2(688, 384), Vector2(640, 360), 1.0],              # the room is already bigger than the view
 	]
 	for c in cases:
-		var z := ScreenFit.camera_zoom(c[0], room)
-		if absf(z - c[1]) > 0.001: return "view %s zoom %.3f (want %.3f)" % [c[0], z, c[1]]
-		var seen: Vector2 = c[0] / z
-		if seen.x > room.x + 0.5 or seen.y > room.y + 0.5: return "view %s still shows %s of a %s room" % [c[0], seen, room]
+		var room: Vector2 = c[0]
+		var z := ScreenFit.camera_zoom(c[1], room)
+		if absf(z - c[2]) > 0.001: return "%s room, view %s zoom %.3f (want %.3f)" % [room, c[1], z, c[2]]
+		var seen: Vector2 = c[1] / z
+		if seen.x > room.x + 0.5 or seen.y > room.y + 0.5: return "view %s still shows %s of a %s room" % [c[1], seen, room]
+	var rs := RoomSet.open()
+	for id in rs.ids():
+		if rs.layout(id).size_px() != Vector2(512, 512): return "%s is %s, add its zoom cases" % [id, rs.layout(id).size_px()]
 	return ""
 
 func test_portrait_buttons_fit_and_leave_the_joystick_side_free():
@@ -116,7 +124,8 @@ func test_world_drawn_at_pixel_size():
 	var r := ""
 	var px: Vector2 = Vector2(g.world_vp.size)
 	var s: float = g._scale
-	if px.x > 688.0 + 1 or px.y > 384.0 + 1: r = "world view %s is bigger than a room" % px
+	var room: Vector2 = g.layout.size_px()
+	if px.x > room.x + 1 or px.y > room.y + 1: r = "world view %s is bigger than the %s room" % [px, room]
 	elif g.view.size.x < v.x - 0.5 or g.view.size.y < v.y - 0.5: r = "world picture %s does not cover the %s screen" % [g.view.size, v]
 	elif absf(g.view.size.x / px.x - s) > 0.001: r = "picture scale %.3f != cover scale %.3f" % [g.view.size.x / px.x, s]
 	elif g.hero.get_viewport() != g.world_vp: r = "the hero is not drawn in the world view"
@@ -146,3 +155,17 @@ func test_fps_meter_folds():
 	hud.queue_free()
 	if not open_text.begins_with("FPS "): return "meter shows %s" % open_text
 	return "" if folded == "FPS" else "folded meter shows %s" % folded
+
+## Owner 2026-11-08: portrait pause screens keep Safari's bottom bar clear on iPhone web only — not
+## landscape, not when opened from the home screen, not off iPhone.
+func test_bottom_inset_iphone_safari_portrait_only():
+	var cases := [[true, 1, 0, ScreenFit.IOS_BOTTOM_INSET], [false, 1, 0, 0.0], [true, 1, 1, 0.0], [true, 0, 0, 0.0]]
+	var r := ""
+	for c in cases:
+		ScreenFit.ios_override = c[1]
+		ScreenFit.standalone_override = c[2]
+		var got := ScreenFit.bottom_inset(c[0])
+		if got != c[3]: r = "portrait=%s iphone=%d home=%d: %.0f (want %.0f)" % [c[0], c[1], c[2], got, c[3]]; break
+	ScreenFit.ios_override = -1
+	ScreenFit.standalone_override = -1
+	return r

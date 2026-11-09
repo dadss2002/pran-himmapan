@@ -10,10 +10,12 @@ var slots: Array = []     # [{id, count}] or [{id, count: 1, item}]
 func _max_slots() -> int: return int(Balance.num("bag.slots"))
 func _stack() -> int: return int(Balance.num("bag.stack"))
 
-## Adds items; returns how many did NOT fit.
+## Adds items; returns how many did NOT fit. Gold always fits, but the wallet stops at save.gold_cap (owner Q4,
+## save hardening 2026-11-09): coins above it are picked up and lost, so the game never writes a save the loader
+## refuses.
 func add(id: String, count: int) -> int:
 	if id == "gold":
-		gold += count
+		gold = mini(gold + count, maxi(gold, int(Balance.num("save.gold_cap"))))
 		return 0
 	var left := count
 	for s in slots:
@@ -97,10 +99,10 @@ func to_dict() -> Dictionary:
 	return {"gold": gold, "slots": slots.duplicate(true)}
 
 func from_dict(d: Dictionary) -> void:
-	gold = int(d.get("gold", 0))
+	gold = roundi(float(d.get("gold", 0)))
 	slots = []
 	for s in d.get("slots", []):
-		var e := {"id": String(s.id), "count": int(s.count)}
+		var e := {"id": String(s.id), "count": roundi(float(s.count))}
 		if s.has("item"): e["item"] = SaveGame.clean_item(s.item)
 		if s.has("gem"): e["gem"] = SaveGame.clean_gem(s.gem)
 		slots.append(e)
