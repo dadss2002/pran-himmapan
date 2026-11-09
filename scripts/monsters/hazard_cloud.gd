@@ -2,7 +2,7 @@ extends Node2D
 ## Poison mist left where a poison mushroom died: for `time` seconds, a hero inside `radius` is
 ## poisoned (once per cloud). Task 3f review: it does not vanish in one frame. Review Minor #3 (2026-11-09): it shows
 ## at full strength for its whole `time` (it can poison until the end), then, harmless, the mist and disc fade out
-## over FADE s, the mist held on its last frame, and the cloud is freed (gameplay: radius, time and dose unchanged).
+## over FADE s, the mist held on the frame it shows then (review M1), and the cloud is freed (gameplay: radius, time and dose unchanged).
 
 const FADE := 0.3
 
@@ -53,8 +53,7 @@ func step(delta: float) -> void:
 		if time <= 0.0:
 			_fade_t = 0.0                    # harmless from now on: fade out
 			if _mist and is_instance_valid(_mist):
-				_mist.pause()
-				_mist.frame = _mist.sprite_frames.get_frame_count("poison_mist") - 1
+				_mist.pause()                # review M1: hold the frame shown now (the mist loops: no jump)
 		return
 	_fade_t += delta
 	modulate.a = clampf(1.0 - _fade_t / FADE, 0.0, 1.0)

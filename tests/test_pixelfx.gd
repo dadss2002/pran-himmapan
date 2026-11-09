@@ -597,7 +597,7 @@ func _tint_is(mat: ShaderMaterial, c: Color) -> bool:
 
 ## Review Minor #3 (2026-11-09, replaces "fades over the last FADE s of its time"): the cloud is a hazard, so it
 ## shows at full strength for as long as it can poison (its whole `time`, cloud_time); only then, harmless, it fades
-## out over HazardCloud.FADE s (mist held on its last frame) and is freed. A hero who walks in during the fade is
+## out over HazardCloud.FADE s (mist held on the frame it shows then, review M1) and is freed. A hero who walks in during the fade is
 ## not poisoned; one who walks in on the last poisonous frame is. Gameplay time and dose unchanged.
 func test_mist_full_while_poisonous_then_fades_harmless():
 	var h: Hero = load("res://scenes/hero.tscn").instantiate()
@@ -627,20 +627,25 @@ func test_mist_full_while_poisonous_then_fades_harmless():
 	b.set_physics_process(false)
 	h.global_position = Vector2(1000, 1000)
 	b.setup(Vector2(100, 100), 32.0, 2.0, 1, 3.0, h)
-	for i in 121: b.step(1.0 / 60.0)                        # 2.017 s: time is up
-	if r == "" and b.is_harmful(): r = "still harmful after its time"
-	h.global_position = Vector2(100, 100)
 	var mist: FxSprite = null
 	for ch in b.get_children():
 		if ch is FxSprite: mist = ch
+	# Review M1: the looping mist is mid-loop when the time runs out (here frame 9 of 28): the fade holds THAT frame
+	# (no jump to the last frame, and never back to frame 0).
+	if mist != null: mist.frame = 9
+	for i in 121: b.step(1.0 / 60.0)                        # 2.017 s: time is up
+	if r == "" and b.is_harmful(): r = "still harmful after its time"
+	h.global_position = Vector2(100, 100)
 	for i in 6:                                             # 0.1 s into the fade, hero inside
 		b.step(1.0 / 60.0)
 	if r == "" and h.poison_left > 0.0: r = "poisoned during the harmless fade"
 	if r == "" and (b.modulate.a <= 0.05 or b.modulate.a >= 0.95): r = "not fading after its time (alpha %.2f)" % b.modulate.a
 	if r == "" and b.is_queued_for_deletion(): r = "cloud freed before its fade"
-	if r == "" and mist != null:
-		var last := mist.sprite_frames.get_frame_count("poison_mist") - 1
-		if mist.is_playing() or mist.frame != last: r = "mist not held on its last frame in the fade (frame %d of %d, playing %s)" % [mist.frame, last, mist.is_playing()]
+	if r == "" and mist == null: r = "setup: no mist sprite"
+	if r == "" and (mist.is_playing() or mist.frame != 9): r = "mist not held on the frame shown when the fade began (frame %d, want 9; playing %s)" % [mist.frame, mist.is_playing()]
+	if r == "":                                             # a paused sprite stays put while the scene runs
+		for i in 3: await tree.process_frame
+		if mist.frame != 9: r = "held mist frame moved to %d during the fade" % mist.frame
 	for i in int(ceil(fade * 60.0)) + 1: b.step(1.0 / 60.0)
 	if r == "" and not b.is_queued_for_deletion(): r = "cloud not freed after time + FADE"
 	if r == "" and h.poison_left > 0.0: r = "poisoned during the harmless fade"
@@ -772,39 +777,58 @@ func _pose(k: String) -> String:
 func _luma(c: Color) -> float:
 	return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
 
-## Owner (after f9058ce): a frozen monster turns a brighter, whiter ice so the already-blue ice wolf still reads frozen
-## ("มอนที่ติดแข็งให้สว่างขาวเย็นกว่าเดิม"); outlines stay dark. On the wolf's own sprite: the frozen mean colour is far
-## from the plain one (distance >= 0.3), clearly lighter (+0.15 luma) and whiter (saturation down >= 0.15); on every
-## monster no outline pixel changes and frost reads ice (pale: sat <= 0.2, light: luma up >= 0.15).
-func test_frost_tint_reads_on_the_ice_wolf():
-	var s := _tint_stats(_pose("wolf"), Wolf.FROST_TINT, Wolf.FROST_AMOUNT)
-	var a: Color = s.before
-	var b: Color = s.after
-	var d := Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
-	if d < 0.3: return "frozen ice wolf mean %s vs plain %s: distance %.2f (want >= 0.3)" % [b.to_html(false), a.to_html(false), d]
-	if _luma(b) - _luma(a) < 0.15: return "frozen ice wolf only %.2f lighter" % (_luma(b) - _luma(a))
-	if a.s - b.s < 0.15: return "frozen ice wolf not whiter (sat %.2f -> %.2f)" % [a.s, b.s]
-	for k in ["boar", "deer", "kongkoi", "macaque", "shroom", "viper"]:
+const MONSTER_KINDS := ["wolf", "boar", "deer", "kongkoi", "macaque", "shroom", "viper"]
+
+## Owner 2026-11-09 (B23 fixed, true colours): frozen reads as ice on EVERY monster, the dark ones (boar) included:
+## bluer ice, not grey stone ("ให้มอนสีเข้มออกฟ้ามากขึ้น"). Every monster's frozen mean colour is ice-blue (hue
+## 190-210 degrees, saturation >= 0.28: a grey-stone frost (sat ~0.1) fails) and lighter than the plain monster
+## (luma up >= 0.15). The already-blue ice wolf (assets/wolf) still clearly changes: mean colour distance >= 0.25 and
+## luma up >= 0.15 (was 0.3 + "whiter" before B23: its plain true colours are much lighter, luma 0.67 vs 0.49 squared,
+## and the owner now wants ice bluer, not whiter). Outlines stay dark: no outline pixel changes under either tint.
+func test_frost_tint_reads_as_ice_on_every_monster():
+	for k in MONSTER_KINDS:
 		var m := _tint_stats(_pose(k), Wolf.FROST_TINT, Wolf.FROST_AMOUNT)
-		var mb: Color = m.after
-		if mb.s > 0.2 or _luma(mb) - _luma(m.before) < 0.15: return "frozen %s mean %s does not read ice" % [k, mb.to_html(false)]
-	for k in ["wolf", "boar", "deer", "kongkoi", "macaque", "shroom", "viper"]:
+		var a: Color = m.before
+		var b: Color = m.after
+		if b.h * 360.0 < 190.0 or b.h * 360.0 > 210.0 or b.s < 0.28:
+			return "frozen %s mean %s (hue %.0f, sat %.2f) is not ice-blue (grey stone?)" % [k, b.to_html(false), b.h * 360.0, b.s]
+		if _luma(b) - _luma(a) < 0.15: return "frozen %s only %.2f lighter than plain %s" % [k, _luma(b) - _luma(a), a.to_html(false)]
+		if k == "wolf":
+			var d := Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
+			if d < 0.25: return "frozen ice wolf mean %s vs plain %s: distance %.2f (want >= 0.25)" % [b.to_html(false), a.to_html(false), d]
+	for k in MONSTER_KINDS:
 		for pair in [[Wolf.FROST_TINT, Wolf.FROST_AMOUNT], [Wolf.BURN_TINT, Wolf.BURN_AMOUNT]]:
 			var o := _tint_stats(_pose(k), pair[0], pair[1])
 			if o.outline > 0.001 or o.outline_luma >= 0.06: return "%s outline lifted by %.3f under tint %s" % [k, o.outline, pair[0].to_html(false)]
 	return ""
 
-## Burn stays red-orange, also on a light monster (review: at 0.6 x (0.7 + luma) the pale wolf went salmon, sat 0.47):
-## every monster's burning mean colour has hue 8-30 degrees and saturation >= 0.6.
+## Burn stays red-orange on every monster in true colours (B23): each burning mean colour has hue 16-22 degrees and
+## saturation >= 0.75 (what the squared look gave: 16-22 / 0.75; before B23 this test allowed 8-30 / 0.6).
 func test_burn_tint_is_red_orange_not_salmon():
-	for k in ["wolf", "boar", "deer", "kongkoi", "macaque", "shroom", "viper"]:
+	for k in MONSTER_KINDS:
 		var s := _tint_stats(_pose(k), Wolf.BURN_TINT, Wolf.BURN_AMOUNT)
 		var b: Color = s.after
-		if b.h * 360.0 < 8.0 or b.h * 360.0 > 30.0 or b.s < 0.6: return "burning %s mean %s (hue %.0f, sat %.2f) is not red-orange" % [k, b.to_html(false), b.h * 360.0, b.s]
+		if b.h * 360.0 < 16.0 or b.h * 360.0 > 22.0 or b.s < 0.75: return "burning %s mean %s (hue %.1f, sat %.2f) is not red-orange" % [k, b.to_html(false), b.h * 360.0, b.s]
 	return ""
 
-## The CPU mirror (Wolf.tint_preview) and flash.gdshader share their numbers: the shader's consts equal Wolf's
-## TINT_BASE / TINT_GAIN / OUTLINE_LO / OUTLINE_HI (the GPU result itself is compared in screenshots_m5a_pixelfx).
+## B23: the body shader drew every sprite with its colour AND alpha squared (texture x COLOR, where COLOR already holds
+## the texel in Godot 4). Untinted, the mirror now gives the texel itself: RGB and alpha unchanged, for dark, light,
+## saturated and half-transparent (edge) texels.
+func test_tint_mirror_draws_true_colours():
+	for src in [Color(0.5, 0.3, 0.8, 1.0), Color(0.9, 0.85, 0.7, 1.0), Color(0.12, 0.08, 0.05, 1.0), Color(0.6, 0.4, 0.2, 0.5), Color(0.02, 0.02, 0.03, 0.25)]:
+		for tint in [Wolf.FROST_TINT, Wolf.BURN_TINT]:
+			var got := Wolf.tint_preview(src, tint, 0.0)
+			if not got.is_equal_approx(src): return "untinted texel %s drawn as %s (squared?)" % [src, got]
+		var t := Wolf.tint_preview(src, Wolf.FROST_TINT, Wolf.FROST_AMOUNT)
+		if absf(t.a - src.a) > 0.0001: return "tinted alpha %.3f for texel alpha %.3f" % [t.a, src.a]
+	return ""
+
+## The CPU mirror (Wolf.tint_preview) and flash.gdshader share their numbers AND their formula: the shader's consts
+## equal Wolf's TINT_BASE / TINT_GAIN / OUTLINE_LO / OUTLINE_HI, and its fragment() body, with comments and white space
+## removed, is exactly FLASH_FRAGMENT below (the formula tint_preview mirrors; change all three together). The suite
+## runs --headless (dummy renderer: a viewport draws no pixels), so the GPU result itself is compared with the mirror
+## in screenshots_m5a_pixelfx (opengl3, a real window), which exits 1 on a mismatch.
+const FLASH_FRAGMENT := "vec4c=COLOR;floatl=dot(c.rgb,vec3(0.299,0.587,0.114));floatk=tint_amount*smoothstep(OUTLINE_LO,OUTLINE_HI,l);vec3t=mix(c.rgb,min(tint_color.rgb*(TINT_BASE+TINT_GAIN*l),vec3(1.0)),k);COLOR=vec4(mix(t,flash_color.rgb,flash_amount),c.a);"
 func test_tint_shader_matches_its_mirror():
 	var code: String = (load("res://shaders/flash.gdshader") as Shader).code
 	for pair in [["TINT_BASE", Wolf.TINT_BASE], ["TINT_GAIN", Wolf.TINT_GAIN], ["OUTLINE_LO", Wolf.OUTLINE_LO], ["OUTLINE_HI", Wolf.OUTLINE_HI]]:
@@ -812,7 +836,50 @@ func test_tint_shader_matches_its_mirror():
 		var m := re.search(code)
 		if m == null: return "flash.gdshader has no const %s" % pair[0]
 		if absf(float(m.get_string(1)) - float(pair[1])) > 0.00001: return "%s: shader %s, Wolf %s" % [pair[0], m.get_string(1), pair[1]]
+	var body := _fragment_body(code)
+	if body != FLASH_FRAGMENT: return "flash.gdshader fragment() is not the formula Wolf.tint_preview mirrors:\n  got  %s\n  want %s" % [body, FLASH_FRAGMENT]
 	return ""
+
+## fragment() { ... } of a shader, comments and all white space removed ("" if none).
+func _fragment_body(code: String) -> String:
+	var re := RegEx.create_from_string("//[^\\n]*|/\\*[\\s\\S]*?\\*/")
+	var c := re.sub(code, "", true)
+	var i := c.find("void fragment()")
+	if i < 0: return ""
+	var open := c.find("{", i)
+	var depth := 0
+	var j := open
+	while j < c.length():
+		if c[j] == "{": depth += 1
+		elif c[j] == "}":
+			depth -= 1
+			if depth == 0: break
+		j += 1
+	return RegEx.create_from_string("\\s+").sub(c.substr(open + 1, j - open - 1), "", true)
+
+## B23 everywhere: in a canvas_item shader COLOR already holds texture(TEXTURE, UV) x the vertex colour, so sampling
+## TEXTURE at UV again and multiplying squares colour and alpha. No shader file, and no inline shader code in a scene,
+## resource or script, samples texture(TEXTURE, UV) (a custom UV, as sharp_pixels uses, is fine).
+func test_no_shader_samples_the_texture_at_uv_again():
+	var bad := []
+	var re := RegEx.create_from_string("texture\\s*\\(\\s*TEXTURE\\s*,\\s*UV\\s*\\)")
+	var comments := RegEx.create_from_string("//[^\\n]*|/\\*[\\s\\S]*?\\*/|##[^\\n]*")     # shader and doc comments
+	for path in _files_under("res://", ["gdshader", "tscn", "tres", "gd"]):
+		if path.begins_with("res://tests/"): continue                  # tests may hold the old formula on purpose
+		var t := comments.sub(FileAccess.get_file_as_string(path), "", true)
+		if t.contains("shader_type") and re.search(t) != null: bad.append(path)
+	return "" if bad.is_empty() else "texture(TEXTURE, UV) sampled again (squares colours, B23) in %s" % str(bad)
+
+func _files_under(dir: String, exts: Array) -> Array:
+	var out := []
+	var d := DirAccess.open(dir)
+	if d == null: return out
+	for f in d.get_files():
+		if f.get_extension() in exts: out.append(dir.path_join(f))
+	for sub in d.get_directories():
+		if sub.begins_with(".") or sub in ["addons", "build", "docs"]: continue
+		out.append_array(_files_under(dir.path_join(sub), exts))
+	return out
 
 # ---------- licence ----------
 

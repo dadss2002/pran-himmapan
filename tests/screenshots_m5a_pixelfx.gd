@@ -15,6 +15,10 @@ extends SceneTree
 ##      docs/preview/m4b/pixelfx_tint_x3.png - the status tint alone (no overlay) x3: rows ice wolf / deer / boar,
 ##      columns plain / frozen / burning; and a check that the GPU result (flash.gdshader) equals Wolf.tint_preview,
 ##      the CPU mirror the tests use ("tint GPU vs mirror: max diff ..." printed; exit 1 if over 3/255).
+##      B23 (fixed): a GPU check that the body shader and circle_mask draw the texture's true colours (no squared colour
+##      or alpha; "B23 GPU: ..." printed, exit 1 on a mismatch), and docs/preview/m4b/b23_before_after.png - the same
+##      in-game view (hero, ice wolf, frozen boar, burning deer, macaque) with the old squared shader and old tints
+##      (test-only material, OLD_FLASH) above and the game now below, x2.
 
 const OUT := "res://docs/preview/m4b/"
 var before_dir := OS.get_environment("PFX_BEFORE") if OS.get_environment("PFX_BEFORE") != "" else "/tmp/pfxshots"
@@ -377,6 +381,220 @@ func _tint_sheet() -> bool:
 	await process_frame
 	return worst <= 3.0 / 255.0 + 0.0001
 
+## B23 GPU check (a real window, opengl3; the suite runs headless and draws nothing): each sprite is drawn three ways
+## over the grass, 1 px = 1 px: with no material, with the game's body shader (flash.gdshader, no tint, no flash) and
+## with circle_mask (dim 0). The body-shader copy must equal the no-material copy on every pixel, edges included (no
+## squared colour or alpha), and the no-material copy's opaque pixels equal the texture (true colours); inside the
+## circle, circle_mask must draw texel over grass at alpha x 0.92. Not saved; prints the worst differences.
+const B23_TEX := ["res://assets/hero/idle_south.png", "res://assets/monsters/boar/pose_south.png",
+	"res://assets/wolf/pose_south.png", "res://assets/monsters/deer/pose_south.png", "res://assets/skills/dodge.png"]
+func _b23_gpu_check() -> bool:
+	var size := Vector2i(40 + 3 * 140, 20 + (B23_TEX.size() + 1) * 140)
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	await _size(size)
+	var board := Node2D.new()
+	root.add_child(board)
+	var bg := ColorRect.new()
+	bg.color = GRASS
+	bg.size = Vector2(size)
+	board.add_child(bg)
+	var rows := []
+	var texs := []
+	for path in B23_TEX: texs.append(load(path))
+	# a synthetic 48x48 texture with half-transparent texels (alpha 0.1-1.0 across, colours down): the game's sheets
+	# have only alpha 0 / 1, so this is what shows a squared alpha
+	var gimg := Image.create(48, 48, false, Image.FORMAT_RGBA8)
+	for y in 48:
+		for x in 48:
+			gimg.set_pixel(x, y, Color.from_hsv(y / 48.0, 0.7, 0.4 + 0.5 * x / 47.0, 0.1 + 0.9 * x / 47.0))
+	texs.append(ImageTexture.create_from_image(gimg))
+	for i in texs.size():
+		var tex: Texture2D = texs[i]
+		var region := Rect2(Vector2.ZERO, tex.get_size().min(Vector2(64, 64)))     # the hero sheet: its first frame
+		var at := []
+		for j in 3:
+			var sp := Sprite2D.new()
+			sp.texture = tex
+			sp.centered = false
+			sp.region_enabled = true
+			sp.region_rect = region
+			sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			sp.position = Vector2(20 + j * 140, 20 + i * 140)
+			if j == 1:
+				var m := ShaderMaterial.new()
+				m.shader = preload("res://shaders/flash.gdshader")
+				sp.material = m
+			elif j == 2:
+				var m2 := ShaderMaterial.new()
+				m2.shader = preload("res://shaders/circle_mask.gdshader")
+				sp.material = m2
+			board.add_child(sp)
+			at.append(Vector2i(sp.position))
+		var img := tex.get_image()
+		img.decompress()
+		rows.append([img.get_region(Rect2i(region)), at, region.size == tex.get_size()])
+	for i in 4: await process_frame
+	var shot := root.get_texture().get_image()
+	var bgc := shot.get_pixel(5, 5)                        # the grass as drawn
+	var worst_body := 0.0
+	var worst_true := 0.0
+	var worst_mask := 0.0
+	var edge := 0
+	for r in rows:
+		var img: Image = r[0]
+		var w := img.get_width()
+		var h := img.get_height()
+		for y in h:
+			for x in w:
+				var src := img.get_pixel(x, y)
+				var plain := shot.get_pixel(r[1][0].x + x, r[1][0].y + y)
+				var body := shot.get_pixel(r[1][1].x + x, r[1][1].y + y)
+				worst_body = maxf(worst_body, maxf(absf(plain.r - body.r), maxf(absf(plain.g - body.g), absf(plain.b - body.b))))
+				if src.a > 0.0 and src.a < 1.0: edge += 1
+				if src.a >= 1.0:
+					worst_true = maxf(worst_true, maxf(absf(plain.r - src.r), maxf(absf(plain.g - src.g), absf(plain.b - src.b))))
+				if r[2] and Vector2(x + 0.5, y + 0.5).distance_to(Vector2(w, h) / 2.0) < minf(w, h) / 2.0 - 1.5:   # whole texture: UV = 0..1
+					var want := bgc.lerp(Color(src.r, src.g, src.b), src.a * 0.92)
+					var got := shot.get_pixel(r[1][2].x + x, r[1][2].y + y)
+					worst_mask = maxf(worst_mask, maxf(absf(got.r - want.r), maxf(absf(got.g - want.g), absf(got.b - want.b))))
+	print("B23 GPU: body shader vs no material max diff %.1f/255 (%d half-transparent edge texels), plain vs texture %.1f/255, circle_mask vs texel x 0.92 over grass %.1f/255"
+		% [worst_body * 255.0, edge, worst_true * 255.0, worst_mask * 255.0])
+	board.queue_free()
+	root.content_scale_mode = _mode
+	await process_frame
+	return worst_body <= 1.0 / 255.0 + 0.0001 and worst_true <= 1.0 / 255.0 + 0.0001 and worst_mask <= 2.0 / 255.0 + 0.0001
+
+## The body shader as it was up to 4025f91 (B23: texture x COLOR = colour and alpha squared) with its tint numbers then
+## (frost #d8f4ff x 0.8, burn #ff5a1f x 0.85, 0.5 + 0.9 x luma), and circle_mask then: test-only, for the "before" half.
+const OLD_FLASH := """shader_type canvas_item;
+uniform vec4 flash_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
+uniform float flash_amount : hint_range(0.0, 1.0) = 0.0;
+uniform vec4 tint_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
+uniform float tint_amount : hint_range(0.0, 1.0) = 0.0;
+void fragment() {
+	vec4 src = texture(TEXTURE, UV);
+	vec4 c = src * COLOR;
+	float l = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+	float k = tint_amount * smoothstep(0.06, 0.16, l);
+	vec3 t = mix(c.rgb, min(tint_color.rgb * (0.5 + 0.9 * l), vec3(1.0)), k);
+	COLOR = vec4(mix(t, flash_color.rgb, flash_amount), c.a);
+}"""
+const OLD_CIRCLE := """shader_type canvas_item;
+uniform float dim : hint_range(0.0, 1.0) = 0.0;
+void fragment() {
+	vec4 c = texture(TEXTURE, UV) * COLOR;
+	if (distance(UV, vec2(0.5)) > 0.5) discard;
+	float g = dot(c.rgb, vec3(0.299, 0.587, 0.114)) * 0.55;
+	COLOR = vec4(mix(c.rgb, vec3(g), dim), c.a * 0.92);
+}"""
+
+## docs/preview/m4b/b23_before_after.png: the same in-game view (test ground c1r0, seed 7) of the hero with an ice wolf
+## (plain), a boar (frozen), a deer (burning) and a macaque (plain), status overlays frozen on a frame, x2 nearest:
+## top = as drawn up to 4025f91 (the old squared shader and old tints, swapped in on the same materials), bottom = now.
+func _b23_before_after() -> void:
+	var hidden := []
+	var cloud_script := load("res://scripts/monsters/hazard_cloud.gd")
+	for c in g.world.get_children() + g.stage.get_children() + g.overlay.get_children():
+		var shown_extra: bool = c is Wolf or c is FxSprite or c.get_script() == cloud_script or c.get_parent() == g.overlay or c.has_method("snapshot")
+		if c is CanvasItem and c.visible and c != g.hero and shown_extra:
+			c.visible = false
+			hidden.append(c)
+	var mid: Vector2 = g.layout.size_px() / 2.0
+	g.hero.global_position = mid + Vector2(-100, 30)
+	g.hero.reset_physics_interpolation()
+	var spawned := []
+	var kinds := [["wolf", ""], ["boar", "slow"], ["deer", "burn"], ["macaque", ""]]
+	for i in kinds.size():
+		var w: Wolf = (load("res://scenes/wolf.tscn") if kinds[i][0] == "wolf" else load("res://scenes/monster.tscn")).instantiate()
+		if kinds[i][0] != "wolf": w.set("kind", kinds[i][0])
+		w.position = mid + Vector2(-48 + i * 50, 30)
+		w.home = w.position
+		g.world.add_child(w)
+		w.setup()
+		w.set_physics_process(false)
+		w.set_process(false)
+		if kinds[i][1] != "": w.apply_status(kinds[i][1], 1.0)
+		w._update_status_fx()
+		spawned.append(w)
+	for i in 4: await process_frame
+	for w in spawned: _freeze(w)
+	var crops := []
+	for pass_i in 2:
+		var swapped := []                                   # [material, shader, tint_color, tint_amount]
+		if pass_i == 0: _old_shaders(root, swapped)
+		for i in 4: await process_frame
+		var img := root.get_texture().get_image()
+		var k: float = float(img.get_width()) / root.get_visible_rect().size.x
+		var a: Vector2 = g.world_to_screen(mid + Vector2(-125, -38)) * k
+		var b: Vector2 = g.world_to_screen(mid + Vector2(130, 46)) * k
+		var box := Rect2i(Vector2i(a), Vector2i(b - a)).intersection(Rect2i(Vector2i.ZERO, img.get_size()))
+		var crop := img.get_region(box)
+		crop.resize(crop.get_width() * 2, crop.get_height() * 2, Image.INTERPOLATE_NEAREST)
+		crops.append(crop)
+		for s in swapped:
+			s[0].shader = s[1]
+			if s[0].shader == preload("res://shaders/flash.gdshader"):
+				s[0].set_shader_parameter("tint_color", s[2])
+				s[0].set_shader_parameter("tint_amount", s[3])
+	var cw: int = crops[0].get_width()
+	var ch: int = crops[0].get_height()
+	var size := Vector2i(cw + 20, ch * 2 + 90)
+	var mode := root.content_scale_mode
+	var old_size := root.size
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	await _size(size)
+	var layer := CanvasLayer.new()
+	layer.layer = 200
+	root.add_child(layer)
+	var bg := ColorRect.new()
+	bg.color = Color("#202020")
+	bg.size = Vector2(size)
+	layer.add_child(bg)
+	for i in 2:
+		var tr := TextureRect.new()
+		tr.texture = ImageTexture.create_from_image(crops[i])
+		tr.position = Vector2(10, 35 + i * (ch + 45))
+		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		layer.add_child(tr)
+	_text(layer, Vector2(12, 6), "before (up to 4025f91): colour and alpha squared (B23), frost #d8f4ff x 0.80, burn #ff5a1f x 0.85", 17)
+	_text(layer, Vector2(12, ch + 51), "now: true PixelLab colours, frost #%s x %.2f, burn #%s x %.2f   (hero, ice wolf, boar frozen, deer burning, macaque) x2"
+		% [Wolf.FROST_TINT.to_html(false), Wolf.FROST_AMOUNT, Wolf.BURN_TINT.to_html(false), Wolf.BURN_AMOUNT], 17)
+	await _snap("b23_before_after.png")
+	layer.queue_free()
+	root.content_scale_mode = mode
+	await _size(old_size)
+	for w in spawned: w.queue_free()
+	for c in hidden:
+		if is_instance_valid(c): c.visible = true
+	g.hero.global_position = mid + Vector2(-90, 40)
+	await process_frame
+
+## Every ShaderMaterial under n drawing flash.gdshader / circle_mask gets the old shader (and a status tint the old
+## tint); the originals are recorded in `out` to put back.
+func _old_shaders(n: Node, out: Array) -> void:
+	if n is CanvasItem and n.material is ShaderMaterial:
+		var m: ShaderMaterial = n.material
+		if m.shader == preload("res://shaders/flash.gdshader"):
+			var tc = m.get_shader_parameter("tint_color")          # null: never set (no status yet)
+			var ta: float = m.get_shader_parameter("tint_amount") if m.get_shader_parameter("tint_amount") != null else 0.0
+			out.append([m, m.shader, tc, ta])
+			var old := Shader.new()
+			old.code = OLD_FLASH
+			m.shader = old
+			if ta > 0.0 and tc != null:
+				var frost := Color(tc.r, tc.g, tc.b).is_equal_approx(Color(Wolf.FROST_TINT.r, Wolf.FROST_TINT.g, Wolf.FROST_TINT.b))
+				m.set_shader_parameter("tint_color", Color("#d8f4ff") if frost else Wolf.BURN_TINT)
+				m.set_shader_parameter("tint_amount", 0.8 if frost else 0.85)
+			else:
+				m.set_shader_parameter("tint_color", tc if tc != null else Color.WHITE)
+				m.set_shader_parameter("tint_amount", 0.0)
+		elif m.shader == preload("res://shaders/circle_mask.gdshader"):
+			out.append([m, m.shader, null, 0.0])
+			var oc := Shader.new()
+			oc.code = OLD_CIRCLE
+			m.shader = oc
+	for c in n.get_children(): _old_shaders(c, out)
+
 func _freeze(n: Node) -> void:
 	if n is FxSprite:
 		var id: String = n.animation
@@ -391,6 +609,9 @@ func _run() -> void:
 	await _compare()
 	var ok: bool = await _tint_sheet()                   # before the test ground (its fade and HUD layers)
 	if not ok: print("FAIL: flash.gdshader and Wolf.tint_preview disagree")
+	var ok23: bool = await _b23_gpu_check()
+	if not ok23: print("FAIL: B23 - the body shader or circle_mask does not draw the texture's true colours")
 	await _ingame()
+	await _b23_before_after()
 	await _warp_moments()
-	quit(0 if ok else 1)
+	quit(0 if ok and ok23 else 1)
