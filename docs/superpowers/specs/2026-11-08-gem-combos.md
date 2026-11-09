@@ -185,3 +185,10 @@
 **อนุมัติ 2026-11-08 (เจ้าของ):** ตัวเลขเสนอทั้งหมดข้างบน "อนุมัติตามนี้ ค่อยปรับหลังเล่นจริง" · ช่องเจม: **ทุกสกิลได้ 2 ช่องตั้งแต่ปลด** ช่องที่ 3 เลเวลสกิล 10 ช่องที่ 4 เลเวลสกิล 50 ("ทุกสกิลได้ 2 ช่องตั้งแต่ปลด (ช่อง 3 คงเลเวลสกิล 10)") → สูตรป้ายพื้นที่ 2 เม็ดใช้ได้ในเฟส 1 · บอสแข็งได้เหมือนมอนอื่น ("บอสแข็งได้เหมือนมอนอื่น") · สายอึดคืน MP เมื่อฆ่า ไม่เกิน 6 / 9 MP ต่อการกด 1 ครั้ง
 
 **Owner 2026-11-09 (before implementation):** gems already socketed in a save stay where they are when the slot rule changes ("อยู่ที่เดิม"); a gem in a slot that is not open under the new rule goes back to the bag (never lost — if the bag is full it stays socketed until there is room).
+
+**Owner 2026-11-09 (plan questions, before coding):**
+- The 3 area skills (ห่าศร, กับดักหนาม, ศรเพลิง — numbers in docs/skills.md, approved 2026-11-06) are built in this milestone (M5b), so the 6 area recipes can form ("ทำ 3 สกิลพื้นที่ในงานนี้เลย").
+- When 4 gems form two recipes: one combo per skill — the higher tier first, then recipe-book order ("สกิลละ 1 ท่า: ขั้นสูงก่อน แล้วตามลำดับในสมุด").
+- Combo bonus values do not grow with gem level; each gem's own effect still does ("ไม่โต ใช้ค่าที่อนุมัติ").
+- Kills by burn / fire trail also count as kills for the sustain combos (heal / MP on kill), still capped at 6 / 9 MP per press ("นับทุกแบบ").
+- Still open: art for กับดักหนาม / ศรเพลิง icons and the trap sprite; whether 3-gem rows add their base's unlisted effects (recommended: read the table literally, as simulated); green/red number baseline (recommended: vs the current build while a gem is selected); recipe-book hiding (recommended: hide name and gems).
