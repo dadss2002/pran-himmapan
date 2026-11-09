@@ -377,7 +377,7 @@ func test_no_combo_arrow_unchanged():      # build without a combo: no FireTrail
 - Consumes: `build.extra_bounces`, `GemCombo.p(id, "bolts" / "bolt_frac")`, `Arrow._secondary_hit`, `ComboFx.play(..., "bounce", at)`
 - Produces: `Arrow.bolts(from: Vector2, n: int, frac: float, skip: Array) -> int` (hits the n nearest distinct live targets within `elements.lightning.range`, skipping `skip`)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```gdscript
 func test_thunder_hop_two_bounces_on_piercing():  # piercing [ricochet, lightning] Lv1, dummies A (in line), B, C chained within 120 px:
@@ -388,10 +388,12 @@ func test_bolt_without_target_is_safe():          # lone target: no error, bolts
 func test_lightning_gem_chain_still_works():      # element lightning's own +1 target ×0.8 still happens on primary hits (gems keep working)
 ```
 
-- [ ] **Step 2: Run and check it fails.**
-- [ ] **Step 3: Implement.** On spawning a bounce arrow, the child gets `bounces = base_child + parent.build.extra_bounces` and `extra_bounces = 0`. This adds exactly +1 to each chain, piercing lines included. At every bounce event, `bolts(from, p("bolts"), p("bolt_frac"), [struck, next])` runs. A bolt is a secondary hit.
-- [ ] **Step 4: Run and check it passes.** Run `test_arrow_combos` and `test_arrow_gems` (`test_piercing_bounces_only_from_first_target` must still pass for no-combo builds).
-- [ ] **Step 5: Commit** `git commit -m "M5b Task 6: lightning combos (+1 bounce, bolts per bounce)"`
+- [x] **Step 2: Run and check it fails.**
+- [x] **Step 3: Implement.** On spawning a bounce arrow, the child gets `bounces = base_child + parent.build.extra_bounces` and `extra_bounces = 0`. This adds exactly +1 to each chain, piercing lines included. At every bounce event, `bolts(from, p("bolts"), p("bolt_frac"), [struck, next])` runs. A bolt is a secondary hit.
+- [x] **Step 4: Run and check it passes.** Run `test_arrow_combos` and `test_arrow_gems` (`test_piercing_bounces_only_from_first_target` must still pass for no-combo builds).
+- [x] **Step 5: Commit** `git commit -m "M5b Task 6: lightning combos (+1 bounce, bolts per bounce)"`
+
+**Done (2026-11-09):** `Arrow._spawn_bounce`: the child gets `bounces = (0 if pierce else parent's left − 1) + build.extra_bounces` and `extra_bounces = 0` (exactly +1 per chain; piercing 1 → 2, spread gem Lv1 1 → 2). `Arrow._bounce_event(struck, next)` runs at every bounce (primary and bounce arrows): the recipe's `bounce` effect (hit_spark #7fd4ff) at the bounce point and, when `combo_p.bolts` > 0, `bolts(struck.hurt_point(), bolts, bolt_frac, [struck, next])`. `Arrow.bolts(from, n, frac, skip) -> int`: the n nearest distinct live targets within `elements.lightning.range` (120) via `_nearest`, each a `_secondary_hit` (frac of the bouncing arrow's mult, its crit chance, leech; never `_after_hit`) + the recipe's `bolt` effect (chain_zap, once per bolt); no once-per-target limit (the approved sim counts 3 lines × 2 bolts on the same monsters). Reading resolved: "bolt 50 %" = 50 % of the arrow that bounces (plan test `arrow_mult × bounce_mult^k × 0.50`), so the 2nd bounce's bolt is 0.4 × the hit; tools/gem_combo_sim.py counts ศรอสนีกระโดด per line as 0.8 + 2 × 0.5 = 1.8 × the hit where the game gives 0.64 + 0.5 + 0.4 = 1.54 (pack slightly under the approved table; sim not changed, approved numbers; risks B29). ศรอสนีพันสาย matches the sim exactly (3 lines × 1 bounce × 2 bolts × 0.5). Tests: test_arrow_combos +9 (the plan's 5 + `test_bolts_nearest_in_range_and_secondary`, `test_bounce_and_bolt_fx` (saver on and off), `test_no_lightning_combo_no_bolt` (piercing + spread), `test_thunder_hop_on_spread_adds_one`, and the `_on_spawned` helper so bounce arrows' own bounces are stepped, as `Hero._on_arrow_spawned`). Changed: test helper `_arrow` listens to bounce arrows' bounces too (no assertion changed). Seen failing first (7 fails: no extra bounce, no `bolts`); `test_lightning_gem_chain_still_works` and `test_no_lightning_combo_no_bolt` passed before as regression guards. Mutation checks, each caught: extra_bounces not reset (spread: A→B→C→E), bolts on primary arrows only, a bolt via `_after_hit` (chains + bounces), bolts skipping only the struck target. Risk B29 added.
 
 ---
 

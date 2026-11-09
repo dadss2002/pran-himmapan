@@ -48,8 +48,14 @@ func _arrow(dir: Vector2, enemies: Array, b: Dictionary, primary := true, shoote
 	a.crit_mult = 1.0
 	a.primary = primary
 	a.configure(b, shooter)
-	a.spawned.connect(func(x): _spawned.append(x))
+	a.spawned.connect(_on_spawned)
 	return a
+
+## A bounce arrow's own bounces are listened to as well (as Hero._on_arrow_spawned does), so chains of 2+ bounces
+## (ศรอสนีกระโดด, Task 6) are stepped by _step.
+func _on_spawned(x: Arrow) -> void:
+	_spawned.append(x)
+	x.spawned.connect(_on_spawned)
 
 ## The hero's fan for a build (Hero._release), from the origin.
 func _fan(b: Dictionary, enemies: Array, shooter: Node = null) -> Array:
@@ -708,4 +714,214 @@ func test_trail_box_skips_far_targets():
 		edge.free()
 	t.free()
 	_free([near, far])
+	return r
+
+# ---------- lightning combos (Task 6: ศรอสนีกระโดด, ศรอสนีพันสาย) ----------
+
+## Hits on `d` that an arrow dealt directly (the hit's origin is the arrow, within its hit radius of the hurt point),
+## not a chain (origin = the struck monster's hurt point) or a bolt (origin = the bouncing arrow, far away).
+func _direct(d: Node2D) -> Array:
+	return d.hits.filter(func(h): return (h[2] as Vector2).distance_to(d.hurt_point()) <= Balance.num("shot.arrow_hit_radius") + 0.01)
+
+## Flies one primary arrow of build `b` from the origin to the right, frame by frame; returns the names (keys of
+## `named`) in the order each first took a direct arrow hit.
+func _direct_order(b: Dictionary, named: Dictionary) -> Array:
+	_spawned = []
+	var order: Array = []
+	var a := _arrow(Vector2.RIGHT, named.values(), b)
+	for i in 120:
+		_step([a], [])
+		for k in named:
+			if not k in order and not _direct(named[k]).is_empty(): order.append(k)
+	_free([a] + _spawned)
+	return order
+
+## ศรอสนีกระโดด on ศรทะลวง: the gem's one bounce (a piercing arrow bounces from its first target only) + 1 extra:
+## A (on the line) → B → C. Ricochet alone: A → B only (the existing rule).
+func test_thunder_hop_two_bounces_on_piercing():
+	var b := _build(["ricochet", "lightning"])
+	var r := "" if String(b.combo.get("id", "")) == "thunder_hop" and int(b.extra_bounces) == 1 else "setup: combo %s extra %s" % [b.combo, b.get("extra_bounces")]
+	var ds := {"A": _dummy(Vector2(60, 0)), "B": _dummy(Vector2(60, 90)), "C": _dummy(Vector2(60, 180))}
+	if r == "":
+		var order := _direct_order(b, ds)
+		if order != ["A", "B", "C"]: r = "thunder_hop direct hits %s, want [A, B, C]" % [order]
+	if r == "":
+		for k in ds: ds[k].hits.clear()
+		var plain := _build(["ricochet"])
+		var order := _direct_order(plain, ds)
+		if not plain.combo.is_empty(): r = "setup: [ricochet] formed %s" % plain.combo
+		elif order != ["A", "B"]: r = "ricochet alone: direct hits %s, want [A, B]" % [order]
+	_free(ds.values())
+	return r
+
+## Every bounce of ศรอสนีกระโดด bolts the nearest other monster (not the struck one, not the next) for 50 % of the
+## bouncing arrow's hit: D1 by the bounce at A (k = 0), D2 by the bounce at B (k = 1, after one ×bounce_mult). One
+## bolt per bounce, and no chain lands on D1 / D2 (A is 100 px from B; D2 85 px; C 70 px).
+func test_thunder_hop_bolt_per_bounce():
+	var b := _build(["ricochet", "lightning"])
+	var am := float(b.arrow_mult)
+	var bm := float(b.bounce_mult)
+	var ds := {"A": _dummy(Vector2(60, 0)), "B": _dummy(Vector2(60, 100)), "C": _dummy(Vector2(60, 170)),
+		"D1": _dummy(Vector2(60, -110)), "D2": _dummy(Vector2(145, 100))}
+	var order := _direct_order(b, ds)
+	var r := ""
+	if order != ["A", "B", "C"]: r = "setup: direct hits %s, want [A, B, C]" % [order]
+	elif ds.D1.hits.size() != 1: r = "D1 (by the bounce at A) took %d hits, want 1 bolt" % ds.D1.hits.size()
+	elif ds.D2.hits.size() != 1: r = "D2 (by the bounce at B) took %d hits, want 1 bolt" % ds.D2.hits.size()
+	elif not is_equal_approx(float(ds.D1.hits[0][1]), am * 0.5): r = "bolt at the 1st bounce mult %s, want %s × 0.50" % [ds.D1.hits[0][1], am]
+	elif not is_equal_approx(float(ds.D2.hits[0][1]), am * bm * 0.5): r = "bolt at the 2nd bounce mult %s, want %s × %s × 0.50" % [ds.D2.hits[0][1], am, bm]
+	elif not ds.D1.statuses.is_empty() or not ds.D2.statuses.is_empty(): r = "a bolt applied a status"
+	_free(ds.values())
+	return r
+
+## ศรอสนีพันสาย (ricochet + lightning + split) on ศรทะลวง: all 3 lines bounce, once each (the tier-3 row replaces its
+## base: no extra bounce), and every bounce bolts the 2 nearest distinct others (X, Y; Z, 3rd nearest, never) at 50 %.
+func test_thousand_bolts_two_bolts_no_extra():
+	var b := _build(["ricochet", "lightning", "split"])
+	var r := "" if String(b.combo.get("id", "")) == "thousand_bolts" and int(b.extra_bounces) == 0 and int(b.arrows) == 3 else "setup: combo %s extra %s arrows %s" % [b.combo, b.get("extra_bounces"), b.get("arrows")]
+	var t := _dummy(Vector2(40, 0))          # all 3 lines (±12°) pass within the hit radius here
+	var nb := _dummy(Vector2(40, 60))        # the bounce target (nearest)
+	var x := _dummy(Vector2(40, -70))
+	var y := _dummy(Vector2(-35, 0))
+	var z := _dummy(Vector2(40, -115))
+	var all := [t, nb, x, y, z]
+	_spawned = []
+	var arrows := _fan(b, all)
+	if r == "":
+		for i in 120: _step(arrows, [])
+		var am := float(b.arrow_mult)
+		if _direct(t).size() != 3: r = "%d lines hit the first target, want 3" % _direct(t).size()
+		elif _spawned.size() != 3: r = "%d bounce arrows, want 3 (one per line, no extra)" % _spawned.size()
+		elif _spawned.any(func(s): return int(s.build.get("bounces", -1)) != 0): r = "a bounce arrow can bounce again"
+		elif _direct(nb).size() != 3: r = "the bounce target took %d bounce hits, want 3" % _direct(nb).size()
+		elif x.hits.size() != 3 or y.hits.size() != 3: r = "bolts: X %d, Y %d, want 3 each (2 per bounce, 3 bounces)" % [x.hits.size(), y.hits.size()]
+		elif not z.hits.is_empty(): r = "the 3rd nearest took %d bolts (only 2 per bounce)" % z.hits.size()
+		else:
+			for h in x.hits + y.hits:
+				if not is_equal_approx(float(h[1]), am * 0.5): r = "bolt mult %s, want %s × 0.50" % [h[1], am]
+	_free(arrows + _spawned + all)
+	return r
+
+## bolts() with nothing to hit is safe and hits nothing: a lone target (skipped), n = 0, a dead or freed target.
+func test_bolt_without_target_is_safe():
+	var b := _build(["ricochet", "lightning"])
+	var t := _dummy(Vector2(60, 0))
+	var a := _arrow(Vector2.RIGHT, [t], b)
+	var r := ""
+	if a.bolts(t.hurt_point(), 1, 0.5, [t]) != 0: r = "a lone target: bolted something"
+	elif a.bolts(t.hurt_point(), 0, 0.5, []) != 0: r = "n = 0 bolted"
+	elif not t.hits.is_empty(): r = "the lone target was hit"
+	if r == "":
+		var dead := _dummy(Vector2(60, 40))
+		dead.alive = false
+		var gone := _dummy(Vector2(60, 50))
+		a.targets = [t, dead, gone]
+		gone.free()
+		if a.bolts(t.hurt_point(), 2, 0.5, [t]) != 0: r = "bolted a dead or freed target"
+		dead.free()
+		a.targets = [t]
+	if r == "":
+		_spawned = []
+		for i in 90: _step([a], [])                  # a whole flight past a lone target: no bounce, no bolt, no error
+		if not _spawned.is_empty(): r = "a lone target: %d bounce arrows" % _spawned.size()
+		elif _direct(t).size() != 1 or t.hits.size() != 1: r = "the lone target took %s, want one direct hit" % [t.hits]
+	_free([a, t])
+	return r
+
+## bolts() hits the n nearest distinct live targets within elements.lightning.range (120), skipping `skip`, each a
+## secondary hit (no bounce arrow, no element chain or status from the bolt target, no trail).
+func test_bolts_nearest_in_range_and_secondary():
+	var b := _build(["ricochet", "lightning", "split"])
+	var from := Vector2(100, 100)
+	var s := _dummy(from)
+	var n1 := _dummy(from + Vector2(30, 0))
+	var n2 := _dummy(from + Vector2(0, 50))
+	var n3 := _dummy(from + Vector2(-80, 0))
+	var out := _dummy(from + Vector2(0, -125))      # past 120 px
+	var close := _dummy(from + Vector2(30, 10))     # 31.6 px from from, 10 from n1 (a chain would land here)
+	var all := [s, n1, n2, n3, out, close]
+	var a := _arrow(Vector2.RIGHT, all, b)
+	_spawned = []
+	var made := FireTrail.made
+	var r := ""
+	var n: int = a.bolts(from, 2, 0.5, [s, close])
+	if n != 2: r = "bolts hit %d, want 2" % n
+	elif n1.hits.size() != 1 or n2.hits.size() != 1: r = "the 2 nearest took %d / %d, want 1 / 1" % [n1.hits.size(), n2.hits.size()]
+	elif not n3.hits.is_empty() or not out.hits.is_empty() or not s.hits.is_empty(): r = "bolted past the 2 nearest, out of range or a skipped target"
+	elif not close.hits.is_empty(): r = "a bolt hit chained (lightning gem) to the target next to it"
+	elif not _spawned.is_empty() or FireTrail.made != made: r = "a bolt spawned an arrow or a trail"
+	elif not n1.statuses.is_empty(): r = "a bolt applied a status"
+	if r == "" and a.bolts(from, 9, 0.5, [s]) != 4: r = "n larger than the targets in range should hit all 4 in range"
+	_free([a] + all)
+	return r
+
+## The lightning gem's own chain (+1 target within 120 px at ×0.8) still happens on the arrows' hits with the combo
+## on (gems keep working): B, the nearest other to A, takes a chain hit whose origin is A.
+func test_lightning_gem_chain_still_works():
+	var b := _build(["ricochet", "lightning"])
+	var a_ := _dummy(Vector2(60, 0))
+	var b_ := _dummy(Vector2(60, 60))
+	var order := _direct_order(b, {"A": a_, "B": b_})
+	var chain: Array = b_.hits.filter(func(h): return h[2] == a_.hurt_point())
+	var r := ""
+	if order != ["A", "B"]: r = "setup: direct hits %s" % [order]
+	elif chain.size() != 1: r = "B took %d chain hits from A, want 1 (hits %s)" % [chain.size(), b_.hits]
+	elif not is_equal_approx(float(chain[0][1]), float(b.arrow_mult) * Balance.num("elements.lightning.mult")): r = "chain mult %s, want %s × 0.8" % [chain[0][1], b.arrow_mult]
+	_free([a_, b_])
+	return r
+
+## In game: each bounce plays the recipe's "bounce" effect (hit_spark #7fd4ff) at the bounce point, each bolt its
+## "bolt" effect (chain_zap) on the bolted monster: พันสาย plays chain_zap once per bolt. Hit effects, not shed by
+## PerfSaver.
+func test_bounce_and_bolt_fx():
+	var r := ""
+	for saver in [false, true]:
+		PerfSaver.active = saver
+		var world := Node2D.new()
+		tree.root.add_child(world)
+		var b := _build(["ricochet", "lightning", "split"])
+		var from := Vector2(100, 100)
+		var s := _dummy(from)
+		var n1 := _dummy(from + Vector2(30, 0))
+		var n2 := _dummy(from + Vector2(0, 50))
+		var a := _arrow(Vector2.RIGHT, [s, n1, n2], b)
+		world.add_child(a)
+		var n: int = a.bolts(from, 2, 0.5, [s])
+		var zaps := world.get_children().filter(func(c): return c is FxSprite and c.animation == "chain_zap")
+		if n != 2 or zaps.size() != 2: r = "saver %s: %d bolts played %d chain_zap, want 2 / 2" % [saver, n, zaps.size()]
+		elif not zaps.any(func(z): return z.position == n1.hurt_point()) or not zaps.any(func(z): return z.position == n2.hurt_point()): r = "a chain_zap is not on its bolted monster"
+		if r == "":
+			a._bounce_event(s, n1)
+			var sparks := world.get_children().filter(func(c): return c is FxSprite and c.animation == "hit_spark")
+			if sparks.size() != 1 or sparks[0].position != s.hurt_point() or sparks[0].modulate != Color("#7fd4ff"): r = "saver %s: the bounce played %d hit_spark, want one light-blue spark at the bounce point" % [saver, sparks.size()]
+		world.free()
+		_free([s, n1, n2])
+		if r != "": break
+	PerfSaver.active = false
+	return r
+
+## A build without the combo (ricochet + fire) gets no extra bounce and no bolt, on piercing and on spread.
+func test_no_lightning_combo_no_bolt():
+	var r := ""
+	for skill in ["piercing", "spread"]:
+		var b := _build(["ricochet", "fire"], skill)
+		if not b.combo.is_empty() or int(b.extra_bounces) != 0: r = "%s [ricochet, fire]: combo %s extra %s" % [skill, b.combo, b.extra_bounces]
+		if r != "": break
+		var ds := {"A": _dummy(Vector2(60, 0)), "B": _dummy(Vector2(60, 90)), "C": _dummy(Vector2(60, 180)), "D": _dummy(Vector2(60, -110))}
+		var order := _direct_order(b, ds)
+		if order != ["A", "B"]: r = "%s [ricochet, fire]: direct hits %s, want [A, B]" % [skill, order]
+		elif not ds.D.hits.is_empty() or not ds.C.hits.is_empty(): r = "%s: a no-combo bounce bolted" % skill
+		_free(ds.values())
+		if r != "": break
+	return r
+
+## ศรอสนีกระโดด on ศรกระจาย (not piercing): the gem's bounce chain (1 at gem Lv1) + 1 = 2 bounces per arrow.
+func test_thunder_hop_on_spread_adds_one():
+	var b := _build(["ricochet", "lightning"], "spread")
+	var r := "" if String(b.combo.get("id", "")) == "thunder_hop" else "setup: spread combo %s" % b.combo
+	var ds := {"A": _dummy(Vector2(60, 0)), "B": _dummy(Vector2(60, 90)), "C": _dummy(Vector2(60, 180)), "E": _dummy(Vector2(60, 270))}
+	if r == "":
+		var order := _direct_order(b, ds)
+		if order != ["A", "B", "C"]: r = "spread thunder_hop direct hits %s, want [A, B, C] (1 + 1 bounces, not 3)" % [order]
+	_free(ds.values())
 	return r

@@ -28,8 +28,9 @@ func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier :
 
 ## M5b combos (plan Task 5): a primary arrow is one the hero's skill press fired (Hero._fire with a build); bounce
 ## arrows and basic shots are not. Per-line combo effects belong to primary arrows only: the fire trail (FireTrail,
-## ศรพัดเพลิง / พรหมาสตร์) and the line-end blast (พรหมาสตร์). Secondary hits (blast) never trigger combo or gem
-## on-hit effects: no trail, bounce, element status, bolt, mark or freeze count (Global Constraints).
+## ศรพัดเพลิง / พรหมาสตร์) and the line-end blast (พรหมาสตร์). Per-bounce effects (Task 6: the lightning combos'
+## extra bounce and bolts) belong to every arrow of the chain. Secondary hits (blasts, bolts) never trigger combo or
+## gem on-hit effects: no trail, bounce, element status, bolt, mark or freeze count (Global Constraints).
 var primary := false
 var trail: FireTrail = null
 var _trail_checked := false
@@ -94,7 +95,9 @@ func _after_hit(t: Node2D, amount: int) -> void:
 	if _bounces_left > 0 and not _bounced:
 		var next := _nearest(t.hurt_point(), Balance.num("ricochet.range"), _hit.keys())
 		_bounced = pierce              # a piercing arrow tries once, from its first target only
-		if next: _spawn_bounce(t.hurt_point(), next)
+		if next:
+			_spawn_bounce(t.hurt_point(), next)
+			_bounce_event(t, next)
 
 ## The press's combo id ("" for none).
 func combo_id() -> String:
@@ -132,6 +135,32 @@ func _end_line(struck: Node2D = null) -> void:
 			for s in ComboFx.play(get_parent(), combo_id(), "line_end", position):
 				s.scale = Vector2.ONE * (2.0 * r / maxf(1.0, s._cell.x))   # the burst as wide as the blast (r32 → 64 px)
 
+## One bounce, from `struck` to `next` (Task 6): the recipe's "bounce" effect at the bounce point, and the lightning
+## combos' bolts (ศรอสนีกระโดด 1, ศรอสนีพันสาย 2, each bolt_frac of the bouncing arrow's hit) at the nearest others,
+## never the struck monster or the bounce's own target. Every bounce event of the chain bolts (bounce arrows too).
+func _bounce_event(struck: Node2D, next: Node2D) -> void:
+	var at: Vector2 = struck.hurt_point()
+	if is_inside_tree(): ComboFx.play(get_parent(), combo_id(), "bounce", at)
+	var n := int(_cp("bolts"))
+	if n > 0: bolts(at, n, _cp("bolt_frac"), [struck, next])
+
+## Lightning bolts of this press from `from`: the n nearest distinct live targets within elements.lightning.range,
+## skipping `skip`, each a secondary hit for frac of this arrow's hit (_secondary_hit: no bounce, no element, no combo
+## on-hit) with the recipe's "bolt" effect on it (พันสาย: one chain_zap per bolt). Returns how many were hit.
+func bolts(from: Vector2, n: int, frac: float, skip: Array) -> int:
+	if n <= 0: return 0
+	var reach := Balance.num("elements.lightning.range")
+	var done := skip.duplicate()
+	var hit := 0
+	while hit < n:
+		var t := _nearest(from, reach, done)
+		if t == null: break
+		done.append(t)
+		_secondary_hit(t, frac)
+		hit += 1
+		if is_inside_tree(): ComboFx.play(get_parent(), combo_id(), "bolt", t.hurt_point())
+	return hit
+
 ## Secondary hits of this press at `at`: every live target whose hurt point is within `radius`, plus `include` (hit
 ## even outside the radius: meteor_rain's own target), minus `skip`; each takes frac of this arrow's hit
 ## (_secondary_hit), and with `burn` the fire burn (elements.fire.burn_frac of that hit, the press's leech / ledger).
@@ -151,7 +180,7 @@ func blast(at: Vector2, radius: float, frac: float, burn: bool, include: Node2D 
 			t.apply_status("burn", amount * Balance.num("elements.fire.burn_frac"), float(build.get("leech", 0.0)), shooter, build.get("cast"))
 	return n
 
-## One secondary hit: frac of this arrow's hit, with its crit chance; leeches. Never _after_hit (no element, no bounce,
+## One secondary hit (blast, bolt): frac of this arrow's hit, with its crit chance; leeches. Never _after_hit (no element, no bounce,
 ## no combo on-hit). Task 8: the kill hook (MP / heal on kill through build.cast) goes here too.
 func _secondary_hit(t: Node2D, frac: float) -> int:
 	var amount: int = t.receive_hit(atk, mult * frac, _pos(), crit_chance, crit_mult)
@@ -183,7 +212,10 @@ func _spawn_bounce(from: Vector2, to: Node2D) -> void:
 	a.crit_chance = crit_chance
 	a.crit_mult = crit_mult
 	var b := build.duplicate()
-	b["bounces"] = 0 if pierce else _bounces_left - 1
+	# the chain's own bounces (a piercing arrow bounces from its first target only) + the lightning combo's extra
+	# bounce (ศรอสนีกระโดด +1), handed to the first bounce only: exactly +1 per chain, piercing lines included (Task 6)
+	b["bounces"] = (0 if pierce else _bounces_left - 1) + int(build.get("extra_bounces", 0))
+	b["extra_bounces"] = 0
 	b["pierce_extra"] = 0
 	b["homing"] = false
 	a.configure(b, shooter)
