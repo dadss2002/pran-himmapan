@@ -415,6 +415,51 @@ func _one_patch_per_mark(t: FireTrail, patches: Array) -> bool:
 		if not patches.any(func(c): return c.position.distance_to(q) < 0.01): return false
 	return true
 
+## Owner 2026-11-09 ("ย่อให้เท่าภาพตัวอย่าง"): every patch is drawn at FireTrail.PATCH_SCALE = 0.4 in world space
+## (the size of the owner's sample, pasted 1 sheet px = 1 screen px on a 2.5x screen), nearest-filtered, with the sheet's
+## anchor (the feet) exactly on its mark, i.e. on the path; the patch's drawn box (17.6 x 19.6) stands on the mark.
+## A long bent line still lays at most MAX_STREAKS patches, one per SPACING px (44, unchanged), and with the PerfSaver
+## on every mark keeps one readable patch (visible, opaque, the same small size). The blast's own 1:1 is checked in
+## test_line_end_blast_plays_once_and_frees.
+func test_trail_patches_drawn_at_sample_size():
+	var r := ""
+	if not is_equal_approx(FireTrail.PATCH_SCALE, 0.4): return "PATCH_SCALE %s, want 0.4 (owner: the sample's size)" % FireTrail.PATCH_SCALE
+	if FireTrail.SPACING != 44.0 or FireTrail.MAX_STREAKS != 6: return "spacing %s / %d marks changed (owner: unchanged)" % [FireTrail.SPACING, FireTrail.MAX_STREAKS]
+	var man: Dictionary = FxSprite._manifest().fire_trail
+	var anchor := Vector2(man.anchor[0], man.anchor[1])
+	var cell := Vector2(man.cell[0], man.cell[1])
+	for saver in [false, true]:
+		PerfSaver.active = saver
+		var t := FireTrail.new()
+		t.setup(Vector2(10, 20), ATK, 1.0, 0.2, 2.0, [], null, null, 0.0, "brahmastra")
+		var at := Vector2(10, 20)
+		for i in 400:                                   # a 1600 px path that bends (homing-like), extended every frame
+			at += Vector2.RIGHT.rotated(i * 0.01) * 4.0
+			t.extend_to(at)
+		var patches := t.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_trail")
+		var marks := t.points()
+		if patches.size() != FireTrail.MAX_STREAKS or marks.size() != FireTrail.MAX_STREAKS:
+			r = "saver %s: %d patches / %d marks on a 1600 px line, want %d (bounded)" % [saver, patches.size(), marks.size(), FireTrail.MAX_STREAKS]
+		elif not _one_patch_per_mark(t, patches): r = "saver %s: a mark has no patch" % saver
+		for i in patches.size():
+			if r != "": break
+			var s: FxSprite = patches[i]
+			var feet: Vector2 = s.transform * (s.offset + anchor)        # where the sheet's anchor pixel is drawn
+			var box := Rect2(s.transform * s.offset, cell * s.scale)
+			if not s.scale.is_equal_approx(Vector2(0.4, 0.4)): r = "saver %s: patch %d drawn at %s, want 0.4" % [saver, i, s.scale]
+			elif s.texture_filter != CanvasItem.TEXTURE_FILTER_NEAREST: r = "patch %d not nearest-filtered" % i
+			elif feet.distance_to(marks[i]) > 0.01: r = "patch %d's feet at %s, its mark at %s (want on the path)" % [i, feet, marks[i]]
+			elif not box.size.is_equal_approx(Vector2(17.6, 19.6)): r = "patch %d box %s, want 17.6 x 19.6 world px" % [i, box.size]
+			elif absf(box.end.y - marks[i].y - (cell.y - anchor.y) * 0.4) > 0.01: r = "patch %d box bottom %.2f, want %.2f below its mark" % [i, box.end.y - marks[i].y, (cell.y - anchor.y) * 0.4]
+			elif not s.visible or s.modulate.a < 1.0 or t.modulate.a < 1.0: r = "saver %s: patch %d is not readable (visible %s, alpha %.2f)" % [saver, i, s.visible, s.modulate.a]
+		if r == "":                                      # the damage reach is not the art's: a monster between two small patches still burns
+			var gap: Vector2 = (marks[1] + marks[2]) / 2.0
+			if not t._near(gap, 10.0): r = "a point on the line between two patches is not in the fire"
+		t.free()
+		if r != "": break
+	PerfSaver.active = false
+	return r
+
 ## Owner 2026-11-09 (T2 sample, PHASE 7): the patches of a line never flicker in sync. Every patch plays the fire_trail
 ## loop from its own frame: neighbours 3..11 frames apart (circular), the same frames every run for the same line
 ## (deterministic), and another line (another first mark) starts elsewhere; patch_frame stays inside the loop.
