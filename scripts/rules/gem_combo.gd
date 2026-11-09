@@ -8,8 +8,24 @@ class_name GemCombo
 
 const ELEMENT_KEYS := ["fire", "ice", "lightning"]
 
+static var _no_rows: Array = []
+static var _src: Array = []        # the recipe list _by_id was built from
+static var _by_id := {}            # id → row (the data row itself, not a copy)
+
 static func _rows() -> Array:
-	return Balance.data().get("gem_combos", {}).get("recipes", [])
+	var gc = Balance.data().get("gem_combos", null)
+	if typeof(gc) != TYPE_DICTIONARY or typeof(gc.get("recipes", null)) != TYPE_ARRAY: return _no_rows
+	return gc.recipes
+
+## GemCombo is read per hit from M5b Task 4 on: one id → row map, rebuilt only when the recipe list itself is
+## replaced (tests that swap it), so recipe() / p() allocate nothing per call.
+static func _index() -> Dictionary:
+	var rows := _rows()
+	if not is_same(rows, _src):
+		_src = rows
+		_by_id = {}
+		for row in rows: _by_id[String(row.id)] = row
+	return _by_id
 
 ## Recipe rows in data (= recipe-book) order.
 static func recipes() -> Array:
@@ -22,15 +38,29 @@ static func ids() -> Array:
 
 ## The recipe row, {} when the id is unknown.
 static func recipe(id: String) -> Dictionary:
-	for row in _rows():
-		if String(row.id) == id: return row
-	return {}
+	return _index().get(id, _NONE)
+
+const _NONE := {}
 
 ## A number of a recipe ("trail_frac", "kill_mp_cap", ...), `default` when the row does not have it.
 static func p(id: String, key: String, default := 0.0) -> float:
-	var row := recipe(id)
+	var row: Dictionary = _index().get(id, _NONE)
 	if not row.has(key): return default
 	return float(row[key])
+
+## Row keys that are not numbers (everything else in a row is a recipe number).
+const META_KEYS := ["id", "tier", "name", "gems", "bases", "fx"]
+
+## A copy of a recipe's numbers as floats ({} for no / an unknown id). SkillBuild puts it in the build once per
+## press, so hits read the press's numbers without looking anything up.
+static func numbers(id: String) -> Dictionary:
+	var out := {}
+	var row: Dictionary = _index().get(id, _NONE)
+	for k in row:
+		if k in META_KEYS: continue
+		var v = row[k]
+		if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT: out[k] = float(v)
+	return out
 
 ## A socketed gem's recipe key: its type, or its element (fire / ice / lightning) for an element gem.
 ## "" for an element gem with no element yet, or anything that is not a gem.
@@ -97,7 +127,7 @@ static func describe(id: String) -> String:
 		"hawk_eye":
 			return "นำวิถีไม่ลดแรง · คริ +%s · โดนแล้วมาร์ก %s วิ เป้ารับดาเมจทุกอย่าง +%s" % [_pct(f.call("crit_bonus")), _n(f.call("mark_secs")), _pct(f.call("mark_taken"))]
 		"bloodthirst":
-			return "ดูดเลือดสกิลนี้ ×%s · ฆ่าได้ฟื้น HP %s และ MP +%d (สูงสุด %d MP ต่อการกด 1 ครั้ง)" % [_n(f.call("leech_mult")), _pct(f.call("kill_heal_frac")), int(f.call("kill_mp")), int(f.call("kill_mp_cap"))]
+			return "ดูดเลือดสกิลนี้ +%s (บวกกับเจมดูดเลือด) · ฆ่าได้ฟื้น HP %s และ MP +%d (สูงสุด %d MP ต่อการกด 1 ครั้ง)" % [_pct(f.call("leech_add")), _pct(f.call("kill_heal_frac")), int(f.call("kill_mp")), int(f.call("kill_mp_cap"))]
 		"frost_shard":
 			return "โดนครบ %d ดอกในเป้าเดียว แข็ง %s วิ (เป้าละครั้งทุก %s วิ) · ลูกศรสกิลนี้แรง +%s ใส่เป้าที่ช้าหรือแข็ง" % [int(f.call("freeze_hits")), _n(f.call("freeze_secs")), _n(f.call("freeze_lock_secs")), _pct(f.call("bonus_vs_chilled"))]
 		"shockwave":
@@ -115,7 +145,7 @@ static func describe(id: String) -> String:
 		"anodard":
 			return "โดนครบ %d ดอก แข็ง %s วิ (เป้าละครั้งทุก %s วิ) · โดนเป้าที่แข็ง/ช้า = คริแน่นอน และแตกผลึก r%d แรง %s" % [int(f.call("freeze_hits")), _n(f.call("freeze_secs")), _n(f.call("freeze_lock_secs")), int(f.call("blast_radius")), _pct(f.call("blast_frac"))]
 		"rahu":
-			return "HP ≥ %s: สกิลนี้แรง +%s · ดูดเลือด ×%s · คริฟื้น HP %s · ฆ่าได้ MP +%d (สูงสุด %d ต่อการกด)" % [_pct(f.call("hp_min")), _pct(f.call("hp_bonus")), _n(f.call("leech_mult")), _pct(f.call("crit_heal_frac")), int(f.call("kill_mp")), int(f.call("kill_mp_cap"))]
+			return "HP ≥ %s: สกิลนี้แรง +%s · ดูดเลือด +%s (บวกกับเจมดูดเลือด) · คริฟื้น HP %s · ฆ่าได้ MP +%d (สูงสุด %d ต่อการกด)" % [_pct(f.call("hp_min")), _pct(f.call("hp_bonus")), _pct(f.call("leech_add")), _pct(f.call("crit_heal_frac")), int(f.call("kill_mp")), int(f.call("kill_mp_cap"))]
 		"hellfield":
 			return "วงกลายเป็นทุ่งไฟ: ช้าลง %s · รับดาเมจ +%s · ไหม้ทุกตัวในวง" % [_pct(f.call("zone_slow")), _pct(f.call("zone_taken"))]
 		"earth_piercer":

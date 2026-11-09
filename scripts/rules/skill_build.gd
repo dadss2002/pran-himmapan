@@ -9,17 +9,25 @@ static func _base(skill_id: String) -> Dictionary:
 		_:
 			return {"arrows": 1, "fan_deg": 0.0, "pierce_all": true}
 
-## gems: the skill's sockets (nulls and gems whose labels do not fit are ignored).
+## gems: the skill's OPEN sockets (Hero.open_gems; nulls and gems whose labels do not fit are ignored).
 ## hero_stats needs crit, skill_cd_cut and element_dmg (Hero.stats()).
+## M5b combos (docs/superpowers/specs/2026-11-08-gem-combos.md): "combo" = GemCombo.resolve, "combo_p" = a copy
+## of that recipe's numbers (read once per press; hits read the build, not the data), "extra_bounces".
+## Stat-level parts folded in here: crit_bonus → crit, leech_add → leech (owner 2026-11-09: the leech gem's own
+## leech + a flat 3 %), homing_full → homing keeps full damage. Combos add no MP multiplier. Combo numbers are
+## flat at any gem level (owner 2026-11-09); the gems' own effects keep scaling.
 static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dictionary) -> Dictionary:
+	var combo := GemCombo.resolve(skill_id, gems)
+	var cp := GemCombo.numbers(String(combo.get("id", "")))
 	var b := _base(skill_id)
 	var mp := Skills.mp_cost(skill_id)
 	var dmg := 1.0
 	var dmg_pct := 0.0
 	var mp_cut := 0.0
 	var cd_cut := 0.0
-	var crit := float(hero_stats.get("crit", Balance.num("crit.chance")))
-	var out := {"pierce_extra": 0, "bounces": 0, "bounce_mult": 0.0, "homing": false, "leech": 0.0, "element": "", "element_mult": 1.0}
+	var crit := float(hero_stats.get("crit", Balance.num("crit.chance"))) + float(cp.get("crit_bonus", 0.0))
+	var out := {"pierce_extra": 0, "bounces": 0, "bounce_mult": 0.0, "homing": false, "leech": float(cp.get("leech_add", 0.0)), "element": "", "element_mult": 1.0,
+		"combo": combo, "combo_p": cp, "extra_bounces": int(cp.get("extra_bounces", 0.0))}
 	var per_arrow := 1.0
 	for g in gems:
 		if typeof(g) != TYPE_DICTIONARY or not Gem.fits(String(g.type), skill_id): continue
@@ -45,7 +53,7 @@ static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dicti
 				out.pierce_extra = int(d.extra_at_10) if high else int(d.extra)
 			"homing":
 				out.homing = true
-				per_arrow *= e
+				if cp.get("homing_full", 0.0) == 0.0: per_arrow *= e
 			"multiply":
 				dmg *= e
 			"execute":

@@ -247,7 +247,7 @@ For area recipes, the tests add `Balance.data()["skill_labels"]["test_fire_arrow
   - `SkillBuild.of(...)` gains output keys `"combo": Dictionary` (the resolve result) and `"extra_bounces": int`. `crit` adds `crit_bonus`. `leech` is multiplied by `leech_mult`. With `homing_full`, homing does not multiply `per_arrow`. `mp` is unchanged by combos.
   - `class_name ComboCast extends RefCounted`: `func _init(id := "", hp_frac := 1.0)`, `var id: String`, `func dmg_bonus() -> float` (Rahu: `hp_bonus` if `hp_frac >= hp_min`, else 0), `func refund_mp(per_kill: int) -> int` (granted after the cap), `func count_hit(target_key: int) -> int` (returns the new count), `func once(tag: String, target_key: int) -> bool`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```gdscript
 # build (char Lv10, gem Lv1, no options, hero_stats {"crit": 0.05, "element_dmg": 0.0, "skill_cd_cut": 0.0})
@@ -266,10 +266,12 @@ func test_count_hit():                    # count_hit(5) → 1, 2, 3; count_hit(
 func test_rahu_hp_threshold():            # ComboCast.new("rahu", 0.70).dmg_bonus() ≈ 0.30; 0.69 → 0.0; ComboCast.new("garuda", 1.0) → 0.0
 ```
 
-- [ ] **Step 2: Run and check they fail** (`TEST_ONLY=test_combo_cast`, `TEST_ONLY=test_gem_combo`).
-- [ ] **Step 3: Implement** the changes and the class as listed. The refund cap comes from `GemCombo.p(id, "kill_mp_cap")`, and the per-kill amount from `p(id, "kill_mp")`. `refund_mp` takes the per-kill amount so Task 8 can pass it in.
-- [ ] **Step 4: Run and check they pass.** Then run the full suite: `test_hero_gems`, `test_arrow_gems` and `test_skill_panel` must stay green, because a build without a combo is unchanged.
-- [ ] **Step 5: Commit** `git commit -m "M5b Task 3: SkillBuild combo stats + ComboCast per-press ledger (MP-on-kill caps 6/9)"`
+- [x] **Step 2: Run and check they fail** (`TEST_ONLY=test_combo_cast`, `TEST_ONLY=test_gem_combo`).
+- [x] **Step 3: Implement** the changes and the class as listed. The refund cap comes from `GemCombo.p(id, "kill_mp_cap")`, and the per-kill amount from `p(id, "kill_mp")`. `refund_mp` takes the per-kill amount so Task 8 can pass it in.
+- [x] **Step 4: Run and check they pass.** Then run the full suite: `test_hero_gems`, `test_arrow_gems` and `test_skill_panel` must stay green, because a build without a combo is unchanged.
+- [x] **Step 5: Commit** `git commit -m "M5b Task 3: SkillBuild combo stats + ComboCast per-press ledger (MP-on-kill caps 6/9)"`
+
+**Done (2026-11-09):** Owner 2026-11-09 (Task 2 review): `balance.json` bloodthirst / rahu `leech_mult: 2.0` → `leech_add: 0.03` (the leech gem's own leech + a flat 3 %: 6 % at gem Lv1, 7.9 % at Lv20), `describe()` now reads "ดูดเลือด… +3% (บวกกับเจมดูดเลือด)". `GemCombo`: id → row map rebuilt only when the recipe list itself is replaced (`recipe` / `p` allocate nothing), new `numbers(id)` (a float copy of a row's numbers). `SkillBuild.of` adds `combo` (= `GemCombo.resolve`, unchanged), `combo_p` (= `GemCombo.numbers`, copied once per press, so Task 4+ hits read the build, not the data) and `extra_bounces`; `crit` + `crit_bonus`; `leech` + `leech_add`; `homing_full` drops the homing ×0.9; `mp` unchanged. `scripts/rules/combo_cast.gd` (`ComboCast`, RefCounted, pure): `_init(id, hp_frac)` copies kill_mp / kill_mp_cap / kill_heal_frac / crit_heal_frac / rahu hp bonus once; `refund_mp(per_kill)` (granted after the per-press cap, 0 for junk), `mp_refunded()`, `count_hit`, `once`, `dmg_bonus`. Plan test `test_bloodthirst_doubles_leech` became `test_sustain_leech_is_gem_plus_flat_three` (owner decision). New tests: test_gem_combo +11 (the plan's build tests, `test_build_carries_combo_and_numbers`, `test_combo_values_flat_at_any_gem_level_in_build` (every arrow recipe, gem Lv1 vs Lv20: combo numbers equal, the build's crit/leech minus the gems' own part = the flat combo value), `test_hero_build_reads_open_slots_only`, `test_every_combo_reader_uses_open_gems` (source guard: no `SkillBuild.of` / `GemCombo.resolve` fed from `skill_gems`), `test_recipe_lookup_cache`); test_combo_cast 10 (the plan's 6 + partial/junk refund, numbers copied at press, presses separate, `test_refund_cap_below_press_cost`). Changed assertions: test_gem_combo SPEC rows bloodthirst / rahu (`leech_add` instead of `leech_mult`) and `test_describe_has_numbers` (+3 %, no ×), both owner 2026-11-09. Seen failing first (ComboCast not declared; leech 0.03 vs 0.06; homing 2.349 vs 2.61). Mutation checks: leech scaling with gem level → 2 fails; `hero.build` on raw sockets → 2 fails. Full suite: `RESULT passed=530 failed=0`. Risk B25 added.
 
 ---
 

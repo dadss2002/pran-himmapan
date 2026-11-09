@@ -4,11 +4,13 @@ extends RefCounted
 ## Owner 2026-11-09: one combo per skill (higher tier first, then recipe-book order); combo values do not
 ## grow with gem level; 3-gem rows read literally (no unlisted base effects).
 
+## leech_add (owner 2026-11-09, Task 2 review): "ดูดเลือด ×2 (3% → 6%)" / "ดูดเลือด 6%" = the leech gem's own
+## leech (grows with its level) + a flat 3 %, not ×2.
 const SPEC := {   # spec §1 and §2 at gem Lv1, verbatim
 	"fire_fan":      {"tier": 2, "name": "ศรพัดเพลิง", "gems": ["split", "fire"], "trail_secs": 2.0, "trail_frac": 0.20},
 	"thunder_hop":   {"tier": 2, "name": "ศรอสนีกระโดด", "gems": ["ricochet", "lightning"], "extra_bounces": 1, "bolts": 1, "bolt_frac": 0.50},
 	"hawk_eye":      {"tier": 2, "name": "ศรตาเหยี่ยว", "gems": ["homing", "execute"], "homing_full": 1, "crit_bonus": 0.15, "mark_secs": 4.0, "mark_taken": 0.20},
-	"bloodthirst":   {"tier": 2, "name": "ศรกระหายเลือด", "gems": ["leech", "multiply"], "leech_mult": 2.0, "kill_heal_frac": 0.03, "kill_mp": 2, "kill_mp_cap": 6},
+	"bloodthirst":   {"tier": 2, "name": "ศรกระหายเลือด", "gems": ["leech", "multiply"], "leech_add": 0.03, "kill_heal_frac": 0.03, "kill_mp": 2, "kill_mp_cap": 6},
 	"frost_shard":   {"tier": 2, "name": "ศรเกล็ดน้ำแข็ง", "gems": ["ice", "split"], "freeze_hits": 3, "freeze_secs": 1.0, "freeze_lock_secs": 5.0, "bonus_vs_chilled": 0.25},
 	"shockwave":     {"tier": 2, "name": "ศรคลื่นกระแทก", "gems": ["pierce", "expand"], "blast_on_pierce": 1, "blast_radius": 32, "blast_frac": 0.80},
 	"hunter_zone":   {"tier": 2, "name": "อาณาเขตพราน", "gems": ["expand", "extend"], "zone_slow": 0.30, "zone_taken": 0.10},
@@ -17,7 +19,7 @@ const SPEC := {   # spec §1 and §2 at gem Lv1, verbatim
 	"thousand_bolts":{"tier": 3, "name": "ศรอสนีพันสาย", "gems": ["ricochet", "lightning", "split"], "bases": ["thunder_hop"], "bolts": 2, "bolt_frac": 0.50},
 	"garuda":        {"tier": 3, "name": "ศรเนตรพญาครุฑ", "gems": ["homing", "execute", "multiply"], "bases": ["hawk_eye"], "homing_full": 1, "crit_bonus": 0.15, "mark_secs": 4.0, "mark_taken": 0.30, "sure_crit_marked": 1},
 	"anodard":       {"tier": 3, "name": "ศรผลึกอโนดาต", "gems": ["ice", "split", "execute"], "bases": ["frost_shard"], "freeze_hits": 3, "freeze_secs": 1.0, "freeze_lock_secs": 5.0, "sure_crit_chilled": 1, "blast_on_chilled": 1, "blast_radius": 32, "blast_frac": 0.50},
-	"rahu":          {"tier": 3, "name": "ศรราหูอมจันทร์", "gems": ["leech", "multiply", "execute"], "bases": ["bloodthirst"], "hp_min": 0.70, "hp_bonus": 0.30, "leech_mult": 2.0, "crit_heal_frac": 0.01, "kill_mp": 3, "kill_mp_cap": 9},
+	"rahu":          {"tier": 3, "name": "ศรราหูอมจันทร์", "gems": ["leech", "multiply", "execute"], "bases": ["bloodthirst"], "hp_min": 0.70, "hp_bonus": 0.30, "leech_add": 0.03, "crit_heal_frac": 0.01, "kill_mp": 3, "kill_mp_cap": 9},
 	"hellfield":     {"tier": 3, "name": "ทุ่งเพลิงบรรลัยกัลป์", "gems": ["expand", "extend", "fire"], "bases": ["hunter_zone", "fire_burst"], "zone_slow": 0.30, "zone_taken": 0.20, "burn_all": 1},
 	"earth_piercer": {"tier": 3, "name": "ศรอัคนีทะลวงพิภพ", "gems": ["pierce", "expand", "fire"], "bases": ["shockwave", "fire_burst"], "blast_on_pierce": 1, "blast_radius": 40, "blast_frac": 1.00, "blast_burn": 1},
 	"meteor_rain":   {"tier": 3, "name": "ฝนดาวไฟ", "gems": ["split", "fire", "expand"], "bases": ["fire_fan", "fire_burst"], "blast_on_hit": 1, "blast_radius": 40, "blast_frac": 0.80},
@@ -270,6 +272,9 @@ func test_describe_has_numbers():
 	if not ("2 วิ" in d and "20%" in d): return "fire_fan: %s" % d
 	d = GemCombo.describe("rahu")
 	if not ("70%" in d and "9" in d and "30%" in d): return "rahu: %s" % d
+	if not ("+3%" in d) or "×" in d: return "rahu leech is a flat +3 %% (owner 2026-11-09), not ×: %s" % d
+	d = GemCombo.describe("bloodthirst")
+	if not ("+3%" in d) or "×" in d: return "bloodthirst leech is a flat +3 %% (owner 2026-11-09), not ×: %s" % d
 	d = GemCombo.describe("shockwave")
 	if not ("r32" in d and "80%" in d): return "shockwave: %s" % d
 	d = GemCombo.describe("frost_shard")
@@ -277,3 +282,167 @@ func test_describe_has_numbers():
 	for id in GemCombo.ids():
 		if GemCombo.describe(id) == "": return "%s has no text" % id
 	return "" if GemCombo.describe("nope") == "" else "unknown id should describe as ''"
+
+# ---------- build (M5b Task 3): SkillBuild combo stats ----------
+## char Lv10, gem Lv1, no options (spec §5 example row).
+const STATS := {"crit": 0.05, "element_dmg": 0.0, "skill_cd_cut": 0.0}
+
+func _b(keys: Array, char_level := 10, gem_level := 1, skill := "piercing") -> Dictionary:
+	var gems: Array = []
+	for k in keys: gems.append(_k(k, gem_level))
+	return SkillBuild.of(skill, char_level, gems, STATS)
+
+## Recipes whose gems all fit `skill`.
+func _formable_on(skill: String) -> Array:
+	var out: Array = []
+	for row in GemCombo.recipes():
+		var all := true
+		for k in row.gems: if not Gem.fits(GemCombo.key_type(String(k)), skill): all = false
+		if all: out.append(row)
+	return out
+
+func test_build_spec_section5_numbers():
+	var rows := [[["split"], 1.566, 11.2, ""], [["split", "fire"], 1.7226, 14.56, "fire_fan"], [["split", "fire", "multiply"], 2.32551, 21.84, "brahmastra"]]
+	for r in rows:
+		var b := _b(r[0])
+		if not is_equal_approx(float(b.arrow_mult), r[1]): return "%s arrow_mult %s, spec %s" % [r[0], b.arrow_mult, r[1]]
+		if not is_equal_approx(float(b.mp), r[2]): return "%s mp %s, spec %s" % [r[0], b.mp, r[2]]
+		if String(b.combo.get("id", "")) != r[3]: return "%s combo %s, want '%s'" % [r[0], b.combo, r[3]]
+	return ""
+
+## The build carries the resolve result unchanged, and a copy of the recipe's numbers (read once per press).
+func test_build_carries_combo_and_numbers():
+	var b := _b(["split", "fire"])
+	if b.combo != GemCombo.resolve("piercing", [_k("split"), _k("fire")]): return "combo %s is not the resolve result" % b.combo
+	if not is_equal_approx(float(b.combo_p.get("trail_frac", 0.0)), 0.20) or not is_equal_approx(float(b.combo_p.get("trail_secs", 0.0)), 2.0): return "combo_p %s" % b.combo_p
+	for k in b.combo_p:
+		if k in META: return "combo_p holds the non-number %s" % k
+		if typeof(b.combo_p[k]) != TYPE_FLOAT: return "combo_p.%s is not a float" % k
+	var none := _b(["split"])
+	if not none.combo.is_empty() or not none.combo_p.is_empty() or int(none.extra_bounces) != 0: return "no combo: %s %s %s" % [none.combo, none.combo_p, none.extra_bounces]
+	# a copy: changing it never changes the data
+	b.combo_p.trail_frac = 9.0
+	return "" if is_equal_approx(GemCombo.p("fire_fan", "trail_frac"), 0.20) else "combo_p is not a copy"
+
+func test_combo_adds_no_mp():
+	var n := 0
+	for row in _formable_on("piercing"):
+		var want := Skills.mp_cost("piercing")
+		for k in row.gems: want *= Gem.mp_mult(GemCombo.key_type(String(k)))
+		var b := _b(row.gems)
+		if String(b.combo.get("id", "")) != String(row.id): return "%s did not form (%s)" % [row.id, b.combo]
+		if not is_equal_approx(float(b.mp), want): return "%s mp %s, want %s (no combo MP multiplier)" % [row.id, b.mp, want]
+		n += 1
+	return "" if n == 10 else "expected the 10 arrow recipes on piercing, got %d" % n
+
+func test_hawk_eye_homing_full_crit():
+	for id in ["hawk_eye", "garuda"]:
+		var keys: Array = GemCombo.recipe(id).gems
+		var b := _b(keys)
+		var want_mult := Skills.damage_mult("piercing", 10) * (Gem.effect(_k("multiply")) if "multiply" in keys else 1.0)
+		if not is_equal_approx(float(b.arrow_mult), want_mult): return "%s arrow_mult %s, want %s (no homing ×0.9)" % [id, b.arrow_mult, want_mult]
+		if not is_equal_approx(float(b.crit), 0.05 + 0.15 + 0.15): return "%s crit %s, want 0.35" % [id, b.crit]
+		if not b.homing: return "%s lost homing" % id
+	return ""
+
+func test_homing_alone_keeps_penalty():
+	var b := _b(["homing"], 1)
+	if not is_equal_approx(float(b.arrow_mult), 1.8 * 0.9): return "homing alone %s, want 1.62" % b.arrow_mult
+	b = _b(["homing", "multiply"], 1)          # homing + a gem that forms no combo: penalty stays
+	return "" if is_equal_approx(float(b.arrow_mult), 1.8 * 0.9 * 1.35) and b.combo.is_empty() else "homing+multiply %s %s" % [b.arrow_mult, b.combo]
+
+## Owner 2026-11-09: the combo leech is the leech gem's own leech + a flat 3 % (not ×2).
+func test_sustain_leech_is_gem_plus_flat_three():
+	var cases := [[["leech", "multiply"], 1, 0.06], [["leech", "multiply"], 5, 0.034 + 0.03], [["leech", "multiply"], 20, 0.079],
+		[["leech", "multiply", "execute"], 1, 0.06], [["leech", "multiply", "execute"], 20, 0.079], [["leech"], 1, 0.03], [["leech"], 20, 0.049]]
+	for c in cases:
+		var b := _b(c[0], 10, c[1])
+		if not is_equal_approx(float(b.leech), c[2]): return "%s gem Lv%d leech %s, want %s" % [c[0], c[1], b.leech, c[2]]
+	return ""
+
+func test_thunder_hop_extra_bounce():
+	var b := _b(["ricochet", "lightning"])
+	if String(b.combo.get("id", "")) != "thunder_hop" or int(b.extra_bounces) != 1: return "thunder_hop %s extra %s" % [b.combo, b.extra_bounces]
+	if int(b.bounces) != 1: return "the ricochet gem's own bounce stays separate: %s" % b.bounces
+	b = _b(["ricochet", "lightning", "split"])
+	if String(b.combo.get("id", "")) != "thousand_bolts" or int(b.extra_bounces) != 0: return "thousand_bolts (row read literally) %s extra %s" % [b.combo, b.extra_bounces]
+	return ""
+
+## Owner 2026-11-09 Q2 at the build level: from gem Lv1 to Lv20 only the gems' own effects grow.
+## Every build number with a combo minus the same build's number without the combo part must not change.
+func test_combo_values_flat_at_any_gem_level_in_build():
+	for row in _formable_on("piercing"):
+		var lo := _b(row.gems, 10, 1)
+		var hi := _b(row.gems, 10, 20)
+		var id := String(row.id)
+		if lo.combo_p != hi.combo_p: return "%s combo numbers moved with gem level: %s vs %s" % [id, lo.combo_p, hi.combo_p]
+		if int(lo.extra_bounces) != int(hi.extra_bounces): return "%s extra_bounces moved" % id
+		for lv in [1, 20]:
+			var b := lo if lv == 1 else hi
+			var own_crit := 0.05
+			var own_leech := 0.0
+			for k in row.gems:
+				if k == "execute": own_crit += Gem.effect(_k("execute", lv))
+				if k == "leech": own_leech += Gem.effect(_k("leech", lv))
+			if not is_equal_approx(float(b.crit) - own_crit, GemCombo.p(id, "crit_bonus")): return "%s Lv%d crit %s: combo part %s, want flat %s" % [id, lv, b.crit, float(b.crit) - own_crit, GemCombo.p(id, "crit_bonus")]
+			if not is_equal_approx(float(b.leech) - own_leech, GemCombo.p(id, "leech_add")): return "%s Lv%d leech %s: combo part %s, want flat %s" % [id, lv, b.leech, float(b.leech) - own_leech, GemCombo.p(id, "leech_add")]
+	return ""
+
+## Every reader of sockets goes through hero.open_gems(): a closed-slot gem never forms a combo in the build.
+func test_hero_build_reads_open_slots_only():
+	var h: Hero = load("res://scenes/hero.tscn").instantiate()
+	h.setup_sprites()
+	h.inventory.slots.clear()
+	var i := 0
+	while h.inventory.slots.size() < int(Balance.num("bag.slots")):
+		h.inventory.add("junk_%d" % i, 1)
+		i += 1
+	h.set_skill_gems({"piercing": [_k("homing"), null, _k("execute")]})
+	h.return_closed_gems()      # bag full: execute stays in closed slot 3
+	var r := ""
+	var b := h.build("piercing")
+	if h.skill_gems.piercing[2] == null: r = "setup: execute should stay socketed"
+	elif not b.combo.is_empty() or not b.combo_p.is_empty(): r = "closed-slot gem formed %s" % b.combo
+	elif not is_equal_approx(float(b.crit), float(h.stats().crit)): r = "closed-slot execute/crit_bonus counted: %s" % b.crit
+	if r == "":
+		h.set_progress(10, 0)
+		b = h.build("piercing")
+		if String(b.combo.get("id", "")) != "hawk_eye": r = "slot 3 open at skill Lv10: %s" % b.combo
+	h.free()
+	return r
+
+## Source guard: outside scripts/rules, every SkillBuild.of / GemCombo.resolve call is fed from open_gems, never
+## from skill_gems directly (a gem in a closed slot must stay inert).
+func test_every_combo_reader_uses_open_gems():
+	var files: Array = []
+	var stack := ["res://scripts"]
+	while not stack.is_empty():
+		var dir_path: String = stack.pop_back()
+		if dir_path.ends_with("/rules"): continue
+		var d := DirAccess.open(dir_path)
+		for sub in d.get_directories(): stack.append(dir_path + "/" + sub)
+		for f in d.get_files(): if f.ends_with(".gd"): files.append(dir_path + "/" + f)
+	var callers := 0
+	for path in files:
+		var text := FileAccess.get_file_as_string(path)
+		if not ("SkillBuild.of(" in text or "GemCombo.resolve(" in text): continue
+		callers += 1
+		if not "open_gems(" in text: return "%s calls SkillBuild.of / GemCombo.resolve without open_gems()" % path
+		var n := 0
+		for line in text.split("\n"):
+			n += 1
+			if ("SkillBuild.of(" in line or "GemCombo.resolve(" in line) and "skill_gems" in line: return "%s:%d reads skill_gems directly: %s" % [path, n, line.strip_edges()]
+	return "" if callers >= 2 else "expected hero.gd and skill_panel.gd as callers, found %d" % callers
+
+## The id → row cache: same rows as the data, and it follows a test that swaps the recipe list.
+func test_recipe_lookup_cache():
+	if not is_same(GemCombo.recipe("rahu"), GemCombo.recipes()[9]): return "recipe() should return the data row itself"
+	var old: Array = Balance.data()["gem_combos"]["recipes"]
+	Balance.data()["gem_combos"]["recipes"] = [{"id": "only", "tier": 2, "name": "x", "gems": ["split", "fire"], "trail_frac": 0.5}]
+	Balance.clear_cache()
+	var r := ""
+	if not is_equal_approx(GemCombo.p("only", "trail_frac"), 0.5) or not GemCombo.recipe("fire_fan").is_empty(): r = "cache did not follow the new list"
+	Balance.data()["gem_combos"]["recipes"] = old
+	Balance.clear_cache()
+	if r == "" and not is_equal_approx(GemCombo.p("fire_fan", "trail_frac"), 0.20): r = "cache did not come back"
+	return r
