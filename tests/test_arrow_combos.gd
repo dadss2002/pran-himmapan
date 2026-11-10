@@ -1375,10 +1375,11 @@ func _sim_pack_spread(b: Dictionary, hit_rays: Array) -> Array:
 	return out
 
 ## tools/gem_combo_sim.py, pack of 6, per press in units of the press's first hit (cast(...) pack / hit, crit off, gem
-## Lv1): ศรทะลวง กระโดด 3 + 0.8×3 + 0.8 + 1.8 = 8.0 · ศรกระจาย กระโดด 4 + 0.8×4 + 0.8 + 1.8 = 9.8 · ศรทะลวง พันสาย
-## 7 + 0.8×7 + 0.8×3 + 0.5×3×2 = 18.0 · ศรกระจาย พันสาย 5 + 0.8×5 + 0.8×3 + 3.0 = 14.4 (`python3 tools/gem_combo_sim.py
-## --press` prints them).
-const SIM_PRESS := {"piercing thunder_hop": 8.0, "spread thunder_hop": 9.8, "piercing thousand_bolts": 18.0, "spread thousand_bolts": 14.4}
+## Lv1): ศรทะลวง กระโดด 3 + 0.8×3 + 0.8 + 1.8 = 8.0 · ศรกระจาย กระโดด 4 + 0.8×4 + 0.8×4 + 1.8 = 12.2 · ศรทะลวง พันสาย
+## 7 + 0.8×7 + 0.8×3 + 0.5×3×2 = 18.0 · ศรกระจาย พันสาย 5 + 0.8×5 + 0.8×5 + 3.0 = 16.0 (`python3 tools/gem_combo_sim.py
+## --press` prints them). ศรกระจาย's ricochet term counts every arrow that hits (owner 2026-11-10 "คงไว้ แก้ตัวเลขอนุมัติ
+## ให้นับทุกลูก"; was 1 per line: 9.8 / 14.4).
+const SIM_PRESS := {"piercing thunder_hop": 8.0, "spread thunder_hop": 12.2, "piercing thousand_bolts": 18.0, "spread thousand_bolts": 16.0}
 
 ## One press of build b into `all` (crit off; the dummies record each hit's multiplier): [total / first hit, primary
 ## direct hits, chains, bounce arrows, bolts, plain (non-carrier) bounce arrows].
@@ -1405,10 +1406,9 @@ func _press_total(b: Dictionary, all: Array) -> Array:
 
 ## Owner 2026-11-10 goal: per-press pack totals in game = tools/gem_combo_sim.py. Real arrows of a press (crit off,
 ## gem Lv1, char Lv10/12) into a 6-monster pack laid out to the sim's hit counts (ศรทะลวง line 3 hits; +split 7 hits on 5;
-## ศรกระจาย 4 arrows hit; +split 5), every chain / bounce / bolt finding a monster. ศรทะลวง: total within ±3 % of the
-## sim. ศรกระจาย: the sim counts the ricochet gem as 1 bounce per LINE (1 / 3), but in game the line's other arrows
-## that hit still bounce (owner rule 1: "the other arrows keep the plain ricochet gem's bounces"); the total minus
-## exactly those plain bounces (bounce_mult each) is within ±3 % of the sim, and the raw total is recorded (risks B29).
+## ศรกระจาย 4 arrows hit; +split 5), every chain / bounce / bolt finding a monster. Every case, ศรกระจาย included: the
+## raw total (plain bounces of the line's other arrows counted, as the corrected sim does, owner 2026-11-10) within
+## ±3 % of the sim; the hit counts equal the sim's.
 func test_lightning_pack_press_matches_sim():
 	var lines: Array = []
 	var r := ""
@@ -1438,11 +1438,10 @@ func test_lightning_pack_press_matches_sim():
 				want = [5, 5, 5, 6, 2]
 		var got := _press_total(b, all)
 		var sim: float = SIM_PRESS[c[0]]
-		var plain_part := float(got[5]) * float(b.bounce_mult)
-		var comparable: float = float(got[0]) - plain_part
-		lines.append("%s: game %.2f (sim-counted %.2f + plain %.2f) vs sim %.2f = %+.1f %% raw / %+.1f %% sim-counted" % [c[0], got[0], comparable, plain_part, sim, (float(got[0]) / sim - 1.0) * 100.0, (comparable / sim - 1.0) * 100.0])
+		var total: float = float(got[0])
+		lines.append("%s: game %.2f vs sim %.2f = %+.1f %%" % [c[0], total, sim, (total / sim - 1.0) * 100.0])
 		if got.slice(1) != want: r = "%s: [direct, chains, bounces, bolts, plain] %s, want %s (the sim's hit counts)" % [c[0], got.slice(1), want]
-		elif absf(comparable / sim - 1.0) > 0.03: r = "%s: %.3f vs sim %.3f (> ±3 %%)" % [c[0], comparable, sim]
+		elif absf(total / sim - 1.0) > 0.03: r = "%s: %.3f vs sim %.3f (> ±3 %%)" % [c[0], total, sim]
 		elif c[2] == "piercing" and got[5] != 0: r = "%s: plain bounces on a piercing press" % c[0]
 		if r != "": break
 	print("  lightning pack per press (units of the first hit):\n    " + "\n    ".join(lines))

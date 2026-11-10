@@ -81,7 +81,9 @@ def cast(s, gems, L, c, cdm):
     one, pack = hit * n1, hit * np_
     if 'fire' in G: one += 0.6 * hit; pack += 0.6 * hit * d          # burn 20%/s x3 s, no stacking
     if 'lightning' in G: pack += 0.8 * hit * np_                       # +1 target per hit (none on a lone boss)
-    if 'ricochet' in G: pack += 0.8 * hit * (3 if split else 1)        # 1 bounce per arrow line
+    # ricochet gem: 1 bounce per arrow that hits — ศรทะลวง / ศรเพลิง: 1 arrow per line (1, 3 with split); ศรกระจาย:
+    # every arrow that hits bounces (np_ = 4, 5 with split), owner 2026-11-10 "คงไว้ แก้ตัวเลขอนุมัติให้นับทุกลูก"
+    if 'ricochet' in G: pack += 0.8 * hit * (np_ if s == 'spread' else (3 if split else 1))
     mark = 0.0; refund = 0
     # ---- 2-gem combos ⚙
     if name == 'ศรพัดเพลิง': one += 0.4 * hit; pack += 0.4 * hit * d       # trail 20%/s x 2 s
