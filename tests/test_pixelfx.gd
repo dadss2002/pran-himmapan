@@ -886,13 +886,15 @@ func _files_under(dir: String, exts: Array) -> Array:
 ## MIT notice kept (LICENSE + NOTICE), in the export, and a line in the game's credits; no Patch Pixel font. The web
 ## export ships the licence, CREDITS.md and the file it points to (assets/audio/CREDITS.md).
 ## Owner 2026-11-09 fire picks (spec 2026-11-08-gem-combos.md, samples /home/claude/fx_samples rows T2 / B2): the fire
-## trail patch is T2 fire/campfire (cell 44x49, 45 f @ 15 fps, 3.0 s loop) and the line-end blast B2
+## trail patch is T2 fire/campfire (owner 2026-11-10: pre-shrunk, fire_trail_small: cell 18x20 = 0.4 of 44x49, feet
+## anchor 9,18, 45 f @ 15 fps, 3.0 s loop; the full-size fire_trail is retired) and the line-end blast B2
 ## explosions/grenade (cell 64x62, 9 f @ 15 fps, 0.6 s one-shot, only the blast: 1.667-2.2 s), in the game's fire ramp
 ## (status_burn's palette), exactly as exported for the samples: logs cut (no marker blue left), the glow fades before
-## the cell edge (no glow box: edge alpha <= 8), every trail frame a readable flame (>= 400 solid px; measured 505-747),
+## the cell edge (no glow box: edge alpha <= 8; the shrunk trail <= its faintest level 16 on <= 8 of its 68 border px),
+## every trail frame a readable flame (>= 64 solid px of 360; measured 83-123, = 505-747 x 0.16),
 ## the blast as wide as พรหมาสตร์'s blast (2 x r32 = 64 px, drawn 1:1) and its last 3 frames fading out.
 const FIRE_PICKS := {
-	"fire_trail": {"id": "fire/campfire", "cell": Vector2i(44, 49), "frames": 45, "loop": true, "anchor": Vector2i(22, 44), "sheet": Vector2i(1980, 49), "secs": 3.0},
+	"fire_trail_small": {"id": "fire/campfire", "cell": Vector2i(18, 20), "frames": 45, "loop": true, "anchor": Vector2i(9, 18), "sheet": Vector2i(810, 20), "secs": 3.0},
 	"fire_blast": {"id": "explosions/grenade", "cell": Vector2i(64, 62), "frames": 9, "loop": false, "anchor": Vector2i(32, 52), "sheet": Vector2i(576, 62), "secs": 0.6}}
 func test_fire_picks_match_the_samples():
 	var man := _man()
@@ -912,14 +914,19 @@ func test_fire_picks_match_the_samples():
 		if Vector2i(img.get_size()) != want.sheet: return "%s: sheet %s, want %s" % [id, img.get_size(), want.sheet]
 		var cw := int(e.cell[0])
 		var ch := int(e.cell[1])
+		var edge_max := 16 if id == "fire_trail_small" else 8
 		for i in int(e.frames):
 			var f := _frame(img, e, i)
+			var lit_edge := 0
 			for y in ch:
 				for x in cw:
 					var c := f.get_pixel(x, y)
 					if c.a > 0.0 and c.b8 > c.r8 + 40 and c.b8 > c.g8 + 40: return "%s frame %d: marker blue left at %d,%d" % [id, i, x, y]
-					if (x == 0 or y == 0 or x == cw - 1 or y == ch - 1) and c.a8 > 8: return "%s frame %d: alpha %d at the cell edge (glow box)" % [id, i, c.a8]
-			if id == "fire_trail" and _opaque(f) < 400: return "fire_trail frame %d: only %d solid px" % [i, _opaque(f)]
+					if (x == 0 or y == 0 or x == cw - 1 or y == ch - 1) and c.a8 > 0:
+						lit_edge += 1
+						if c.a8 > edge_max: return "%s frame %d: alpha %d at the cell edge (glow box)" % [id, i, c.a8]
+			if id == "fire_trail_small" and lit_edge > 8: return "%s frame %d: %d lit pixels on the cell border (glow box)" % [id, i, lit_edge]
+			if id == "fire_trail_small" and _opaque(f) < 64: return "fire_trail_small frame %d: only %d solid px" % [i, _opaque(f)]
 	var bl: Dictionary = man.fire_blast
 	var r := 0
 	for row in GemCombo.recipes():
@@ -936,6 +943,39 @@ func test_fire_picks_match_the_samples():
 		peaks.append(m)
 	if not (peaks[5] == 255 and peaks[6] < peaks[5] and peaks[7] < peaks[6] and peaks[8] < peaks[7] and peaks[8] > 0): return "fire_blast does not fade out over its last 3 frames: %s" % [peaks]
 	if not FileAccess.get_file_as_string(CREDITS).contains("fire trail"): return "credits do not name the fire trail / blast"
+	return ""
+
+## Owner 2026-11-10 ("ทำชีตย่อใหม่ให้เนียน"): fire_trail_small is the T2 sheet area-averaged by 0.4 (44x49 -> 18x20,
+## tools/pixelfx_export.py shrink_cells) and still crisp pixel art: alpha only 0, its 3 glow levels or 255 (no blur
+## halo of in-between alphas round the flame), every colour from its T2 palette (the fire ramp + 2 smoke tones), the
+## feet anchor on a whole pixel; 810x20 RGBA = 64.8 KB of VRAM (the 44x49 sheet was 379 KB). The full-size fire_trail
+## is retired: no manifest entry, no sheet, no recipe using it.
+func test_fire_trail_small_is_crisp():
+	var man := _man()
+	if man.has("fire_trail") or FileAccess.file_exists("res://assets/fx/pfx_fire_trail.png"): return "the retired full-size fire_trail is still in the manifest / assets"
+	for row in GemCombo.recipes():
+		if JSON.stringify(row.get("fx", {})).contains("\"fire_trail\""): return "recipe %s still uses fire_trail" % row.id
+	var e: Dictionary = man.fire_trail_small
+	var sh = e.pixelfx.get("shrink")
+	if not (sh is Dictionary) or not is_equal_approx(float(sh.k), 0.4) or Array(sh.from_cell) != [44.0, 49.0]: return "shrink %s, want k 0.4 from 44x49" % [sh]
+	var levels := {0: true}
+	for a in sh.alpha_levels: levels[int(a)] = true
+	if levels.size() != 5 or not levels.has(255): return "alpha levels %s, want 0 + 3 glow levels + 255" % [levels.keys()]
+	var pal := {}
+	for c in sh.palette: pal[Color(c).to_html(false)] = true
+	if pal.size() > 9: return "palette of %d colours" % pal.size()
+	var img := _img(e)
+	if img.get_width() * img.get_height() * 4 > 70000: return "sheet %s: more than 70 KB of VRAM" % img.get_size()
+	var used := {}
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if not levels.has(c.a8): return "alpha %d at %d,%d: not one of the levels %s (blur halo)" % [c.a8, x, y, levels.keys()]
+			if c.a8 > 0:
+				var h := c.to_html(false)
+				if not pal.has(h): return "colour #%s at %d,%d not in the T2 palette" % [h, x, y]
+				used[h] = true
+	if used.size() < 5: return "only %d palette colours used" % used.size()
 	return ""
 
 func test_licence_and_credits():

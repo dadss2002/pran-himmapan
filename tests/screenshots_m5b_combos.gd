@@ -4,7 +4,7 @@ extends SceneTree
 ## Task 5, in game (test ground, seed 7, room c1r0, 1280x720, the real press: Hero.try_skill, its arrows, trails and
 ## blasts as the game runs them; only the monsters are held still):
 ##   docs/preview/m5b/fire_fan_ingame.png - ศรพัดเพลิง (piercing, split + fire, char Lv10): 3 fire lines laid by the
-##     primary arrows (fire_trail patches: PixelFX T2 campfire, owner 2026-11-09), 0.75 s after the release.
+##     primary arrows (fire_trail_small patches: PixelFX T2 campfire pre-shrunk, owner 2026-11-09/10), 0.75 s after the release.
 ##   docs/preview/m5b/brahmastra_ingame.png - พัดเพลิงพรหมาสตร์ (split + fire + multiply): the same lines and the
 ##     fire_blast (PixelFX B2 grenade) at each line end, just after the arrows are spent.
 ##   docs/preview/m5b/brahmastra_saver_ingame.png - the same moment with the PerfSaver on: the fire patches (where the

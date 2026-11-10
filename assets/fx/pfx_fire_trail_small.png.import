@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://n4dp3y13jjqg"
-path="res://.godot/imported/pfx_fire_trail.png-66edcfdaad2dfbc9a8991da6dcc0514f.ctex"
+uid="uid://c5n7r3xh742ha"
+path="res://.godot/imported/pfx_fire_trail_small.png-3e6e3824c564a43240136140e20bb4c9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/fx/pfx_fire_trail.png"
-dest_files=["res://.godot/imported/pfx_fire_trail.png-66edcfdaad2dfbc9a8991da6dcc0514f.ctex"]
+source_file="res://assets/fx/pfx_fire_trail_small.png"
+dest_files=["res://.godot/imported/pfx_fire_trail_small.png-3e6e3824c564a43240136140e20bb4c9.ctex"]
 
 [params]
 

@@ -23,7 +23,12 @@ and then post-processed here (no drawing by hand):
     pixel goes, leaving flames and coals), symmetric (the crop keeps the anchor centred across, so trail patches line
     up on the path), glow_fade (translucent pixels, alpha < glow_fade: PixelFX's soft light and thin smoke, fade out
     radially from the cell centre: no rectangular orange glow box on the ground; solid flame is untouched) and
-    fade_out (the last N frames of a one-shot trimmed mid-effect ease out instead of popping off).
+    fade_out (the last N frames of a one-shot trimmed mid-effect ease out instead of popping off);
+  - owner 2026-11-10 pre-shrunk trail (shrink, shrink_cells): fire_trail_small = the T2 cells area-averaged by 0.4
+    (premultiplied alpha; 44x49 -> 18x20, feet anchor on a whole pixel), then crisp again: half-solid pixels opaque,
+    the rest the glow's own alpha snapped to 3 levels taken from the sheet (glow_levels), every colour snapped to the
+    T2 palette (the fire ramp + the sheet's 2 smoke tones). Retired ids (RETIRED: the full-size fire_trail) leave the
+    manifest and assets/fx.
 Writes assets/fx/pfx_<name>.png and the manifest entry <name> (with "sheet" and "pixelfx" metadata). The old
 PixelLab entry is kept as "pixellab_<name>" (sheet <name>.png) when <name> was a PixelLab effect.
 
@@ -76,8 +81,12 @@ EFFECTS = {
 # fire_trail = T2 fire/campfire (the trail patches of ศรพัดเพลิง / พรหมาสตร์), fire_blast = B2 explosions/grenade (the
 # line-end blast of พรหมาสตร์, the grenade's blast only: 1.667-2.2 s, its anchor on the burst 39 px from PixelFX's pivot).
 WOOD_MARK = ["#0000ff", "#0008f8", "#0010f0", "#0018e8", "#0020e0", "#0028d8"]   # campfire logs in pure-blue marker shades
-EFFECTS["fire_trail"] = dict(id="fire/campfire", old="status_burn", fps=15, opts={"wood": WOOD_MARK, "height": 20, "seed": 3},
-                             marker="blue", point=(0, 0), box=(-22, -44, 22, 5), symmetric=True, glow_fade=200)
+# Owner 2026-11-10 ("ทำชีตย่อใหม่ให้เนียน"): the trail patch is the same T2 render pre-shrunk by 0.4 (shrink_cells: the
+# 44x49 cell area-averaged to 18x20, feet anchor (22, 44) -> (9, 18), crisp: 3 glow alpha levels + opaque, the T2
+# palette), drawn 1:1 in world pixels (FireTrail, scale 1). The full-size "fire_trail" sheet is retired (RETIRED).
+EFFECTS["fire_trail_small"] = dict(id="fire/campfire", old="status_burn", fps=15, opts={"wood": WOOD_MARK, "height": 20, "seed": 3},
+                                   marker="blue", point=(0, 0), box=(-22, -44, 22, 5), symmetric=True, glow_fade=200, shrink=0.4)
+RETIRED = ["fire_trail"]   # manifest entries / sheets no game code uses any more: removed from the manifest and assets/fx
 EFFECTS["fire_blast"] = dict(id="explosions/grenade", old="status_burn", fps=15, opts={"seed": 6}, point=(39, 0), box=(-32, -52, 32, 10),
                              t0=25 / 15, t1=25 / 15 + 8 / 15, tail_px=8, symmetric=True, glow_fade=200, fade_out=3)
 
@@ -107,6 +116,79 @@ def glow_fade(c, gf):
                 a2 = int(round(a * u * u * (3 - 2 * u)))
                 px[x, y] = (r, g, b, a2) if a2 >= ALPHA_FLOOR else (0, 0, 0, 0)
     return c
+
+def _hex(c): return tuple(int(c[i:i + 2], 16) for i in (1, 3, 5))
+
+def glow_levels(cells, solid):
+    """The sheet's glow alpha levels: the full T2 sheet has every alpha 1-255 (PixelFX's light), so its translucent
+    pixels (ALPHA_FLOOR <= alpha < solid) are split into three equal-count bands and each band's median is a level."""
+    chans = [c.getchannel("A") for c in cells]
+    al = sorted(a for ch_ in chans for a in (ch_.get_flattened_data() if hasattr(ch_, "get_flattened_data") else ch_.getdata()) if ALPHA_FLOOR <= a < solid)
+    if not al: return []
+    return sorted({al[min(len(al) - 1, (2 * j + 1) * len(al) // 6)] for j in range(3)})
+
+def smoke_tones(cells, n=2):
+    """The sheet's smoke: PixelFX's campfire draws grey-brown smoke the fire ramp does not hold (it would snap to dark
+    red). Its pixels (saturation < 0.45, value < 0.75, alpha >= ALPHA_FLOOR) split by brightness into n equal-count
+    groups; each group's alpha-weighted mean colour is a tone."""
+    px_ = []
+    for c in cells:
+        for r, g, b, a in (c.get_flattened_data() if hasattr(c, "get_flattened_data") else c.getdata()):
+            if a < ALPHA_FLOOR: continue
+            _, s_, v_ = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+            if s_ < 0.45 and v_ < 0.75: px_.append((0.299 * r + 0.587 * g + 0.114 * b, r, g, b, a))
+    if not px_: return []
+    px_.sort()
+    out = []
+    for j in range(n):
+        grp = px_[j * len(px_) // n:(j + 1) * len(px_) // n]
+        w = sum(q[4] for q in grp)
+        out.append("#%02x%02x%02x" % tuple(round(sum(q[i] * q[4] for q in grp) / w) for i in (1, 2, 3)))
+    return out
+
+def shrink_cells(cells, anchor, k, palette, solid=200):
+    """Owner 2026-11-10 ("ทำชีตย่อใหม่ให้เนียน"): every cell area-averaged down by k (each output pixel = the 1/k x 1/k
+    source box round it, fractional edge weights, colour averaged premultiplied by alpha), the anchor (feet) kept on a
+    whole pixel: output (round(ax k), round(ay k)) <-> source (ax, ay). Then made crisp pixel art again, no blur halo:
+    - a pixel at least half covered by solid flame (alpha >= solid, the glow_fade threshold) is opaque;
+    - any other pixel takes only the glow's own alpha (partly covered flame edges do not bleed into a translucent ring),
+      snapped to the nearest of the sheet's glow levels (glow_levels), or nothing below half the lowest level;
+    - every colour snaps to the T2 palette: the fire ramp it was rendered with + its smoke tones (smoke_tones).
+    Returns (cells, (w, h), anchor, alpha levels, palette used)."""
+    cw, ch = cells[0].size; ax, ay = anchor
+    nw, nh = round(cw * k), round(ch * k); nax, nay = round(ax * k), round(ay * k)
+    palette = list(palette) + smoke_tones(cells)
+    ramp = [_hex(c) for c in palette]
+    levels = glow_levels(cells, solid)
+    snap_c = lambda c: min(ramp, key=lambda r: (r[0] - c[0]) ** 2 * 0.3 + (r[1] - c[1]) ** 2 * 0.59 + (r[2] - c[2]) ** 2 * 0.11)
+    s = 1.0 / k; area = s * s
+    def spans(o, a_src, na, n):   # source pixels [i] and their weights for output pixel o along one axis
+        lo = a_src + (o - na) * s; hi = lo + s
+        return [(i, min(hi, i + 1) - max(lo, i)) for i in range(max(0, math.floor(lo)), min(n, math.ceil(hi))) if min(hi, i + 1) > max(lo, i)]
+    xs = [spans(u, ax, nax, cw) for u in range(nw)]; ys = [spans(v, ay, nay, ch) for v in range(nh)]
+    out = []
+    for c in cells:
+        src = c.load(); o = Image.new("RGBA", (nw, nh), (0, 0, 0, 0)); dst = o.load()
+        for v in range(nh):
+            for u in range(nw):
+                ws = wa = ga = 0.0; pr = pg = pb = 0.0; qr = qg = qb = 0.0
+                for (y, wy) in ys[v]:
+                    for (x, wx) in xs[u]:
+                        r, g, b, a = src[x, y]
+                        if a == 0: continue
+                        w = wx * wy; wa_ = w * a
+                        pr += wa_ * r; pg += wa_ * g; pb += wa_ * b; wa += wa_
+                        if a >= solid: ws += w
+                        else: ga += wa_; qr += wa_ * r; qg += wa_ * g; qb += wa_ * b
+                if ws >= 0.5 * area:
+                    dst[u, v] = snap_c((pr / wa, pg / wa, pb / wa)) + (255,)
+                elif ga > 0 and levels:
+                    a_ = ga / area
+                    if a_ < levels[0] / 2: continue
+                    lv = min(levels, key=lambda L: abs(L - a_))
+                    dst[u, v] = snap_c((qr / ga, qg / ga, qb / ga)) + (lv,)
+        out.append(o)
+    return out, (nw, nh), (nax, nay), levels, palette
 
 def check_commit(pfx_dir):
     """The PixelFX checkout must be the commit the licence notice and manifest name, with nothing changed in it."""
@@ -319,6 +401,12 @@ def export(root, pfx_dir, name, cfg, work, actors):
             for x in range(cw):
                 r, g, b, a = px[x, y]
                 if a: px[x, y] = (r, g, b, int(a * m)) if a * m >= ALPHA_FLOOR else (0, 0, 0, 0)
+    anchor = [px0 - cx0, py0 - cy0]
+    shrunk = None
+    if cfg.get("shrink"):   # pre-shrunk sheet (fire_trail_small): crisp area-average of the finished cells
+        out, (cw, ch), (sax, say), levels, spal = shrink_cells(out, anchor, cfg["shrink"], pal, cfg.get("glow_fade", 200))
+        anchor = [sax, say]
+        shrunk = {"k": cfg["shrink"], "from_cell": [cx1 - cx0, cy1 - cy0], "alpha_levels": levels + [255], "palette": spal}
     n = len(out)
     rows = (n + max(1, MAX_SIDE // cw) - 1) // max(1, MAX_SIDE // cw)   # fewest rows that fit 2048 px across,
     cols = (n + rows - 1) // rows                                        # then the frames spread evenly (no empty row tail)
@@ -330,13 +418,14 @@ def export(root, pfx_dir, name, cfg, work, actors):
     shown_opts = {k: v for k, v in opts.items() if k != "actor"}
     if cfg.get("actor"): shown_opts["actor"] = {"monster": "average monster silhouette (assets/monsters + assets/wolf poses)", "hero": "hero idle_south frame 0",
                                                 "spark": "invisible 8x8 box at the hero's chest (no figure drawn)"}[cfg["actor"]]
-    entry = {"cell": [cw, ch], "frames": n, "fps": fps, "anchor": [px0 - cx0, py0 - cy0], "loop": loop, "columns": cols,
+    entry = {"cell": [cw, ch], "frames": n, "fps": fps, "anchor": anchor, "loop": loop, "columns": cols,
              "sheet": sheet_name,
              "pixelfx": {"id": cfg["id"], "commit": COMMIT, "options": shown_opts, "palette_from": cfg["old"] + ".png",
                          "trim_s": [t0, min(t1, (len(frames) - 1) / fps + t0)] if (not loop or "t1" in cfg) else None,
                          "post": {k_: cfg[k_] for k_ in ("ramp_drop", "white_to", "pale_to", "scale", "tail_px", "marker", "symmetric", "glow_fade", "fade_out")
                                   if k_ in cfg} or None,
                          "body_cut": bool(cfg.get("cut")), "crop": [cx0 - px0, cy0 - py0, cx1 - px0, cy1 - py0]}}
+    if shrunk: entry["pixelfx"]["shrink"] = shrunk
     return entry
 
 def main():
@@ -359,7 +448,11 @@ def main():
             old = dict(old); old["sheet"] = name + ".png"; old["replaced_by"] = name
             man["pixellab_" + name] = old
         man[name] = e
-        print("%-13s %2d frames @%d fps  cell %dx%d  anchor %s  cols %d" % (name, e["frames"], e["fps"], e["cell"][0], e["cell"][1], e["anchor"], e["columns"]))
+        print("%-16s %2d frames @%d fps  cell %dx%d  anchor %s  cols %d" % (name, e["frames"], e["fps"], e["cell"][0], e["cell"][1], e["anchor"], e["columns"]))
+    for name in RETIRED:      # no game code uses these any more (owner 2026-11-10: fire_trail -> fire_trail_small)
+        man.pop(name, None)
+        for f in ("pfx_%s.png" % name, "pfx_%s.png.import" % name):
+            if os.path.exists(os.path.join(root, "assets/fx", f)): os.remove(os.path.join(root, "assets/fx", f))
     man["_doc"] = ("PixelLab vfx_workbench exports (effects saved in My effects) and PixelFX exports (\"pixelfx\": "
                    "tools/pixelfx_export.py, MIT, assets/fx/PIXELFX_LICENSE.txt). anchor = pixel in a cell that sits on the "
                    "node origin; sheet = file in assets/fx (default <id>.png); columns = frames per row (default all).")

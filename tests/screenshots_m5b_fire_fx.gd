@@ -17,11 +17,13 @@ extends SceneTree
 ##   blast_dark  - the same on c2r0.
 ##   blast_monster - พรหมาสตร์ with a dark monster (boar, c0r1) standing on the middle line's end.
 ##   saver       - blast_light with the PerfSaver on (the patches and the blast must all stay).
-## FIRE_SET=small (owner 2026-11-09: the trail patches drawn at the sample's size, FireTrail.PATCH_SCALE 0.4) runs the
-## trail cases only, into /tmp/fire_shots_small/ (python3 -I tools/fire_fx_review.py --small -> fire_t2_small_*.png):
+## FIRE_SET=dense (owner 2026-11-10: the pre-shrunk fire_trail_small sheet drawn 1:1, patches every 20 px) runs the
+## trail cases only, into /tmp/fire_shots_dense/ (python3 -I tools/fire_fx_review.py --dense -> fire_t2_dense_*.png):
 ##   trail_light, trail_dark, fade as above, and trail_saver - trail_light with the PerfSaver on.
+## (The older FIRE_SET=small images, docs/preview/m5b/fire_t2_small_*.png, were made with the runtime PATCH_SCALE 0.4,
+## which is gone.)
 
-var TMP := "/tmp/fire_shots_small/" if OS.get_environment("FIRE_SET") == "small" else "/tmp/fire_shots/"
+var TMP := "/tmp/fire_shots_dense/" if OS.get_environment("FIRE_SET") == "dense" else "/tmp/fire_shots/"
 const SAVE := "user://shots_m5b_fire_save.json"
 const DT := 1.0 / 60.0
 
@@ -42,7 +44,7 @@ func _run() -> void:
 	await _case("trail_light", "c1r0", ["split", "fire"], "trail", false, Vector2(-110, 30), "")
 	await _case("trail_dark", "c2r0", ["split", "fire"], "trail", false, Vector2(-170, 120), "")
 	await _case("fade", "c1r0", ["split", "fire"], "fade", false, Vector2(-110, 30), "")
-	if OS.get_environment("FIRE_SET") == "small":
+	if OS.get_environment("FIRE_SET") == "dense":
 		await _case("trail_saver", "c1r0", ["split", "fire"], "trail", true, Vector2(-110, 30), "")
 		_finish()
 		return
@@ -160,7 +162,8 @@ func _case(name: String, room: String, keys: Array, mode: String, saver: bool, h
 	var m := {"room": room, "combo": String(b.combo.get("id", "")), "saver": saver, "scale": k / 100.0,
 		"hero": _v(g.world_to_screen(h.global_position)), "aim": _v(g.world_to_screen(aim.global_position)) if aim != null else null,
 		"patch_scale": patches.map(func(p): return _v(p.scale)), "patch_visible": patches.map(func(p): return p.is_visible_in_tree()),
-		"patches": patches.map(func(p): return _v(g.world_to_screen(p.global_position))),
+		"patches": patches.map(func(p): return _v(g.world_to_screen(p.global_position))), "patch_anim": patches.map(func(p): return String(p.animation)),
+		"lines": trails.map(func(t): return Array(t.points()).map(func(q): return _v(g.world_to_screen(q)))),
 		"blasts": blasts.map(func(s): return _v(g.world_to_screen(s.global_position))),
 		"trail_alpha": trails.map(func(t): return t.modulate.a), "monster": _v(g.world_to_screen(end_mon.global_position)) if end_mon != null else null, "monster_hurt": _v(g.world_to_screen(end_mon.hurt_point())) if end_mon != null else null, "monster_visible": end_mon.is_visible_in_tree() if end_mon != null else null,
 		"moments": {}}

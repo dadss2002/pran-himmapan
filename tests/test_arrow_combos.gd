@@ -107,11 +107,11 @@ func test_every_recipe_fx_exists():
 
 func test_combo_fx_plays_tinted_reuse():
 	var p := Node2D.new()
-	# owner 2026-11-09: the fire line is the PixelFX T2 patch (fire_trail), not recoloured, upright (never turned)
+	# owner 2026-11-09/10: the fire line is the PixelFX T2 patch (fire_trail_small, pre-shrunk), not recoloured, upright (never turned)
 	var got := ComboFx.play(p, "fire_fan", "trail", Vector2(5, 7), Vector2.DOWN)
 	var r := ""
-	if got.size() != 1: r = "fire_fan trail spawned %d effects, want one fire_trail patch" % got.size()
-	elif got[0].animation != "fire_trail" or got[0].modulate != Color.WHITE: r = "trail patch %s tint %s" % [got[0].animation, got[0].modulate]
+	if got.size() != 1: r = "fire_fan trail spawned %d effects, want one fire_trail_small patch" % got.size()
+	elif got[0].animation != "fire_trail_small" or got[0].modulate != Color.WHITE: r = "trail patch %s tint %s" % [got[0].animation, got[0].modulate]
 	elif got[0].position != Vector2(5, 7) or got[0].get_parent() != p: r = "patch not placed in the parent at the point"
 	elif got[0].rotation != 0.0: r = "the fire patch turned along the line (%s): flames stand upright" % got[0].rotation
 	elif not ComboFx.play(p, "fire_fan", "no_such_event", Vector2.ZERO).is_empty(): r = "an unknown event spawned something"
@@ -138,11 +138,11 @@ func test_combo_fx_perf_saver_sheds_decor_only():
 	var crit := ComboFx.play(p, "hawk_eye", "crit", Vector2.ZERO)
 	PerfSaver.active = false
 	var r := ""
-	if trail.size() != 1 or trail[0].animation != "fire_trail": r = "saver on: trail gave %s, want the fire patch" % [trail.map(func(s): return s.animation)]
+	if trail.size() != 1 or trail[0].animation != "fire_trail_small": r = "saver on: trail gave %s, want the fire patch" % [trail.map(func(s): return s.animation)]
 	elif end.size() != 1 or end[0].animation != "fire_blast": r = "saver on: the line-end blast was shed"
 	elif crit.size() != 1 or crit[0].animation != "hit_spark": r = "saver on: crit_hit should fall back to hit_spark"
-	elif PerfSaver.decorative("fire_trail") or PerfSaver.decorative("fire_blast"): r = "fire_trail / fire_blast listed as decorative"
-	if r == "" and ComboFx.play(p, "brahmastra", "trail", Vector2.ZERO, Vector2.ZERO, false).map(func(s): return String(s.animation)) != ["fire_trail"]:
+	elif PerfSaver.decorative("fire_trail_small") or PerfSaver.decorative("fire_blast"): r = "fire_trail / fire_blast listed as decorative"
+	if r == "" and ComboFx.play(p, "brahmastra", "trail", Vector2.ZERO, Vector2.ZERO, false).map(func(s): return String(s.animation)) != ["fire_trail_small"]:
 		r = "decor = false must keep the fire patch (it is the hazard, not decoration)"
 	p.free()
 	return r
@@ -373,7 +373,7 @@ func test_trail_fx_bounded():
 		t.setup(Vector2.ZERO, ATK, 2.0, 0.3, 3.0, [d], null, null, 0.0, "brahmastra")
 		for i in 300: t.extend_to(Vector2(i * 4.0, 0))      # a 1200 px line, extended every frame
 		var fx := t.get_children().filter(func(c): return c is FxSprite)
-		var patches := fx.filter(func(c): return c.animation == "fire_trail")
+		var patches := fx.filter(func(c): return c.animation == "fire_trail_small")
 		if fx.size() > FireTrail.MAX_FX: r = "%d effects on one trail, cap %d" % [fx.size(), FireTrail.MAX_FX]
 		elif patches.size() != FireTrail.MAX_STREAKS: r = "saver %s: %d patches on a 1200 px line, want one on each of its %d marks" % [saver, patches.size(), FireTrail.MAX_STREAKS]
 		elif patches.size() != fx.size(): r = "effects other than fire patches on the trail: %s" % [fx.map(func(c): return c.animation)]
@@ -407,7 +407,7 @@ func test_short_trail_still_shows():
 	t.setup(Vector2.ZERO, ATK, 1.0, 0.2, 2.0, [], null, null, 0.0, "fire_fan")
 	t.extend_to(Vector2(12, 0))
 	t.finish()
-	var n := t.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_trail").size()
+	var n := t.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_trail_small").size()
 	t.free()
 	return "" if n == 1 else "a 12 px trail shows %d fire patches, want 1" % n
 
@@ -417,67 +417,80 @@ func _one_patch_per_mark(t: FireTrail, patches: Array) -> bool:
 		if not patches.any(func(c): return c.position.distance_to(q) < 0.01): return false
 	return true
 
-## Owner 2026-11-09 ("ย่อให้เท่าภาพตัวอย่าง"): every patch is drawn at FireTrail.PATCH_SCALE = 0.4 in world space
-## (the size of the owner's sample, pasted 1 sheet px = 1 screen px on a 2.5x screen), nearest-filtered, with the sheet's
-## anchor (the feet) exactly on its mark, i.e. on the path; the patch's drawn box (17.6 x 19.6) stands on the mark.
-## A long bent line still lays at most MAX_STREAKS patches, one per SPACING px (44, unchanged), and with the PerfSaver
-## on every mark keeps one readable patch (visible, opaque, the same small size). The blast's own 1:1 is checked in
-## test_line_end_blast_plays_once_and_frees.
-func test_trail_patches_drawn_at_sample_size():
+## Owner 2026-11-10 ("ทำชีตย่อใหม่ให้เนียน", "ถี่ขึ้นให้เท่าตัวอย่าง"): the patch is the pre-shrunk sheet
+## fire_trail_small (18x20, feet anchor 9,18) drawn at scale 1 (one fire pixel = one world pixel; no runtime PATCH_SCALE
+## any more), nearest-filtered, its feet exactly on its mark (on the path), and the marks are SPACING = 20 px apart along
+## the path (the sample's density; 18 px patches: one continuous fire). A long bent line still lays at most
+## MAX_STREAKS = 12 patches. PerfSaver sheds none (owner: it may never hide the hazard): the same patches, visible and
+## opaque. The damage is the recorded path, not the patches: a point between two patches burns, 10 px off the line
+## burns, 11 px off does not (the arrow's hit radius), the same with the saver on.
+func test_trail_patches_small_sheet_dense():
 	var r := ""
-	if not is_equal_approx(FireTrail.PATCH_SCALE, 0.4): return "PATCH_SCALE %s, want 0.4 (owner: the sample's size)" % FireTrail.PATCH_SCALE
-	if FireTrail.SPACING != 44.0 or FireTrail.MAX_STREAKS != 6: return "spacing %s / %d marks changed (owner: unchanged)" % [FireTrail.SPACING, FireTrail.MAX_STREAKS]
-	var man: Dictionary = FxSprite._manifest().fire_trail
+	if FireTrail.new().get_script().get_script_constant_map().has("PATCH_SCALE"): return "FireTrail still scales patches at runtime (PATCH_SCALE)"
+	if FireTrail.SPACING != 20.0 or FireTrail.MAX_STREAKS != 12: return "spacing %s / %d marks, want 20 / 12 (owner 2026-11-10)" % [FireTrail.SPACING, FireTrail.MAX_STREAKS]
+	var man: Dictionary = FxSprite._manifest().fire_trail_small
 	var anchor := Vector2(man.anchor[0], man.anchor[1])
 	var cell := Vector2(man.cell[0], man.cell[1])
+	if cell != Vector2(18, 20) or anchor != Vector2(9, 18): return "fire_trail_small cell %s anchor %s, want 18x20 / 9,18" % [cell, anchor]
+	var counts: Array = []
 	for saver in [false, true]:
 		PerfSaver.active = saver
 		var t := FireTrail.new()
 		t.setup(Vector2(10, 20), ATK, 1.0, 0.2, 2.0, [], null, null, 0.0, "brahmastra")
-		var at := Vector2(10, 20)
-		for i in 400:                                   # a 1600 px path that bends (homing-like), extended every frame
-			at += Vector2.RIGHT.rotated(i * 0.01) * 4.0
-			t.extend_to(at)
-		var patches := t.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_trail")
+		for i in 56: t.extend_to(Vector2(10, 20) + Vector2(i * 4.0, 0))     # 220 px straight: the longest arrow
 		var marks := t.points()
-		if patches.size() != FireTrail.MAX_STREAKS or marks.size() != FireTrail.MAX_STREAKS:
-			r = "saver %s: %d patches / %d marks on a 1600 px line, want %d (bounded)" % [saver, patches.size(), marks.size(), FireTrail.MAX_STREAKS]
-		elif not _one_patch_per_mark(t, patches): r = "saver %s: a mark has no patch" % saver
+		var patches := t.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_trail_small")
+		counts.append(patches.size())
+		if marks.size() != 11 or patches.size() != 11: r = "saver %s: a 220 px line has %d marks / %d patches, want 11 / 11 (every 20 px)" % [saver, marks.size(), patches.size()]
+		elif marks[0].distance_to(Vector2(30, 20)) > 0.01: r = "the first mark at %s, want 20 px from the start" % marks[0]
+		for i in marks.size() - 1:
+			if r == "" and absf(marks[i].distance_to(marks[i + 1]) - 20.0) > 0.01: r = "marks %d / %d are %.2f px apart, want 20" % [i, i + 1, marks[i].distance_to(marks[i + 1])]
 		for i in patches.size():
 			if r != "": break
-			var s: FxSprite = patches[i]
-			var feet: Vector2 = s.transform * (s.offset + anchor)        # where the sheet's anchor pixel is drawn
-			var box := Rect2(s.transform * s.offset, cell * s.scale)
-			if not s.scale.is_equal_approx(Vector2(0.4, 0.4)): r = "saver %s: patch %d drawn at %s, want 0.4" % [saver, i, s.scale]
-			elif s.texture_filter != CanvasItem.TEXTURE_FILTER_NEAREST: r = "patch %d not nearest-filtered" % i
+			var sp: FxSprite = patches[i]
+			var feet: Vector2 = sp.transform * (sp.offset + anchor)
+			var box := Rect2(sp.transform * sp.offset, cell * sp.scale)
+			if sp.scale != Vector2.ONE: r = "saver %s: patch %d drawn at %s, want 1:1" % [saver, i, sp.scale]
+			elif sp.texture_filter != CanvasItem.TEXTURE_FILTER_NEAREST: r = "patch %d not nearest-filtered" % i
 			elif feet.distance_to(marks[i]) > 0.01: r = "patch %d's feet at %s, its mark at %s (want on the path)" % [i, feet, marks[i]]
-			elif not box.size.is_equal_approx(Vector2(17.6, 19.6)): r = "patch %d box %s, want 17.6 x 19.6 world px" % [i, box.size]
-			elif absf(box.end.y - marks[i].y - (cell.y - anchor.y) * 0.4) > 0.01: r = "patch %d box bottom %.2f, want %.2f below its mark" % [i, box.end.y - marks[i].y, (cell.y - anchor.y) * 0.4]
-			elif not s.visible or s.modulate.a < 1.0 or t.modulate.a < 1.0: r = "saver %s: patch %d is not readable (visible %s, alpha %.2f)" % [saver, i, s.visible, s.modulate.a]
-		if r == "":                                      # the damage reach is not the art's: a monster between two small patches still burns
-			var gap: Vector2 = (marks[1] + marks[2]) / 2.0
+			elif box.size != Vector2(18, 20): r = "patch %d box %s, want 18 x 20 world px" % [i, box.size]
+			elif not sp.visible or sp.modulate.a < 1.0 or t.modulate.a < 1.0: r = "saver %s: patch %d is not readable (visible %s, alpha %.2f)" % [saver, i, sp.visible, sp.modulate.a]
+		if r == "":
+			var gap: Vector2 = (marks[3] + marks[4]) / 2.0
 			if not t._near(gap, 10.0): r = "a point on the line between two patches is not in the fire"
+			elif not t._near(Vector2(117, 30), 10.0) or t._near(Vector2(117, 31.01), 10.0): r = "saver %s: the fire's reach is not the line ± the hit radius" % saver
+		if r == "":                                     # bounded: a 1600 px bent path still lays 12
+			var u := FireTrail.new()
+			u.setup(Vector2.ZERO, ATK, 1.0, 0.2, 2.0, [], null, null, 0.0, "fire_fan")
+			var at := Vector2.ZERO
+			for i in 400:
+				at += Vector2.RIGHT.rotated(i * 0.01) * 4.0
+				u.extend_to(at)
+			var n := u.get_children().filter(func(c): return c is FxSprite).size()
+			if n != FireTrail.MAX_STREAKS or u.points().size() != FireTrail.MAX_STREAKS: r = "saver %s: a 1600 px line laid %d patches / %d marks, want %d" % [saver, n, u.points().size(), FireTrail.MAX_STREAKS]
+			u.free()
 		t.free()
 		if r != "": break
 	PerfSaver.active = false
+	if r == "" and counts[0] != counts[1]: r = "the PerfSaver changed the patches %d → %d (it may not shed the hazard)" % [counts[0], counts[1]]
 	return r
 
 ## Owner 2026-11-09 (T2 sample, PHASE 7): the patches of a line never flicker in sync. Every patch plays the fire_trail
 ## loop from its own frame: neighbours 3..11 frames apart (circular), the same frames every run for the same line
 ## (deterministic), and another line (another first mark) starts elsewhere; patch_frame stays inside the loop.
 func test_trail_patches_start_at_their_own_frames():
-	var n := int(FxSprite._manifest().fire_trail.frames)
+	var n := int(FxSprite._manifest().fire_trail_small.frames)
 	var lines: Array = []
 	for dir in [Vector2.RIGHT, Vector2.RIGHT, Vector2.RIGHT.rotated(0.5)]:
 		var t := FireTrail.new()
 		t.setup(Vector2(30, 40), ATK, 1.0, 0.2, 2.0, [], null, null, 0.0, "fire_fan")
-		for i in 56: t.extend_to(Vector2(30, 40) + dir * (i * 4.0))     # 220 px, the piercing range: 5 marks
+		for i in 56: t.extend_to(Vector2(30, 40) + dir * (i * 4.0))     # 220 px, the piercing range: 11 marks
 		lines.append(t)
 	var frames: Array = []
 	for t in lines:
 		frames.append(t.get_children().filter(func(c): return c is FxSprite).map(func(c): return c.frame))
 	var r := ""
-	if frames[0].size() != 5: r = "a 220 px line has %d patches, want 5" % frames[0].size()
+	if frames[0].size() != 11: r = "a 220 px line has %d patches, want 11 (every 20 px)" % frames[0].size()
 	elif frames[0] != frames[1]: r = "the same line twice starts its patches at %s and %s (want the same)" % [frames[0], frames[1]]
 	elif frames[0] == frames[2]: r = "two different lines start their patches on the same frames %s" % [frames[0]]
 	for f in frames:
@@ -536,7 +549,7 @@ func test_trail_and_blast_reuse_the_cached_frames():
 	for t in lines:
 		for c in t.get_children(): sfs[c.sprite_frames] = true
 	var r := ""
-	if after_trails != 1: r = "3 lines × 5 patches loaded the trail sheet %d times, want 1" % after_trails
+	if after_trails != 1: r = "3 lines × 11 patches loaded the trail sheet %d times, want 1" % after_trails
 	elif after_blasts != 2: r = "3 blasts loaded %d more sheets, want 1 (the blast's, once)" % (after_blasts - after_trails)
 	elif sfs.size() != 1: r = "the patches use %d SpriteFrames, want 1 shared" % sfs.size()
 	elif p.get_children().map(func(c): return c.sprite_frames).any(func(f): return f != p.get_child(0).sprite_frames): r = "blasts do not share their frames"
@@ -646,7 +659,7 @@ func test_homing_trail_follows_the_path():
 	elif Geometry2D.get_closest_point_to_segment(on, path[0], path[path.size() - 1]).distance_to(on) < 25.0: r = "setup: the path point is near the chord"
 	elif _dist_to_path(chord, path) < 25.0 or _dist_to_path(first, path) < 25.0: r = "setup: a probe is near the path"
 	if r == "":
-		var streaks := t.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_trail")
+		var streaks := t.get_children().filter(func(c): return c is FxSprite and c.animation == "fire_trail_small")
 		if streaks.size() < 4: r = "%d fire patches on a 220 px path, want ≥ 4" % streaks.size()
 		for s in streaks:
 			if r == "" and _dist_to_path(s.position, path) > 2.0: r = "a trail mark at %s is %.1f px off the arrow's path" % [s.position, _dist_to_path(s.position, path)]

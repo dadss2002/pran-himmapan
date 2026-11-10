@@ -543,60 +543,6 @@
       ]
     }
   },
-  "fire_trail": {
-    "cell": [
-      44,
-      49
-    ],
-    "frames": 45,
-    "fps": 15,
-    "anchor": [
-      22,
-      44
-    ],
-    "loop": true,
-    "columns": 45,
-    "sheet": "pfx_fire_trail.png",
-    "pixelfx": {
-      "id": "fire/campfire",
-      "commit": "a841596",
-      "options": {
-        "wood": [
-          "#0000ff",
-          "#0008f8",
-          "#0010f0",
-          "#0018e8",
-          "#0020e0",
-          "#0028d8"
-        ],
-        "height": 20,
-        "seed": 3,
-        "palette": [
-          "#1b0404",
-          "#7a1410",
-          "#c22a14",
-          "#f05a1c",
-          "#ff9a2a",
-          "#ffd04a",
-          "#fff3a8"
-        ]
-      },
-      "palette_from": "status_burn.png",
-      "trim_s": null,
-      "post": {
-        "marker": "blue",
-        "symmetric": true,
-        "glow_fade": 200
-      },
-      "body_cut": false,
-      "crop": [
-        -22,
-        -44,
-        22,
-        5
-      ]
-    }
-  },
   "fire_blast": {
     "cell": [
       64,
@@ -644,6 +590,84 @@
         32,
         10
       ]
+    }
+  },
+  "fire_trail_small": {
+    "cell": [
+      18,
+      20
+    ],
+    "frames": 45,
+    "fps": 15,
+    "anchor": [
+      9,
+      18
+    ],
+    "loop": true,
+    "columns": 45,
+    "sheet": "pfx_fire_trail_small.png",
+    "pixelfx": {
+      "id": "fire/campfire",
+      "commit": "a841596",
+      "options": {
+        "wood": [
+          "#0000ff",
+          "#0008f8",
+          "#0010f0",
+          "#0018e8",
+          "#0020e0",
+          "#0028d8"
+        ],
+        "height": 20,
+        "seed": 3,
+        "palette": [
+          "#1b0404",
+          "#7a1410",
+          "#c22a14",
+          "#f05a1c",
+          "#ff9a2a",
+          "#ffd04a",
+          "#fff3a8"
+        ]
+      },
+      "palette_from": "status_burn.png",
+      "trim_s": null,
+      "post": {
+        "marker": "blue",
+        "symmetric": true,
+        "glow_fade": 200
+      },
+      "body_cut": false,
+      "crop": [
+        -22,
+        -44,
+        22,
+        5
+      ],
+      "shrink": {
+        "k": 0.4,
+        "from_cell": [
+          44,
+          49
+        ],
+        "alpha_levels": [
+          16,
+          59,
+          132,
+          255
+        ],
+        "palette": [
+          "#1b0404",
+          "#7a1410",
+          "#c22a14",
+          "#f05a1c",
+          "#ff9a2a",
+          "#ffd04a",
+          "#fff3a8",
+          "#8a6058",
+          "#ac7768"
+        ]
+      }
     }
   }
 }

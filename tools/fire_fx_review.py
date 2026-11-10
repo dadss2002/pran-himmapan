@@ -6,17 +6,22 @@ per-patch frame offsets (three moments 0.2 s apart), the r32 ring (dotted, drawn
 middle line's blast, the owner's sample row next to the game at the same scale, and fire_t2_b2_review.png with
 numbered red circles on what the owner should judge. Nothing is drawn by hand: every pixel of fire is the game's.
 
-    python3 -I tools/fire_fx_review.py --small
-after FIRE_SET=small xvfb-run ... --script tests/screenshots_m5b_fire_fx.gd (frames in /tmp/fire_shots_small): the trail
-patches at the sample's size (owner 2026-11-09, FireTrail.PATCH_SCALE 0.4) -> docs/preview/m5b/fire_t2_small_*.png and
-the numbered fire_t2_small_review.png (1 size vs hero / monster, 2 the sample next to the game at the same scale,
-3 dark ground, 4 PerfSaver on, 5 the trail's end fade).
+    python3 -I tools/fire_fx_review.py --dense
+after FIRE_SET=dense xvfb-run -a godot --path . --rendering-driver opengl3 --script tests/screenshots_m5b_fire_fx.gd
+(frames in /tmp/fire_shots_dense): the pre-shrunk fire_trail_small patches drawn 1:1 every 20 px (owner 2026-11-10)
+-> docs/preview/m5b/fire_t2_dense_*.png (light c1r0, dark c2r0, PerfSaver on; game size and x3) and the numbered
+fire_t2_dense_review.png (1 size vs hero / monster, 2 the owner's sample next to the game x2.5 and one patch x6,
+3 the line as a whole, 4 dark ground, 5 PerfSaver on). The sample patch for the x6 pair is the full-size T2 sheet the
+owner saw, read from git (OLD_SHEET; retired from assets/fx).
+(The older --small mode, fire_t2_small_*.png, was for the runtime PATCH_SCALE 0.4, which is gone.)
 """
 import json, math, os, sys
 from PIL import Image, ImageDraw, ImageFont
 
-SMALL = "--small" in sys.argv
-SHOTS = "/tmp/fire_shots_small" if SMALL else "/tmp/fire_shots"
+import subprocess, io
+DENSE = "--dense" in sys.argv
+SHOTS = "/tmp/fire_shots_dense" if DENSE else "/tmp/fire_shots"
+OLD_SHEET = "56cf11e:assets/fx/pfx_fire_trail.png"   # the full-size T2 sheet (44x49 cells) the owner's sample used
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "docs/preview/m5b")
 SAMPLE_T = "/home/claude/fx_samples/trail_candidates.png"
@@ -211,114 +216,112 @@ def main():
     save(col([title, p1, p2, p3, p4, p5, p6, p7, p8, leg]), "fire_t2_b2_review.png")
 
 
-def main_small():
-    """The trail patches at the sample's size (PATCH_SCALE 0.4): game size and x3 per case, the sample comparison and
-    the numbered review image. Every patch in meta must be drawn at 0.4 and visible (checked here, not assumed)."""
+def main_dense():
+    """The pre-shrunk trail (fire_trail_small, 18x20, 1:1, every 20 px): game size and x3 per case, the sample
+    comparison and the numbered review image. Every patch in meta must be fire_trail_small at scale 1 and visible."""
     os.makedirs(OUT, exist_ok=True)
-    for case in ("trail_light", "trail_dark", "fade", "trail_saver"):
+    for case in ("trail_light", "trail_dark", "trail_saver"):
         m = meta[case]
-        bad = [q for q in m["patch_scale"] if abs(q[0] - 0.4) > 1e-3 or abs(q[1] - 0.4) > 1e-3]
-        if bad or not all(m["patch_visible"]) or not m["patches"]:
-            raise SystemExit("%s: patches %d, scales off %s, all visible %s" % (case, len(m["patches"]), bad, all(m["patch_visible"])))
+        bad = [q for q in m["patch_scale"] if abs(q[0] - 1) > 1e-3 or abs(q[1] - 1) > 1e-3]
+        if bad or not all(m["patch_visible"]) or not m["patches"] or set(m["patch_anim"]) != {"fire_trail_small"}:
+            raise SystemExit("%s: patches %d, scales off %s, all visible %s, anims %s" % (case, len(m["patches"]), bad, all(m["patch_visible"]), set(m["patch_anim"])))
     k = world("trail_light")                              # 2.5 screen px per world px
 
     def cases(case, tag, title):
         full = shot(case, "a")
-        save(full, "fire_t2_small_%s.png" % tag)
+        save(full, "fire_t2_dense_%s.png" % tag)
         pts = [px(p) for p in meta[case]["patches"]]
         c = centre(pts)
-        near = min(pts, key=lambda p: (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2)
-        x3, _ = crop(full, (near[0], near[1] - 20), 200, 150, 3)
+        x3, _ = crop(full, (c[0], c[1] - 20), 280, 170, 3)
         label(x3, "%s  x3  (%s)" % (title, meta[case]["room"]))
-        save(x3, "fire_t2_small_%s_x3.png" % tag)
-        return full, x3, c, near
+        save(x3, "fire_t2_dense_%s_x3.png" % tag)
+        return full, x3, c
 
-    tl_full, tl_x3, tl_c, tl_near = cases("trail_light", "trail_light", "light ground")
-    td_full, td_x3, td_c, _ = cases("trail_dark", "trail_dark", "dark ground")
-    sv_full, sv_x3, sv_c, _ = cases("trail_saver", "saver", "PerfSaver on")
-    fa_full, fa_x3, fa_c, _ = cases("fade", "fade", "fade, alpha %.2f" % meta["fade"]["trail_alpha"][0])
+    tl_full, tl_x3, tl_c = cases("trail_light", "trail_light", "light ground")
+    td_full, td_x3, td_c = cases("trail_dark", "trail_dark", "dark ground")
+    sv_full, sv_x3, sv_c = cases("trail_saver", "saver", "PerfSaver on")
 
-    # 1: size vs the hero and the monster on the line, game size (1:1) and x3 round the monster
+    # 1: size vs the hero and the monster on the line: game size (1:1) and x3 round the monster
     hero, aim = px(meta["trail_light"]["hero"]), px(meta["trail_light"]["aim"])
-    g1, o1 = crop(tl_full, (hero[0] - 100 + 280, aim[1] - 30), 560, 330)       # the hero 100 px in from the left
+    g1, o1 = crop(tl_full, (hero[0] - 100 + 330, aim[1] - 20), 660, 330)
     label(g1, "game size 1:1 (1280x720)")
-    z1, oz = crop(tl_full, (aim[0], aim[1] - 30), 200, 150, 3)
+    z1, _ = crop(tl_full, (aim[0] + 10, aim[1] - 30), 180, 150, 3)
     label(z1, "x3 round the monster")
     p1 = row([g1, z1])
     hx, hy = hero[0] - o1[0], hero[1] - o1[1]
-    circle(p1, (hx - 60, hy - 150, aim[0] - o1[0] + 70, hy + 40), 1)
+    circle(p1, (hx - 50, hy - 140, aim[0] - o1[0] + 90, hy + 30), 1)
 
-    # 2: the owner's T2 sample row next to the game, both x2.5 (nearest) from 240x180 screen px: the sample was pasted
-    # 1 sheet px = 1 screen px on a 1:1 game screenshot, so at the same zoom the patches must now be the same size
+    # 2: the owner's T2 sample row next to the game, both x2.5 (nearest) from 240x180 screen px (the sample pasted
+    # 1 sheet px = 1 screen px; the game now draws the pre-shrunk sheet 1 px = 1 world px = 2.5 screen px)
     st = Image.open(SAMPLE_T).convert("RGB").crop((298, 356, 538, 536))          # T2 row, t = 0.4 s (240x180)
-    gt, og = crop(tl_full, (tl_near[0] + 30, tl_near[1] - 40), 240, 180)
-    pair1 = row([st, gt])
+    lines = meta["trail_light"]["lines"]
+    top = max(lines, key=lambda l: -min(q[1] for q in l))                       # the upper line, clear of the monster
+    tp = [px(q) for q in top]
+    tc = tp[len(tp) // 2]
+    gt, og = crop(tl_full, (tc[0], tc[1] - 30), 240, 180)
     st2 = st.resize((round(st.width * k), round(st.height * k)), Image.NEAREST)
     gt2 = gt.resize((round(gt.width * k), round(gt.height * k)), Image.NEAREST)
     label(st2, "owner's sample T2 (t=0.4 s)  x%.1f" % k)
-    label(gt2, "in game now (patch 0.4)  x%.1f" % k)
-    label(pair1, "both 1:1 (screen px)")
-    # one patch x6: its sheet frame as the sample drew it (1 sheet px = 1 screen px, on the patch's own grass) next to
-    # the same frame in game (the world viewport point-samples the 0.4 patch to world pixels, 2.5 screen px each)
-    sheet = Image.open(os.path.join(ROOT, "assets/fx/pfx_fire_trail.png")).convert("RGBA")
+    label(gt2, "in game now (pre-shrunk, 1:1, every 20 px)  x%.1f" % k)
+    p2 = row([st2, gt2])
+    circle(p2, (st2.width + 8 + 40, 140, st2.width + 8 + gt2.width - 40, gt2.height - 60), 2)
+    # one patch x6: the full-size sheet frame as the sample drew it (1 sheet px = 1 screen px, on the game's own grass)
+    # next to the same frame in game (18x20 world px = 45x50 screen px)
+    sheet = Image.open(io.BytesIO(subprocess.run(["git", "-C", ROOT, "show", OLD_SHEET], check=True, capture_output=True).stdout)).convert("RGBA")
     pts = [px(p) for p in meta["trail_light"]["patches"]]
-    j = min(range(len(pts)), key=lambda i: (pts[i][0] - tl_c[0]) ** 2 + (pts[i][1] - tl_c[1]) ** 2)
+    j = min(range(len(pts)), key=lambda i: (pts[i][0] - tc[0]) ** 2 + (pts[i][1] - tc[1]) ** 2)
     fr_n = meta["trail_light"]["moments"]["a"]["frames"][j]
-    fx0, fy0 = int(round(pts[j][0] - 22)), int(round(pts[j][1] - 44)) - 1
-    game1 = tl_full.crop((fx0 - 8, fy0 - 4, fx0 + 52, fy0 + 53))
-    grass = Image.new("RGBA", game1.size, tl_full.getpixel((fx0 - 6, fy0 + 50)) + (255,))
+    gx0, gy0 = int(round(pts[j][0] - 9 * k)), int(round(pts[j][1] - 18 * k))
+    game1 = tl_full.crop((gx0 - 8, gy0 - 6, gx0 + 53, gy0 + 52))
+    grass = Image.new("RGBA", game1.size, tl_full.getpixel((gx0 - 6, gy0 + 50)) + (255,))
     grass.alpha_composite(sheet.crop((fr_n * 44, 0, fr_n * 44 + 44, 49)), (8, 4))
     z6 = lambda im: im.convert("RGB").resize((im.width * 6, im.height * 6), Image.NEAREST)
     sa6, ga6 = z6(grass), z6(game1)
-    label(sa6, "sample: frame %d, 1 px = 1 screen  x6" % fr_n)
-    label(ga6, "in game: same frame  x6")
-    vs = save(col([row([st2, gt2]), pair1, row([sa6, ga6])]), "fire_t2_small_vs_sample.png")
-    p2 = vs.crop((0, 0, vs.width, st2.height + 8 + pair1.height))      # the x6 pair is in fire_t2_small_vs_sample.png
+    label(sa6, "sample: frame %d (44x49 sheet), 1 px = 1 screen  x6" % fr_n)
+    label(ga6, "in game: same frame, pre-shrunk 18x20  x6")
     p2b = row([sa6, ga6])
-    inside = [(q[0] - og[0], q[1] - og[1]) for q in (px(p) for p in meta["trail_light"]["patches"])
-              if 20 <= q[0] - og[0] <= 220 and 50 <= q[1] - og[1] <= 175]
-    q = min(inside, key=lambda q: (q[0] - 120) ** 2 + (q[1] - 135) ** 2)    # a patch low in the crop (feet), clear of the label
-    qx, qy = st2.width + 8 + q[0] * k, q[1] * k
-    circle(p2, (qx - 90, qy - 160, qx + 90, qy + 40), 2)
+    circle(p2b, (sa6.width + 8 + 20, 40, sa6.width + 8 + ga6.width - 20, ga6.height - 10), 2)
+    save(col([p2, p2b]), "fire_t2_dense_vs_sample.png")
 
-    # 3: dark ground
-    g3, _ = crop(td_full, (td_c[0], td_c[1] - 40), 560, 330)
-    label(g3, "dark ground c2r0, game size")
-    p3 = row([td_x3, g3])
-    circle(p3, (150, 120, 470, 430), 3)
+    # 3: the three lines as a whole, game size and x2, from the bow to the line ends
+    allp = [px(q) for l in lines for q in l]
+    x0, x1 = min(q[0] for q in allp), max(q[0] for q in allp)
+    y0, y1 = min(q[1] for q in allp), max(q[1] for q in allp)
+    g3, o3 = crop(tl_full, ((x0 + x1) / 2, (y0 + y1) / 2 - 20), int(x1 - x0) + 80, int(y1 - y0) + 110)
+    label(g3, "3 lines, game size")
+    z3, oz3 = crop(tl_full, (tc[0], tc[1] - 20), 300, 110, 2)
+    label(z3, "one line x2")
+    p3 = row([g3, z3])
+    circle(p3, (g3.width + 8 + 120, 28, g3.width + 8 + z3.width - 10, z3.height - 5), 3)
 
-    # 4: PerfSaver on: every patch stays, the same size
-    g4, o4 = crop(sv_full, (sv_c[0], sv_c[1] - 40), 560, 330)
-    label(g4, "PerfSaver on, game size: %d patches (saver off: %d)" % (len(meta["trail_saver"]["patches"]), len(meta["trail_light"]["patches"])))
-    p4 = row([sv_x3, g4])
+    # 4: dark ground
+    g4, _ = crop(td_full, (td_c[0], td_c[1] - 40), 560, 330)
+    label(g4, "dark ground c2r0, game size")
+    p4 = row([td_x3, g4])
+    circle(p4, (120, 100, td_x3.width - 100, td_x3.height - 60), 4)
+
+    # 5: PerfSaver on: every patch stays
+    g5, o5 = crop(sv_full, (sv_c[0], sv_c[1] - 40), 560, 330)
+    label(g5, "PerfSaver on, game size: %d patches (saver off: %d)" % (len(meta["trail_saver"]["patches"]), len(meta["trail_light"]["patches"])))
+    p5 = row([sv_x3, g5])
     sp = [px(q) for q in meta["trail_saver"]["patches"]]
-    x0 = sv_x3.width + 8
-    circle(p4, (x0 + min(q[0] for q in sp) - o4[0] - 40, max(30, min(q[1] for q in sp) - o4[1] - 70),
-                x0 + min(560, max(q[0] for q in sp) - o4[0] + 40), min(p4.height - 5, max(q[1] for q in sp) - o4[1] + 40)), 4)
-
-    # 5: the trail's end: the same lines full (left) and fading (right), x3 at the same spot
-    fp = [px(p) for p in meta["fade"]["patches"]]
-    fc = centre(fp)
-    fnear = min(fp, key=lambda p: (p[0] - fc[0]) ** 2 + (p[1] - fc[1]) ** 2)
-    a5, _ = crop(tl_full, (fnear[0], fnear[1] - 20), 200, 150, 3)
-    label(a5, "burning (alpha 1.0)  x3")
-    b5, _ = crop(fa_full, (fnear[0], fnear[1] - 20), 200, 150, 3)
-    label(b5, "last 0.3 s, alpha %.2f  x3" % meta["fade"]["trail_alpha"][0])
-    p5 = row([a5, b5])
-    circle(p5, (a5.width + 120, 100, a5.width + 480, 420), 5)
+    xo = sv_x3.width + 8
+    circle(p5, (xo + max(5, min(q[0] for q in sp) - o5[0] - 30), max(30, min(q[1] for q in sp) - o5[1] - 60),
+                xo + min(555, max(q[0] for q in sp) - o5[0] + 30), min(p5.height - 5, max(q[1] for q in sp) - o5[1] + 30)), 5)
 
     W = 1290
     def fit(im, w=W):
         return im if im.width <= w else im.resize((w, round(im.height * w / im.width)), Image.NEAREST)
+    n_l, n_s = len(meta["trail_light"]["patches"]), len(meta["trail_saver"]["patches"])
     legend = [
-        "1. ขนาดกองไฟเทียบฮีโร่และมอน (ภาพขนาดเกม 1:1 ซ้าย, ซูม ×3 รอบมอนขวา): กองไฟสูงราว 49 พิกเซลจอ ราว 2/5 ของฮีโร่ เท้ากองอยู่บนทางลูกศร",
-        "2. เทียบภาพตัวอย่าง T2: ขยาย ×2.5 ทั้งคู่ (บน), 1:1 ทั้งคู่ (กลาง), กองเดียวซูม ×6 (ล่าง) — ขนาดกองไฟเท่าตัวอย่างแล้ว",
-        "   ที่ยังต่าง: (ก) พิกเซลไฟในเกมหยาบกว่าตัวอย่าง 2.5 เท่า: เกมวาดโลกที่ความละเอียดพิกเซลโลกแล้วค่อยขยาย กองไฟ 0.4 จึงถูกสุ่มจุด",
-        "   เหลือราว 2 ใน 5 ของพิกเซลชีตต่อแกน (ประกายเล็กหลุด ขอบเป็นบล็อก)  (ข) กองห่างกัน 44 พิกเซลโลก = 110 พิกเซลจอ (ตัวอย่างห่าง ~44–55)",
-        "3. บนพื้นเข้ม (ห้อง c2r0) ซูม ×3 และขนาดเกม",
-        "4. เปิดโหมดประหยัด (PerfSaver): กองไฟอยู่ครบทุกจุด (13 กอง เท่าตอนปิด) ขนาดเท่าเดิม เพราะเป็นพื้นที่ดาเมจ",
-        "5. ตอนเส้นไฟจะดับ: ซ้ายยังติดเต็ม ขวาคือ 0.3 วิสุดท้าย ทั้งเส้นจางลงพร้อมกัน (ภาพนี้เหลือ 44 %)",
-        "   ดาเมจ/ระยะ/จำนวนกอง/ระเบิด B2 (1:1 = วง r32) ไม่เปลี่ยน · ในเกมพิกเซลไฟเท่ากริดโลก (ยังไม่ใช่ mixels ละเอียดแบบตัวอย่าง ดูข้อ 2)",
+        "1. ขนาดเทียบฮีโร่และมอน (ซ้ายขนาดเกม 1:1, ขวาซูม ×3 รอบมอน): ชีตย่อ 18×20 พิกเซลโลก วาด 1:1 เปลวทึบกว้างราว 10 สูงราว 15 พิกเซลโลก",
+        "   เตี้ยกว่าฮีโร่ราว 1/3 เท้ากองอยู่บนทางลูกศร",
+        "2. เทียบตัวอย่าง T2 ของเจ้าของ ขยาย ×2.5 ทั้งคู่ (บน) และกองเดียว ×6 เฟรมเดียวกัน (ล่าง): ขนาดเท่าตัวอย่าง พิกเซลไฟ = พิกเซลโลก",
+        "   ภาพเนียนกว่าแบบย่อตอนเล่น (ไม่มีจุดหาย) แต่รายละเอียดน้อยกว่าตัวอย่าง (ประกายเล็ก ๆ รวมเป็นก้อน) · ระยะห่าง 20 (ตัวอย่างราว 22)",
+        "3. ทั้งเส้น: กองไฟถี่ทุก 20 พิกเซลโลก (%d กองใน 3 เส้น) อ่านเป็นแถวไฟแน่นตามแนวลูกศร แต่เปลวยังแยกเป็นกอง ๆ" % n_l,
+        "   (เปลวกว้างราว 10 ห่าง 20 จึงมีช่องราว 10 เหมือนตัวอย่าง ไม่ใช่กำแพงไฟต่อกันทึบ) — ดาเมจคิดตามทั้งเส้นเหมือนเดิม",
+        "4. พื้นเข้ม (ห้อง c2r0) ซูม ×3 และขนาดเกม",
+        "5. เปิดโหมดประหยัด (PerfSaver): กองไฟอยู่ครบ %d กอง (ปิด %d) ขนาดเท่าเดิม — โหมดประหยัดไม่ตัดกองไฟเลย" % (n_s, n_l),
     ]
     lh = 30
     leg = Image.new("RGB", (W, lh * len(legend) + 20), PAPER)
@@ -326,10 +329,10 @@ def main_small():
     for i, t in enumerate(legend):
         d.text((12, 10 + i * lh), t, font=f_small, fill=INK)
     title = Image.new("RGB", (W, 44), PAPER)
-    ImageDraw.Draw(title).text((12, 8), "เส้นไฟ T2 ย่อเท่าภาพตัวอย่าง (สเกล 0.4 ในโลก) — ภาพจริงในเกม 1280×720",
+    ImageDraw.Draw(title).text((12, 8), "เส้นไฟ T2 ชีตย่อ 18×20 วาด 1:1 ถี่ทุก 20 พิกเซล — ภาพจริงในเกม 1280×720",
                                font=f_big, fill=INK)
-    save(col([title, fit(p1), fit(p2), fit(p2b), fit(p3), fit(p4), fit(p5), leg]), "fire_t2_small_review.png")
+    save(col([title, fit(p1), fit(p2), fit(p2b), fit(p3), fit(p4), fit(p5), leg]), "fire_t2_dense_review.png")
 
 
 if __name__ == "__main__":
-    main_small() if SMALL else main()
+    main_dense() if DENSE else main()

@@ -10,34 +10,34 @@ extends Node2D
 ## The line is the path the arrow really flew (Task 5 review I1: a homing arrow curves): every SPACING px of path a
 ## point is recorded (at most MAX_STREAKS, in a PackedVector2Array allocated once in setup) and a mark is laid there;
 ## the fire is the polyline from → points → to (the arrow's position). Past the last point the line is the chord to
-## `to` (only for a path longer than MAX_STREAKS × SPACING = 264 px; the longest arrow range in balance.json, shot.range
-## and every skills.*.range, is 220 px today: tests/test_arrow_combos.gd test_trail_marks_cover_the_longest_range). StatusEffects keeps the highest per_tick on one clock, so overlapping lines
+## `to` (only for a path longer than MAX_STREAKS × SPACING = 240 px; the longest arrow range in balance.json, shot.range
+## and every skills.*.range, is 220 px today: tests/test_arrow_combos.gd test_trail_marks_cover_the_longest_range).
+## The damage reads the whole recorded path, never the patches: it does not depend on how many there are (a straight
+## line burns exactly as before; owner 2026-11-10). StatusEffects keeps the highest per_tick on one clock, so overlapping lines
 ## (3 split lines, back-to-back presses) burn once a second at most; a monster standing in one trail gets exactly
 ## round(trail_secs) ticks, as simulated (risks.md B26).
 ## Never saved, never outlives its room: halt() (the warp's dark, Arrow.halt, TestGround) ends it at once (B20).
-## Look (owner 2026-11-09, sample T2 in /home/claude/fx_samples/trail_candidates.png): one fire_trail patch (PixelFX
-## fire/campfire, logs cut, assets/fx/pfx_fire_trail.png, 45 f @ 15 fps loop) on every mark, i.e. one per SPACING px of
-## path as the line grows (not one per frame), so at most MAX_FX = MAX_STREAKS effects per trail. Each patch starts its
+## Look (owner 2026-11-09, sample T2 in /home/claude/fx_samples/trail_candidates.png): one fire_trail_small patch
+## (PixelFX fire/campfire, logs cut, pre-shrunk, assets/fx/pfx_fire_trail_small.png, 18x20, 45 f @ 15 fps loop) on every
+## mark, i.e. one per SPACING px of path as the line grows (not one per frame), so at most MAX_FX = MAX_STREAKS effects
+## per trail. Each patch starts its
 ## loop at its own frame (patch_frame: PHASE frames on from its neighbour, ± JITTER, from a hash of the line's first mark:
 ## random-looking but the same every run), so the line never flickers in sync; the whole line fades out over the last
-## FADE s. PerfSaver: the patches are the hazard the player reads (one per SPACING px segment), so the saver keeps every
-## one of them (fire_trail is not PerfSaver.DECORATIVE); the glow is baked into the sheet (no extra node to shed).
-## Size (owner 2026-11-09, "ย่อให้เท่าภาพตัวอย่าง"): each patch is drawn at PATCH_SCALE in world space, the size the owner
-## saw in the sample (pasted 1 sheet px = 1 screen px; the game draws 2.5 screen px per world px at 1280x720), so a
-## 44x49 cell covers 17.6x19.6 world px with its feet (the sheet's anchor) on the mark; nearest filtering (FxSprite).
-## The world is drawn in a world-pixel SubViewport (TestGround.world_vp, then scaled up), so the patch is point-sampled
-## to the world's grid: the size matches the sample but only about 2 of every 5 sheet pixels per axis are drawn, each
-## as a world pixel (2.5 screen px), coarser than the sample's 1 px fire (risks.md B30). The patches no longer touch
-## (SPACING and the damage are unchanged: the fire burns the whole line).
+## FADE s. PerfSaver: the patches are the hazard the player reads, so the saver sheds none of them (owner 2026-11-10:
+## it may never hide the hazard; fire_trail_small is not PerfSaver.DECORATIVE); the glow is baked into the sheet.
+## Size and density (owner 2026-11-09 "ย่อให้เท่าภาพตัวอย่าง", 2026-11-10 "ทำชีตย่อใหม่ให้เนียน" / "ถี่ขึ้นให้เท่าตัวอย่าง"):
+## the sheet itself is pre-shrunk to the sample's size (tools/pixelfx_export.py shrink_cells: the 44x49 T2 cell
+## area-averaged by 0.4 to 18x20, crisp), drawn at scale 1 so one fire pixel = one world pixel (no runtime scaling, no
+## point-sampling loss), feet (anchor 9,18) on the mark; patches every SPACING = 20 world px (18 px wide: the line
+## reads as one continuous fire, as dense as the sample), at most MAX_STREAKS = 12 per line.
 ## Performance (risks.md B26): the patches share one cached SpriteFrames (FxSprite); step() allocates nothing. The
 ## damage never depends on the effects.
 ## Task 5 review 2: each trail keeps the bounding box of its path (_lo / _hi, grown as extend_to goes; a finished trail
 ## no longer moves), and a target farther than its hit radius outside that box is skipped before any segment check.
 
 const HOLD := 0.25                 # what one step re-applies (StatusEffects: hold + flight past < 1 tick)
-const SPACING := 44.0              # px between marks (one fire_trail patch on each)
-const PATCH_SCALE := 0.4           # world scale of a patch: the sample's size (sheet px 1:1 on a 2.5x screen; owner)
-const MAX_STREAKS := 6             # 6 × 44 = 264 px ≥ the longest arrow range in balance.json (220; tested)
+const SPACING := 20.0              # px between marks (one fire_trail_small patch on each; owner 2026-11-10: as dense as the sample)
+const MAX_STREAKS := 12            # 12 × 20 = 240 px ≥ the longest arrow range in balance.json (220; tested)
 const MAX_FX := MAX_STREAKS        # one patch per mark
 const PHASE := 7                   # frames between neighbouring patches' loops (as the owner's sample)
 const JITTER := 2                  # ± frames on top, per patch (deterministic): neighbours differ by 3..11 of 45
@@ -119,7 +119,7 @@ func points() -> PackedVector2Array:
 func _mark(p: Vector2, d: Vector2, i: int) -> void:
 	if i == 0: _seed = hash(Vector2i(p.round()))
 	for s in ComboFx.play(self, combo_id, "trail", to_local(p) if is_inside_tree() else p, d):
-		s.scale = Vector2(PATCH_SCALE, PATCH_SCALE)    # round the node origin = the sheet's anchor (feet) on the mark
+		s.scale = Vector2.ONE                           # 1:1, the sheet is pre-shrunk; the anchor (feet) on the mark
 		var n: int = s.sprite_frames.get_frame_count(s.animation)
 		if s.sprite_frames.get_animation_loop(s.animation) and n > 1:
 			s.set_frame_and_progress(patch_frame(_seed, i, n), 0.0)
