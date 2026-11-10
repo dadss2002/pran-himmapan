@@ -591,13 +591,13 @@ func _release() -> void:
 		var fan := deg_to_rad(b.fan_deg)
 		for i in n:
 			var dir := v if n == 1 else v.rotated(-fan / 2.0 + fan * i / (n - 1))
-			_fire(start, dir, mult, b.pierce_all, range_px, b)
+			_fire(start, dir, mult, b.pierce_all, range_px, b, SkillBuild.line_of(b, i))
 	else:
 		_fire(start, v, 1.0, false)
 	Sfx.play("bow_shot", start)                # one twang per release, also for the arrow skills' fans
 	_pending_skill = ""
 
-func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1.0, b := {}) -> void:
+func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1.0, b := {}, line := 0) -> void:
 	var a: Arrow = ARROW_SCENE.instantiate()
 	a.position = start
 	var st := stats()
@@ -606,6 +606,7 @@ func _fire(start: Vector2, v: Vector2, mult: float, pierce: bool, range_px := -1
 	a.crit_mult = st.crit_mult
 	if not b.is_empty():
 		a.primary = true                 # a skill press's own arrow (its bounces are not): per-line combo effects
+		a.line = line                    # its line of the press (owner 2026-11-10: lightning combo, one arrow per line)
 		a.configure(b, self)
 		a.spawned.connect(_on_arrow_spawned)
 	if is_inside_tree():

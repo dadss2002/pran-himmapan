@@ -64,7 +64,9 @@ func _fan(b: Dictionary, enemies: Array, shooter: Node = null) -> Array:
 	var fan := deg_to_rad(float(b.fan_deg))
 	for i in n:
 		var dir := Vector2.RIGHT if n == 1 else Vector2.RIGHT.rotated(-fan / 2.0 + fan * i / (n - 1))
-		out.append(_arrow(dir, enemies, b, true, shooter))
+		var a := _arrow(dir, enemies, b, true, shooter)
+		a.line = SkillBuild.line_of(b, i)          # as Hero._release / _fire
+		out.append(a)
 	return out
 
 ## Every arrow's and trail's step, then the dummies' statuses; returns the dummies' damage per frame summed.
@@ -1173,16 +1175,18 @@ func _press_counts(b: Dictionary, dists: Array) -> Array:
 	return out
 
 ## The worst case of bolts per press (risks B29), gems at Lv10 (ricochet: 2 bounces; pierce: 3 more targets), every
-## bounce and bolt finding a monster. Phase 1 (char Lv10): ศรกระจาย has 2 slots (skill Lv8) → [ricochet, lightning]
-## = ศรอสนีกระโดด, 5 arrows × (2 + 1) = 15 bounces / 15 bolts; ศรทะลวง (skill Lv10, 3 slots) ศรอสนีพันสาย: 3 lines ×
-## 1 bounce (piercing) × 2 = 6. Char Lv12 (ศรกระจาย slot 3): + pierce gem → still 15 / 15 (the old rule bounced at
-## every pierced monster: 5 × 4 × 3 = 60); + split = ศรอสนีพันสาย: 7 arrows × 2 bounces × 2 bolts = 28.
+## bounce and bolt finding a monster. Owner 2026-11-10: the lightning combo (+1 bounce, bolts) rides on ONE arrow per
+## line per press; the other arrows keep the plain ricochet bounces (no +1, no bolt). Phase 1 (char Lv10): ศรกระจาย
+## 2 slots (skill Lv8) [ricochet, lightning] = ศรอสนีกระโดด, 1 line: the carrier 2 + 1 = 3 bounces / 3 bolts, the other
+## 4 arrows 2 bounces each → 11 bounces / 3 bolts (was 15 / 15); ศรทะลวง ศรอสนีพันสาย: 3 lines × 1 bounce (piercing) × 2
+## = 3 / 6. Char Lv12 (ศรกระจาย slot 3): + pierce gem → still 11 / 3; + split = ศรอสนีพันสาย, 7 arrows in 3 lines:
+## 7 × 2 = 14 bounces, 3 carriers × 2 bounces × 2 bolts = 12 bolts (was 28) = the worst case per press.
 func test_lightning_worst_case_bolts_per_press():
 	var cases := [
-		["spread Lv10 thunder_hop", {"ricochet": 10, "lightning": 1}, "spread", 10, "thunder_hop", 15, 15],
+		["spread Lv10 thunder_hop", {"ricochet": 10, "lightning": 1}, "spread", 10, "thunder_hop", 11, 3],
 		["piercing Lv10 thousand_bolts", {"ricochet": 10, "lightning": 1, "split": 1}, "piercing", 10, "thousand_bolts", 3, 6],
-		["spread Lv12 thunder_hop + pierce", {"ricochet": 10, "lightning": 1, "pierce": 10}, "spread", 12, "thunder_hop", 15, 15],
-		["spread Lv12 thousand_bolts", {"ricochet": 10, "lightning": 1, "split": 1}, "spread", 12, "thousand_bolts", 14, 28],
+		["spread Lv12 thunder_hop + pierce", {"ricochet": 10, "lightning": 1, "pierce": 10}, "spread", 12, "thunder_hop", 11, 3],
+		["spread Lv12 thousand_bolts", {"ricochet": 10, "lightning": 1, "split": 1}, "spread", 12, "thousand_bolts", 14, 12],
 	]
 	for c in cases:
 		var b := _build_lv(c[1], c[2], c[3])
@@ -1235,4 +1239,198 @@ func test_bolt_can_crit_and_leeches():
 			elif not is_equal_approx(sink.got - before, 2 * float(b.leech)): r = "2 bolts leeched %s, want %s" % [sink.got - before, 2 * float(b.leech)]
 		_free([a] + _spawned)
 	_free(ds.values() + [sink])
+	return r
+
+# ---------- owner 2026-11-10: lightning combo from one arrow per line, bounce arrows don't chain ----------
+
+## SkillBuild.lines / line_of = the sim's arrow lines (1, 3 with split): ศรทะลวง 1 arrow per line, ศรกระจาย 5 arrows
+## in 1 line, +split 7 arrows in 3 lines (2 / 3 / 2, fan order); the hero's press gives each arrow its line.
+func test_press_lines_follow_the_sim():
+	var cases := [["piercing", [], [0]], ["piercing", ["split"], [0, 1, 2]], ["spread", [], [0, 0, 0, 0, 0]],
+		["spread", ["split"], [0, 0, 1, 1, 1, 2, 2]]]
+	for c in cases:
+		var b := _build(c[1], c[0])
+		var got: Array = []
+		for i in int(b.arrows): got.append(SkillBuild.line_of(b, i))
+		if got != c[2]: return "%s %s: lines %s, want %s" % [c[0], c[1], got, c[2]]
+	var h := _hero(12, [])
+	h.set_skill_gems({"spread": [_g("ricochet"), _g("lightning"), _g("split")]})
+	h.try_skill("spread")
+	for i in 50: h.step(DT, Vector2.ZERO)
+	var lines: Array = _spawned.map(func(a): return a.line)
+	var r := "" if lines == [0, 0, 1, 1, 1, 2, 2] else "the hero's spread + split press: lines %s, want [0, 0, 1, 1, 1, 2, 2]" % [lines]
+	_done(h)
+	return r
+
+## Owner 2026-11-10 ("สายฟ้าคอมโบจาก 1 ลูกต่อการกด"): on ศรกระจาย + ศรอสนีกระโดด (1 line) only the FIRST arrow to hit
+## carries the combo: its chain bounces 1 + 1 and bolts at each bounce; the others bounce once (the plain ricochet
+## gem), no bolt. Arrow 3 (fan order) meets its monster first (40 px), so it carries, not arrow 0. The ledger is per
+## press: a second press (new ledger) has its own carrier.
+func test_lightning_combo_one_arrow_per_line():
+	var r := ""
+	for press in 2:
+		var b := _build(["ricochet", "lightning"], "spread")
+		if String(b.combo.get("id", "")) != "thunder_hop": return "setup: combo %s" % b.combo
+		var n := int(b.arrows)
+		var fan := deg_to_rad(float(b.fan_deg))
+		var all: Array = []
+		for i in n:
+			var dir := Vector2.RIGHT.rotated(-fan / 2.0 + fan * i / (n - 1))
+			all.append(_dummy(dir * (40.0 if i == 3 else 80.0)))
+		all.append(_dummy(Vector2(150, -40)))
+		all.append(_dummy(Vector2(150, 40)))
+		_spawned = []
+		var arrows := _fan(b, all)
+		for i in 150: _step(arrows, [])
+		var carriers: Array = []
+		for i in n:
+			if arrows[i].carries_lightning(): carriers.append(i)
+		var am := float(b.arrow_mult)
+		var bolts := 0
+		for d in all:
+			for h in d.hits:
+				if is_equal_approx(float(h[1]), am * 0.5): bolts += 1
+		var carried := _spawned.filter(func(x): return x.carries_lightning()).size()
+		var plain := _spawned.filter(func(x): return not x.carries_lightning())
+		if carriers != [3]: r = "press %d: carriers %s, want [3] (the first arrow of the line to hit)" % [press, carriers]
+		elif carried != 2: r = "press %d: the carrier's chain bounced %d times, want 1 + 1" % [press, carried]
+		elif plain.size() != 4: r = "press %d: %d plain bounce arrows, want 4 (one per other arrow)" % [press, plain.size()]
+		elif plain.any(func(x): return int(x.build.get("bounces", -1)) != 0): r = "press %d: a plain arrow's bounce got the +1" % press
+		elif bolts != 2: r = "press %d: %d bolts, want 2 (the carrier's 2 bounces only)" % [press, bolts]
+		_free(arrows + _spawned + all)
+		if r != "": break
+	return r
+
+## ศรอสนีพันสาย on ศรกระจาย (+split, 3 lines): one carrier per line (arrows 0, 2, 5: the first of each line to hit),
+## 2 bolts per carrier bounce; arrows 1 and 3 bounce plain. With the homing gem (char Lv12, slot 3) the arrows turn
+## onto other monsters but the ledger still gives exactly one carrier per line.
+func test_thousand_bolts_one_carrier_per_line():
+	var b := _build(["ricochet", "lightning", "split"], "spread")
+	var r := "" if String(b.combo.get("id", "")) == "thousand_bolts" and int(b.lines) == 3 else "setup: combo %s lines %s" % [b.combo, b.get("lines")]
+	if r == "":
+		var all := _sim_pack_spread(b, [0, 1, 2, 3, 5])
+		_spawned = []
+		var arrows := _fan(b, all)
+		for i in 150: _step(arrows, [])
+		var carriers: Array = []
+		for i in arrows.size():
+			if arrows[i].carries_lightning(): carriers.append(i)
+		if carriers != [0, 2, 5]: r = "carriers %s, want [0, 2, 5] (one per line)" % [carriers]
+		_free(arrows + _spawned + all)
+	if r == "":
+		var hb := _build_lv({"ricochet": 1, "lightning": 1, "homing": 1}, "spread", 12)
+		if String(hb.combo.get("id", "")) != "thunder_hop" or not bool(hb.homing): return "setup homing: combo %s" % hb.combo
+		var all := _ray_grid(hb, [60, 95, 130])
+		_spawned = []
+		var arrows := _fan(hb, all)
+		for i in 150: _step(arrows, [])
+		var carriers := arrows.filter(func(x): return x.carries_lightning()).size()
+		if carriers != 1: r = "homing thunder_hop: %d carriers, want 1 (1 line)" % carriers
+		_free(arrows + _spawned + all)
+	return r
+
+## Owner 2026-11-10 ("ลูกเด้งไม่แตกสายโซ่"): a bounce arrow's hit never fires the lightning gem's own ×0.8 chain; the
+## press's primary hits still do. ศรทะลวง + ศรอสนีกระโดด through A, P (on the line): 2 primary hits → 2 chains (from A
+## and from P); the bounce arrows' hits on B and C → no chain from B or C.
+func test_bounce_arrows_never_chain():
+	var b := _build(["ricochet", "lightning"])
+	var ds := {"A": _dummy(Vector2(60, 0)), "P": _dummy(Vector2(160, 0)), "B": _dummy(Vector2(60, 90)), "C": _dummy(Vector2(60, 180))}
+	var order := _direct_order(b, ds)
+	var from_pt := func(k): return ds[k].hurt_point()
+	var chains := {}
+	for k in ds:
+		chains[k] = 0
+		for d in ds.values():
+			if d == ds[k]: continue
+			chains[k] += d.hits.filter(func(h): return h[2] == from_pt.call(k)).size()
+	var r := ""
+	if not order in [["A", "B", "C", "P"], ["A", "B", "P", "C"], ["A", "P", "B", "C"]]: r = "setup: direct hits %s" % [order]
+	elif chains.A != 1 or chains.P != 1: r = "primary hits chained A %d / P %d times, want 1 / 1" % [chains.A, chains.P]
+	elif chains.B != 0 or chains.C != 0: r = "bounce arrows chained: from B %d, from C %d, want 0" % [chains.B, chains.C]
+	_free(ds.values())
+	return r
+
+## Dummies for the sim's spread pack: one on each ray `hit_rays` of b's fan at 80 px (those arrows hit once each), plus
+## one behind ray 0 at 140 px (a 6-monster pack: never in a primary arrow's way).
+func _sim_pack_spread(b: Dictionary, hit_rays: Array) -> Array:
+	var n := int(b.arrows)
+	var fan := deg_to_rad(float(b.fan_deg))
+	var out: Array = []
+	for i in hit_rays: out.append(_dummy(Vector2.RIGHT.rotated(-fan / 2.0 + fan * i / (n - 1)) * 80.0))
+	out.append(_dummy(Vector2.RIGHT.rotated(-fan / 2.0) * 140.0))
+	if hit_rays.size() == 4: out.append(_dummy(Vector2.RIGHT.rotated(-fan / 2.0 + fan / (n - 1)) * 140.0))
+	return out
+
+## tools/gem_combo_sim.py, pack of 6, per press in units of the press's first hit (cast(...) pack / hit, crit off, gem
+## Lv1): ศรทะลวง กระโดด 3 + 0.8×3 + 0.8 + 1.8 = 8.0 · ศรกระจาย กระโดด 4 + 0.8×4 + 0.8 + 1.8 = 9.8 · ศรทะลวง พันสาย
+## 7 + 0.8×7 + 0.8×3 + 0.5×3×2 = 18.0 · ศรกระจาย พันสาย 5 + 0.8×5 + 0.8×3 + 3.0 = 14.4 (`python3 tools/gem_combo_sim.py
+## --press` prints them).
+const SIM_PRESS := {"piercing thunder_hop": 8.0, "spread thunder_hop": 9.8, "piercing thousand_bolts": 18.0, "spread thousand_bolts": 14.4}
+
+## One press of build b into `all` (crit off; the dummies record each hit's multiplier): [total / first hit, primary
+## direct hits, chains, bounce arrows, bolts, plain (non-carrier) bounce arrows].
+func _press_total(b: Dictionary, all: Array) -> Array:
+	_spawned = []
+	var arrows := _fan(b, all)
+	for i in 150: _step(arrows, [])
+	var am := float(b.arrow_mult)
+	var total := 0.0
+	var direct := 0
+	var chains := 0
+	var bolts := 0
+	var pts := all.map(func(d): return d.hurt_point())
+	for d in all:
+		for h in d.hits:
+			total += float(h[1])
+			if is_equal_approx(float(h[1]), am * 0.5): bolts += 1
+			elif h[2] in pts and h[2] != d.hurt_point(): chains += 1
+			elif is_equal_approx(float(h[1]), am): direct += 1
+	var plain := _spawned.filter(func(x): return not x.carries_lightning()).size()
+	var out := [total / am, direct, chains, _spawned.size(), bolts, plain]
+	_free(arrows + _spawned + all)
+	return out
+
+## Owner 2026-11-10 goal: per-press pack totals in game = tools/gem_combo_sim.py. Real arrows of a press (crit off,
+## gem Lv1, char Lv10/12) into a 6-monster pack laid out to the sim's hit counts (ศรทะลวง line 3 hits; +split 7 hits on 5;
+## ศรกระจาย 4 arrows hit; +split 5), every chain / bounce / bolt finding a monster. ศรทะลวง: total within ±3 % of the
+## sim. ศรกระจาย: the sim counts the ricochet gem as 1 bounce per LINE (1 / 3), but in game the line's other arrows
+## that hit still bounce (owner rule 1: "the other arrows keep the plain ricochet gem's bounces"); the total minus
+## exactly those plain bounces (bounce_mult each) is within ±3 % of the sim, and the raw total is recorded (risks B29).
+func test_lightning_pack_press_matches_sim():
+	var lines: Array = []
+	var r := ""
+	var cases := [["piercing thunder_hop", ["ricochet", "lightning"], "piercing", 10],
+		["spread thunder_hop", ["ricochet", "lightning"], "spread", 10],
+		["piercing thousand_bolts", ["ricochet", "lightning", "split"], "piercing", 10],
+		["spread thousand_bolts", ["ricochet", "lightning", "split"], "spread", 12]]
+	for c in cases:
+		var lv := {}
+		for k in c[1]: lv[k] = 1
+		var b := _build_lv(lv, c[2], c[3])
+		var all: Array
+		var want: Array      # [primary direct hits, chains, bounce arrows, bolts, plain bounce arrows] (the sim's counts)
+		match c[0]:
+			"piercing thunder_hop":
+				all = [_dummy(Vector2(60, 0)), _dummy(Vector2(110, 0)), _dummy(Vector2(160, 0)), _dummy(Vector2(60, 60)), _dummy(Vector2(110, -60)), _dummy(Vector2(160, 60))]
+				want = [3, 3, 2, 2, 0]
+			"spread thunder_hop":
+				all = _sim_pack_spread(b, [0, 1, 2, 3])
+				want = [4, 4, 5, 2, 3]
+			"piercing thousand_bolts":
+				var up := Vector2.RIGHT.rotated(deg_to_rad(12.0)) * 130.0
+				all = [_dummy(Vector2(40, 0)), _dummy(Vector2(130, 0)), _dummy(up), _dummy(Vector2(up.x, -up.y)), _dummy(Vector2(180, 0)), _dummy(Vector2(40, -60))]
+				want = [7, 7, 3, 6, 0]
+			_:
+				all = _sim_pack_spread(b, [0, 1, 2, 3, 5])
+				want = [5, 5, 5, 6, 2]
+		var got := _press_total(b, all)
+		var sim: float = SIM_PRESS[c[0]]
+		var plain_part := float(got[5]) * float(b.bounce_mult)
+		var comparable: float = float(got[0]) - plain_part
+		lines.append("%s: game %.2f (sim-counted %.2f + plain %.2f) vs sim %.2f = %+.1f %% raw / %+.1f %% sim-counted" % [c[0], got[0], comparable, plain_part, sim, (float(got[0]) / sim - 1.0) * 100.0, (comparable / sim - 1.0) * 100.0])
+		if got.slice(1) != want: r = "%s: [direct, chains, bounces, bolts, plain] %s, want %s (the sim's hit counts)" % [c[0], got.slice(1), want]
+		elif absf(comparable / sim - 1.0) > 0.03: r = "%s: %.3f vs sim %.3f (> ±3 %%)" % [c[0], comparable, sim]
+		elif c[2] == "piercing" and got[5] != 0: r = "%s: plain bounces on a piercing press" % c[0]
+		if r != "": break
+	print("  lightning pack per press (units of the first hit):\n    " + "\n    ".join(lines))
 	return r

@@ -29,9 +29,18 @@ func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier :
 ## M5b combos (plan Task 5): a primary arrow is one the hero's skill press fired (Hero._fire with a build); bounce
 ## arrows and basic shots are not. Per-line combo effects belong to primary arrows only: the fire trail (FireTrail,
 ## ศรพัดเพลิง / พรหมาสตร์) and the line-end blast (พรหมาสตร์). Per-bounce effects (Task 6: the lightning combos'
-## extra bounce and bolts) belong to every arrow of the chain. Secondary hits (blasts, bolts) never trigger combo or
+## extra bounce and bolts) belong to every arrow of ONE chain per line per press (carries_lightning, owner 2026-11-10). Secondary hits (blasts, bolts) never trigger combo or
 ## gem on-hit effects: no trail, bounce, element status, bolt, mark or freeze count (Global Constraints).
 var primary := false
+## Owner 2026-11-10 ("สายฟ้าคอมโบจาก 1 ลูกต่อการกด", "ลูกเด้งไม่แตกสายโซ่"): `line` = the press's line this primary arrow
+## belongs to (SkillBuild.line_of: ศรทะลวง 1 line, +split 3; ศรกระจาย's 5 arrows 1 line, +split 7 arrows in 3). Only the
+## FIRST arrow of a line to hit a monster carries the lightning combo (its +1 bounce and the bolts) for its whole chain,
+## claimed through the press's ledger (build.cast.once("lightning_line", line)); the line's other arrows keep the
+## plain ricochet gem's bounces. `is_bounce`: a ricochet arrow (_spawn_bounce); it never fires the lightning gem's own
+## ×0.8 chain (only the press's primary hits do).
+var line := 0
+var is_bounce := false
+var _carrier := -1      # lightning combo carrier: -1 not decided yet (decided at the first hit), 0 no, 1 yes
 var trail: FireTrail = null
 var _trail_checked := false
 var _line_ended := false
@@ -84,7 +93,8 @@ func _after_hit(t: Node2D, amount: int) -> void:
 		"ice":
 			if t.has_method("apply_status"): t.apply_status("slow")
 		"lightning":
-			var other := _nearest(t.hurt_point(), Balance.num("elements.lightning.range"), [t])
+			# bounce arrows never chain (owner 2026-11-10 "ลูกเด้งไม่แตกสายโซ่"): only the press's primary hits do
+			var other: Node2D = null if is_bounce else _nearest(t.hurt_point(), Balance.num("elements.lightning.range"), [t])
 			if other:
 				_leech(other.receive_hit(atk, mult * Balance.num("elements.lightning.mult"), t.hurt_point(), crit_chance, crit_mult))
 				if is_inside_tree():
@@ -92,15 +102,30 @@ func _after_hit(t: Node2D, amount: int) -> void:
 					z.position = other.hurt_point()
 					get_parent().add_child(z)
 					z.play("chain_zap")
+	_after_hit_bounce(t)
+
+## The ricochet part of a hit: every arrow tries once, from the first monster it hits.
+func _after_hit_bounce(t: Node2D) -> void:
 	if _bounces_left > 0 and not _bounced:
 		var next := _nearest(t.hurt_point(), Balance.num("ricochet.range"), _hit.keys())
 		# every arrow tries once, from the first monster it hits only: a piercing arrow (ศรทะลวง) and, owner 2026-11-09
 		# (Task 6 review, "เด้งจากตัวแรกที่โดนเท่านั้น"), an arrow piercing by the pierce gem (ศรกระจาย); a plain
 		# ricochet arrow stops at that hit anyway, its chain goes on through the bounce arrows
 		_bounced = true
+		var carry := carries_lightning()         # claimed at the arrow's first hit, bounce target or not
 		if next:
-			_spawn_bounce(t.hurt_point(), next)
-			_bounce_event(t, next)
+			_spawn_bounce(t.hurt_point(), next, carry)
+			if carry: _bounce_event(t, next)
+
+## True when this arrow's chain carries the press's lightning combo (+1 bounce, bolts) for its line: decided once, at
+## the arrow's first hit, by the press's ledger (the first arrow of the line to hit wins; no ledger = no limit). Bounce
+## arrows inherit it from the arrow that spawned them. Builds without a lightning combo never carry.
+func carries_lightning() -> bool:
+	if _carrier < 0:
+		var lightning := _cp("bolts") > 0.0 or int(build.get("extra_bounces", 0)) > 0
+		var cast = build.get("cast")
+		_carrier = 1 if lightning and (not (cast is ComboCast) or cast.once("lightning_line", line)) else 0
+	return _carrier == 1
 
 ## The press's combo id ("" for none).
 func combo_id() -> String:
@@ -145,7 +170,8 @@ func root_mult() -> float:
 
 ## One bounce, from `struck` to `next` (Task 6): the recipe's "bounce" effect at the bounce point, and the lightning
 ## combos' bolts (ศรอสนีกระโดด 1, ศรอสนีพันสาย 2) at the nearest others, never the struck monster or the bounce's own
-## target. Every bounce event of the chain bolts (bounce arrows too). Owner 2026-11-09 (Task 6 review, "50% ของนัดแรก
+## target. Every bounce event of a carrier chain bolts (bounce arrows too; carries_lightning: one chain per line per
+## press, owner 2026-11-10). Owner 2026-11-09 (Task 6 review, "50% ของนัดแรก
 ## คงที่"): each bolt is bolt_frac of the press's FIRST hit (root_mult), flat at every bounce, not of the bouncing arrow.
 func _bounce_event(struck: Node2D, next: Node2D) -> void:
 	var at: Vector2 = struck.hurt_point()
@@ -215,7 +241,7 @@ func _nearest(from: Vector2, max_dist: float, skip: Array) -> Node2D:
 			best = t
 	return best
 
-func _spawn_bounce(from: Vector2, to: Node2D) -> void:
+func _spawn_bounce(from: Vector2, to: Node2D, carry := true) -> void:
 	var a: Arrow = load("res://scenes/arrow.tscn").instantiate()
 	a.position = from
 	var d: float = from.distance_to(to.hurt_point())
@@ -224,13 +250,17 @@ func _spawn_bounce(from: Vector2, to: Node2D) -> void:
 	a.crit_mult = crit_mult
 	var b := build.duplicate()
 	# the chain's own bounces (a piercing arrow bounces from its first target only) + the lightning combo's extra
-	# bounce (ศรอสนีกระโดด +1), handed to the first bounce only: exactly +1 per chain, piercing lines included (Task 6)
-	b["bounces"] = (0 if pierce else _bounces_left - 1) + int(build.get("extra_bounces", 0))
+	# bounce (ศรอสนีกระโดด +1), handed to the first bounce only: exactly +1 per chain, piercing lines included (Task 6),
+	# and only on the line's carrier chain (owner 2026-11-10: one arrow per line per press)
+	b["bounces"] = (0 if pierce else _bounces_left - 1) + (int(build.get("extra_bounces", 0)) if carry else 0)
 	b["extra_bounces"] = 0
 	b["root_mult"] = root_mult()       # the press's first hit, for the lightning combos' flat bolts (owner 2026-11-09)
 	b["pierce_extra"] = 0
 	b["homing"] = false
 	a.configure(b, shooter)
+	a.is_bounce = true
+	a.line = line
+	a._carrier = 1 if carry else 0
 	for k in _hit: a._hit[k] = true
 	if is_inside_tree(): get_parent().add_child(a)
 	spawned.emit(a)

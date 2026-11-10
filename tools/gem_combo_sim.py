@@ -172,6 +172,12 @@ if __name__ == '__main__':
                 o, use = run(L, gear, bo); p, _ = run(L, gear, bp, 'pack')
                 print(f"Lv{L} {gear:6}{nm:5}{o:8.0f}{o / b0:6.2f}{p:8.0f}{p / p0:6.2f}{use:6.1f}  {fmt(bo)} / {fmt(bp)}")
     print('ceiling check: best single-target build vs Lv10 ปกติ no gem:', f"{run(10, 'สุดทาง', best(10, 'สุดทาง', 3, 'one'))[0] / base:.2f}x (must be <= 3.03)")
+    if '--press' in sys.argv:  # per press, pack of 6, crit off, gem Lv1, in units of the press's first hit (tests/test_arrow_combos.gd SIM_PRESS)
+        for s_, nm_ in (('pierce', 'ศรทะลวง'), ('spread', 'ศรกระจาย')):
+            for o in (['ricochet', 'lightning'], ['ricochet', 'lightning', 'split']):
+                _, pk, *_rest = cast(s_, o, 10, 0.0, 0.0)
+                k = SK[s_]; h = k['m'] * (1 + 0.05 * (10 - k['u'])) * GEM['lightning'][0] * (0.6 if 'split' in o else 1)
+                print(f"press {nm_} {combo_name(o)}: {pk / h:.2f} x first hit")
     if '--all' in sys.argv:  # each combo on one skill, other skills no gem, Lv10 ปกติ
         L, g = 10, 'ปกติ'; b0, p0 = run(L, g, {})[0], run(L, g, {}, 'pack')[0]
         one1 = {s_: max(run(L, g, {s_: [x]})[0] for x in GEM if fits(x, s_)) / b0 for s_ in SK}

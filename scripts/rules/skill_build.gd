@@ -29,6 +29,7 @@ static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dicti
 	var out := {"pierce_extra": 0, "bounces": 0, "bounce_mult": 0.0, "homing": false, "leech": float(cp.get("leech_add", 0.0)), "element": "", "element_mult": 1.0,
 		"combo": combo, "combo_p": cp, "extra_bounces": int(cp.get("extra_bounces", 0.0))}
 	var per_arrow := 1.0
+	var lines := 1
 	for g in gems:
 		if typeof(g) != TYPE_DICTIONARY or not Gem.fits(String(g.type), skill_id): continue
 		var t := String(g.type)
@@ -43,6 +44,7 @@ static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dicti
 		match t:
 			"split":
 				b.arrows += int(d.extra_arrows)
+				lines += int(d.extra_arrows)
 				per_arrow *= e
 				if skill_id == "spread": b.fan_deg = Balance.num("gem_split.spread_fan_deg")
 				else: b.fan_deg = Balance.num("gem_split.piercing_step_deg") * (b.arrows - 1)
@@ -72,7 +74,18 @@ static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dicti
 		"crit": crit,
 		"cooldown": Skills.cooldown(skill_id, char_level, float(hero_stats.get("skill_cd_cut", 0.0)) + cd_cut),
 		"arrows": b.arrows,
+		"lines": lines,
 		"fan_deg": b.fan_deg,
 		"pierce_all": b.pierce_all,
 	})
 	return out
+
+## The line (0 .. b.lines − 1) of arrow i of a press of build `b` (Hero._release's fan order). Lines = the approved sim's
+## "arrow lines" (tools/gem_combo_sim.py: 1, 3 with the split gem): ศรทะลวง 1 arrow per line; ศรกระจาย 5 arrows = 1 line,
+## +split 7 arrows in 3 lines, in fan order and symmetric (2 / 3 / 2). Owner 2026-11-10: the lightning combo's +1 bounce
+## and bolts come from one arrow per line per press (Arrow.carries_lightning).
+static func line_of(b: Dictionary, i: int) -> int:
+	var n := int(b.get("arrows", 1))
+	var lines := int(b.get("lines", 1))
+	if n <= 1 or lines <= 1: return 0
+	return clampi(roundi(float(i) * (lines - 1) / (n - 1)), 0, lines - 1)
