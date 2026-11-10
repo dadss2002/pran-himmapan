@@ -92,22 +92,36 @@ def cast(s, gems, L, c, cdm):
     if name in ('ศรตาเหยี่ยว', 'ศรเนตรพญาครุฑ'): one /= 0.9; pack /= 0.9        # homing at full power (no -10%)
     if name == 'ศรตาเหยี่ยว': crit += 0.15; mark = 0.20                   # hit marks 4 s, +20% taken by all hits
     if name == 'อาณาเขตพราน': dmgx *= 1.10                                # in zone +10% taken, slow 30%
-    if name == 'ศรเกล็ดน้ำแข็ง': one += 0.25 * hit * n1 * 0.7; pack += 0.25 * hit * np_ * 0.5  # +25% on slowed/frozen
+    # owner 2026-11-10 (Task 7 review, "แก้ตัวเลขอนุมัติตามเกม"): in the pack only a hit on a monster that is ALREADY slowed /
+    # frozen gets the frost +25 % / อโนดาต sure crit and shatter. The ice gem's slow (3 s) runs out before the next press
+    # (ศรทะลวง cooldown 3.64 s at Lv10), so a press starts on unchilled monsters and only the repeat hits of the same
+    # press count: ch = hits - distinct targets (ศรทะลวง +split: 7 hits on 5, the near monster on all 3 lines -> 2).
+    # "ช้า" = the ice slow / freeze only, not the อาณาเขตพราน zone slow nor a trap root ("นับเฉพาะน้ำแข็ง").
+    ch = max(0, np_ - d)
+    if name == 'ศรเกล็ดน้ำแข็ง': one += 0.25 * hit * n1 * 0.7; pack += 0.25 * hit * ch  # +25% on slowed/frozen
     if name == 'ศรเพลิงระเบิด': np_ += 1; pack += hit + 0.6 * hit        # r +20%: 1 more target, all burn
     # ---- 3-gem advanced ⚙
     if name == 'พัดเพลิงพรหมาสตร์': one += 0.9 * hit; pack += 0.9 * hit * d + 0.5 * hit * 3  # trail 30%/s 3 s + blast 50% x3 lines
     if name == 'ศรอสนีพันสาย': pack += 0.5 * hit * 3 * 2                    # every bounce: chain 50% to 2 targets
     if name == 'ศรเนตรพญาครุฑ': crit += 0.15; mark = 0.30                   # +30% taken, marked = sure crit (below)
-    if name == 'ศรผลึกอโนดาต': one += 0.5 * hit; pack += 0.5 * hit * d       # shatter: frozen hit = sure crit + 50% burst r32
+    # shatter: a hit on a chilled monster = sure crit + 50% burst r32, once per struck monster per press, and each monster
+    # takes at most ONE splash per press (owner 2026-11-10 "โดนแรงแตกได้ตัวละ 1 ครั้งต่อการกด"). Pack: only the monster
+    # hit again this press shatters (1 with ch > 0); its splash is counted on itself (the pack's others stand > r32 apart,
+    # as tests/test_arrow_combos.gd lays them out). Single target: unchanged (approved: 1 shatter, half the presses chilled).
+    if name == 'ศรผลึกอโนดาต': one += 0.5 * hit; pack += 0.5 * hit * min(ch, 1)
     if name == 'ศรราหูอมจันทร์': dmgx *= 1 + 0.30 * 0.7; refund = 3 * 2      # +30% while HP >= 70% (~70% of time); kill +3 MP
     if name == 'ศรกระหายเลือด': refund = 2 * 2                              # kill +2 MP (pack: ~2 kills per cast)
     if name == 'ทุ่งเพลิงบรรลัยกัลป์': dmgx *= 1.2; pack += 0.3 * hit * d    # zone 4.5 s: +20% taken, burn
     if name == 'ศรอัคนีทะลวงพิภพ': pack += hit + 1.0 * hit * 5             # +1 target; each pierce: blast r40 100% (burning)
     if name == 'ฝนดาวไฟ': one += 0.8 * hit; pack += 0.8 * hit * 3            # 3 arrows, each explodes r40
-    cf = 1 + min(1, crit) * (0.5 + cdm)
-    if name == 'ศรเนตรพญาครุฑ': cf = 0.15 * (1 + min(1, crit) * (0.5 + cdm)) + 0.85 * (1.5 + cdm)  # ~85% casts on marked
-    if name == 'ศรผลึกอโนดาต': cf = 0.5 * cf + 0.5 * (1.5 + cdm)          # ~half the casts land on frozen
-    return one * cf * dmgx, pack * cf * dmgx, mp, cdv, mark, name, refund
+    cf = 1 + min(1, crit) * (0.5 + cdm); cfp = cf; sure = 1.5 + cdm
+    # ครุฑ: the 4 s mark outlasts the 3.64 s cooldown, so after the first press every press lands on a marked target
+    # (owner 2026-11-10 "รับได้ คงไว้": the sim follows the game; was ~85% of presses marked)
+    if name == 'ศรเนตรพญาครุฑ': cf = cfp = sure
+    if name == 'ศรผลึกอโนดาต':
+        cf = 0.5 * cf + 0.5 * sure                                         # single: ~half the casts land on frozen (approved)
+        pack = pack * cfp + ch * hit * (sure - cfp); cfp = 1               # pack: the ch repeat hits are sure crits
+    return one * cf * dmgx, pack * cfp * dmgx, mp, cdv, mark, name, refund
 
 def run(L, gear, build, mode='one', regen=REGEN):
     """build: {skill: [gems]} -> hero DPS (single boss or pack of 6) and MP/s spent."""

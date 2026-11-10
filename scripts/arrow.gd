@@ -113,8 +113,13 @@ func _chilled(t: Node2D) -> bool:
 ##   Without a ledger (no press) there is no count and no freeze. Its look is the monster's own frost overlay (shown
 ##   while slowed or frozen), so the recipe's "freeze" row is not played again here.
 ## - shatter (อโนดาต): a hit on a target that was chilled blasts r32 × 0.50 of this arrow's hit around it, the target
-##   included, once per target per press (cast.once("shatter"); no ledger = no limit). A secondary hit: it rolls the
-##   arrow's own crit chance (no sure crit), no element, no further combo effect.
+##   included, once per struck target per press (cast.once("shatter"); no ledger = no limit). Owner 2026-11-10 (Task 7
+##   review, "โดนแรงแตกได้ตัวละ 1 ครั้งต่อการกด"): each monster TAKES at most one shatter splash per press, its own
+##   shatter's included (cast.once("shatter_hit"), like the line-end blast): in a tight pack 5 shatters do not hit a
+##   monster 5 times; a monster already splashed this press still shatters (hits the others) when struck while chilled.
+##   A secondary hit: it rolls the arrow's own crit chance (no sure crit), no element, no further combo effect. A
+##   killing arrow hit on a chilled target still shatters round it (chilled is read before the hit; the dead
+##   target itself takes nothing; risks B31).
 ## The combos' "crit" row (crit_hit) is the hit effect TestGround already plays for every crit; not doubled here.
 func _combo_on_hit(t: Node2D, was_chilled: bool) -> void:
 	if not is_instance_valid(t): return
@@ -130,7 +135,7 @@ func _combo_on_hit(t: Node2D, was_chilled: bool) -> void:
 	if _cp("blast_on_chilled") > 0.0 and was_chilled and (ledger == null or ledger.once("shatter", key)):
 		var r := _cp("blast_radius")
 		var at: Vector2 = t.hurt_point()
-		blast(at, r, _cp("blast_frac"), false, t)
+		blast(at, r, _cp("blast_frac"), false, t, [], "shatter_hit")
 		if is_inside_tree():
 			for s in ComboFx.play(get_parent(), combo_id(), "shatter", at):
 				s.scale = Vector2.ONE * (2.0 * r / maxf(1.0, s._cell.x))   # as wide as the shatter (r32: 64 px)
