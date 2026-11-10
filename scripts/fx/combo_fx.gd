@@ -42,6 +42,14 @@ static func play(parent: Node, combo_id: String, event: String, at: Vector2, dir
 		out.append(s)
 	return out
 
+## True when recipe `combo_id` has at least one effect row for `event`.
+static func has(combo_id: String, event: String) -> bool:
+	if combo_id == "": return false
+	var fx = GemCombo.recipe(combo_id).get("fx", {})
+	if typeof(fx) != TYPE_DICTIONARY: return false
+	var rows = fx.get(event, [])
+	return typeof(rows) == TYPE_ARRAY and not rows.is_empty()
+
 static func tint(hex: String) -> Color:
 	if not _tints.has(hex): _tints[hex] = Color.html(hex) if Color.html_is_valid(hex) else Color.WHITE
 	return _tints[hex]

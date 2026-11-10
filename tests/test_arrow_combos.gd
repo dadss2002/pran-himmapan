@@ -1469,3 +1469,353 @@ func test_lightning_pack_press_matches_sim():
 		if r != "": break
 	print("  lightning pack per press (units of the first hit):\n    " + "\n    ".join(lines))
 	return r
+
+# ---------- mark / frost combos (Task 7: ศรตาเหยี่ยว, ศรเนตรพญาครุฑ, ศรเกล็ดน้ำแข็ง, ศรผลึกอโนดาต) ----------
+
+## One primary arrow of build b flown from the origin to the right into `ds` (its crit chance = the build's, crit
+## multiplier crit.mult, as Hero._fire); returns the arrow (not freed). line: its line of the press.
+func _shoot(b: Dictionary, ds: Array, line := 0, dir := Vector2.RIGHT) -> Arrow:
+	var a := _arrow(dir, ds, b)
+	a.crit_chance = float(b.crit)
+	a.crit_mult = Balance.num("crit.mult")
+	a.line = line
+	for i in 120: _step([a], [])
+	return a
+
+## ศรตาเหยี่ยว: an arrow hit marks the target for 4 s (+20 % taken from everything), credited to the press's ledger.
+func test_hawk_eye_marks_20pct_4s():
+	var b := _build(["homing", "execute"])
+	if String(b.combo.get("id", "")) != "hawk_eye": return "setup: combo %s" % b.combo
+	var d := _dummy(Vector2(60, 0))
+	_spawned = []
+	var a := _shoot(b, [d])
+	var r := ""
+	if d.hits.size() != 1: r = "setup: %d hits" % d.hits.size()
+	elif not d.is_marked(): r = "not marked after the hit"
+	elif not is_equal_approx(d.status.taken_mult(), 1.2): r = "taken_mult %s, want 1.2" % d.status.taken_mult()
+	elif not is_same(d.status.mark_cast, b.cast): r = "the mark is not credited to the press's ledger"
+	if r == "":
+		d.tick_status(3.99)
+		if not d.is_marked(): r = "mark gone before 4 s"
+		d.tick_status(0.02)
+		if r == "" and (d.is_marked() or not is_equal_approx(d.status.taken_mult(), 1.0)): r = "still marked after 4.01 s"
+	_free([a, d] + _spawned)
+	return r
+
+## ศรเนตรพญาครุฑ: the first hit rolls the build's crit (0.05 + execute 0.15 + 0.15 = 0.35) and marks +30 %; the next
+## press's hit on the marked target is a sure crit (crit chance 1.0). ศรตาเหยี่ยว has no sure crit: its hit on a marked
+## target keeps the build's chance.
+func test_garuda_marks_30pct_and_sure_crit():
+	var b := _build(["homing", "execute", "multiply"])
+	if String(b.combo.get("id", "")) != "garuda": return "setup: combo %s" % b.combo
+	var d := _dummy(Vector2(60, 0))
+	_spawned = []
+	var a1 := _shoot(b, [d])
+	var r := ""
+	if d.hits.size() != 1: r = "setup: %d hits" % d.hits.size()
+	elif not is_equal_approx(float(d.crit_chances[0]), float(b.crit)) or not is_equal_approx(float(b.crit), 0.35): r = "first hit crit chance %s, want the build's %s (0.35)" % [d.crit_chances[0], b.crit]
+	elif not d.is_marked() or not is_equal_approx(d.status.taken_mult(), 1.3): r = "after the first hit: marked %s taken %s, want true / 1.3" % [d.is_marked(), d.status.taken_mult()]
+	var b2 := _build(["homing", "execute", "multiply"])        # the next press: a new ledger
+	var a2 := _shoot(b2, [d])
+	if r == "" and (d.hits.size() != 2 or float(d.crit_chances[1]) != 1.0): r = "next press on the marked target: crit chance %s, want 1.0" % [d.crit_chances.slice(1)]
+	var h := _build(["homing", "execute"])
+	var e := _dummy(Vector2(60, 0))
+	e.apply_mark(0.2, 4.0)
+	var a3 := _shoot(h, [e])
+	if r == "" and not is_equal_approx(float(e.crit_chances[0]), float(h.crit)): r = "ศรตาเหยี่ยว on a marked target: crit chance %s, want the build's %s (no sure crit)" % [e.crit_chances[0], h.crit]
+	_free([a1, a2, a3, d, e] + _spawned)
+	return r
+
+## ศรเกล็ดน้ำแข็ง: 3 arrows of ONE press (3 split lines) on one target: the freeze (1 s, lock 5 s) lands on the 3rd hit,
+## once; after 2 hits there is none.
+func test_frost_freezes_once_on_third_hit():
+	var b := _build(["ice", "split"])
+	if String(b.combo.get("id", "")) != "frost_shard": return "setup: combo %s" % b.combo
+	var d := _dummy(Vector2(60, 0))
+	_spawned = []
+	var arrows: Array = []
+	var r := ""
+	for i in 3:
+		arrows.append(_shoot(b, [d], i))
+		if d.hits.size() != i + 1: r = "setup: %d hits after %d arrows" % [d.hits.size(), i + 1]
+		elif i < 2 and (d.freezes != 0 or d.is_frozen()): r = "frozen after %d hits, want the 3rd" % (i + 1)
+		if r != "": break
+	if r == "" and (d.freezes != 1 or not d.is_frozen()): r = "after 3 hits: %d freezes, frozen %s; want 1, true" % [d.freezes, d.is_frozen()]
+	if r == "" and not (is_equal_approx(d.status.freeze_left, 1.0) and is_same(d.status.freeze_cast, b.cast)): r = "freeze %s s / cast %s, want 1 s by this press" % [d.status.freeze_left, d.status.freeze_cast]
+	if r == "":
+		arrows.append(_shoot(b, [d], 0))           # a 4th hit of the same press: no second try
+		if d.freezes != 1: r = "a 4th hit froze again"
+	_free(arrows + [d] + _spawned)
+	return r
+
+## The 5 s lock is per monster: a second press 2 s later (3 hits) does not freeze; a press 5.1 s after the freeze does.
+func test_frost_lock_5s():
+	var d := _dummy(Vector2(60, 0))
+	_spawned = []
+	var arrows: Array = []
+	var press := func():
+		var b := _build(["ice", "split"])
+		for i in 3: arrows.append(_shoot(b, [d], i))
+	press.call()
+	var r := "" if d.is_frozen() else "setup: the first press did not freeze"
+	d.tick_status(2.0)
+	press.call()
+	if r == "" and (d.is_frozen() or d.freezes != 1): r = "a press 2 s later froze again (lock 5 s)"
+	d.tick_status(3.1)
+	press.call()
+	if r == "" and (not d.is_frozen() or d.freezes != 2): r = "a press 5.1 s after the freeze did not freeze (frozen %s, %d freezes)" % [d.is_frozen(), d.freezes]
+	_free(arrows + [d] + _spawned)
+	return r
+
+## ศรเกล็ดน้ำแข็ง's arrows deal +25 % to a chilled (slowed or frozen) target, read before the hit: a fresh target's
+## first hit is plain (the ice gem slows it after), the next arrow's hit gets the bonus.
+func test_frost_bonus_vs_chilled():
+	var b := _build(["ice", "split"])
+	var am := float(b.arrow_mult)
+	var slowed := _dummy(Vector2(60, 0))
+	slowed.apply_status("slow")
+	var frozen := _dummy(Vector2(60, 0))
+	frozen.apply_freeze(1.0, 5.0)
+	var fresh := _dummy(Vector2(60, 0))
+	_spawned = []
+	var arrows := [_shoot(b, [slowed]), _shoot(b, [frozen]), _shoot(b, [fresh]), _shoot(b, [fresh], 1)]
+	var r := ""
+	if not is_equal_approx(float(slowed.hits[0][1]), am * 1.25): r = "slowed: mult %s, want %s × 1.25" % [slowed.hits[0][1], am]
+	elif not is_equal_approx(float(frozen.hits[0][1]), am * 1.25): r = "frozen: mult %s, want %s × 1.25" % [frozen.hits[0][1], am]
+	elif not is_equal_approx(float(fresh.hits[0][1]), am): r = "fresh first hit: mult %s, want %s" % [fresh.hits[0][1], am]
+	elif not is_equal_approx(float(fresh.hits[1][1]), am * 1.25): r = "second hit after the ice gem's slow: mult %s, want × 1.25" % fresh.hits[1][1]
+	_free(arrows + [slowed, frozen, fresh] + _spawned)
+	return r
+
+## ศรผลึกอโนดาต: an arrow hit on a chilled (slowed or frozen) target is a sure crit; on a fresh one it rolls the build's
+## chance (0.05 + execute 0.15 = 0.20).
+func test_anodard_sure_crit_vs_chilled():
+	var b := _build(["ice", "split", "execute"])
+	if String(b.combo.get("id", "")) != "anodard": return "setup: combo %s" % b.combo
+	var slowed := _dummy(Vector2(60, 0))
+	slowed.apply_status("slow")
+	var frozen := _dummy(Vector2(60, 0))
+	frozen.apply_freeze(1.0, 5.0)
+	var fresh := _dummy(Vector2(60, 0))
+	_spawned = []
+	var arrows := [_shoot(b, [slowed]), _shoot(b, [frozen], 1), _shoot(b, [fresh], 2)]
+	var r := ""
+	if float(slowed.crit_chances[0]) != 1.0: r = "slowed: crit chance %s, want 1.0" % slowed.crit_chances[0]
+	elif float(frozen.crit_chances[0]) != 1.0: r = "frozen: crit chance %s, want 1.0" % frozen.crit_chances[0]
+	elif not is_equal_approx(float(fresh.crit_chances[0]), float(b.crit)): r = "fresh: crit chance %s, want the build's %s" % [fresh.crit_chances[0], b.crit]
+	_free(arrows + [slowed, frozen, fresh] + _spawned)
+	return r
+
+## ศรผลึกอโนดาต's shatter: 3 lines into one frozen target D → exactly ONE shatter per target per press (r32, × 0.50 of
+## the arrow's hit, D itself included); a dummy 31 px from D's hurt point takes it, one at 33 px does not. The shatter
+## is a secondary hit: it rolls the arrow's own crit chance (Global Constraints), never the sure crit. The next press
+## shatters again.
+func test_anodard_shatters_once_per_target_per_press():
+	var d := _dummy(Vector2(60, 0))
+	var near := _dummy(Vector2(60, 31))
+	var far := _dummy(Vector2(60, -33))
+	d.apply_freeze(1.0, 5.0)
+	var all := [d, near, far]
+	_spawned = []
+	var arrows: Array = []
+	var r := ""
+	for press in 2:
+		var b := _build(["ice", "split", "execute"])
+		var am := float(b.arrow_mult)
+		for i in 3: arrows.append(_shoot(b, all, i))
+		var shatter_d: Array = d.hits.filter(func(h): return is_equal_approx(float(h[1]), am * 0.5))
+		var direct_d: Array = d.hits.filter(func(h): return is_equal_approx(float(h[1]), am))
+		if direct_d.size() != 3 * (press + 1): r = "press %d setup: %d arrow hits on D" % [press, direct_d.size()]
+		elif shatter_d.size() != press + 1: r = "press %d: D took %d shatters in all, want %d (once per target per press)" % [press, shatter_d.size(), press + 1]
+		elif near.hits.size() != press + 1 or not is_equal_approx(float(near.hits[-1][1]), am * 0.5): r = "press %d: the dummy 31 px away took %s, want one × 0.50 per press" % [press, near.hits]
+		elif not far.hits.is_empty(): r = "the dummy 33 px away was hit"
+		elif not is_equal_approx(float(near.crit_chances[-1]), float(b.crit)): r = "shatter crit chance %s, want the arrow's %s" % [near.crit_chances[-1], b.crit]
+		if r != "": break
+	_free(arrows + all + _spawned)
+	return r
+
+## The tier-3 row replaces its base (owner ②, rows read literally): ศรผลึกอโนดาต has no +25 % vs chilled.
+func test_anodard_has_no_frost_bonus():
+	var b := _build(["ice", "split", "execute"])
+	var d := _dummy(Vector2(60, 0))
+	d.apply_status("slow")
+	_spawned = []
+	var a := _shoot(b, [d])
+	var r := "" if is_equal_approx(float(d.hits[0][1]), float(b.arrow_mult)) else "mult %s, want arrow_mult %s (no × 1.25)" % [d.hits[0][1], b.arrow_mult]
+	_free([a, d] + _spawned)
+	return r
+
+## Bosses / elites freeze like any monster (owner 2026-11-08 "บอสแข็งได้เหมือนมอนอื่น"): an elite wolf hit by 3
+## ศรเกล็ดน้ำแข็ง arrows of one press is frozen.
+func test_boss_size_target_freezes():
+	var w: Wolf = load("res://scenes/wolf.tscn").instantiate()
+	w.setup()
+	w.set_elite(true)
+	w.health.setup(100000)
+	w.position = Vector2(60, 0) - Wolf.HURT_POINT * Wolf.size_scale()
+	var b := _build(["ice", "split"])
+	_spawned = []
+	var arrows: Array = []
+	for i in 3: arrows.append(_shoot(b, [w], i))
+	var r := ""
+	if w.health.hp >= 100000: r = "setup: the elite was not hit"
+	elif not w.is_frozen(): r = "an elite hit 3 times by ศรเกล็ดน้ำแข็ง is not frozen"
+	_free(arrows + [w] + _spawned)
+	return r
+
+## Secondary hits (blasts, bolts, shatters) never mark and never count toward the freeze (Global Constraints); bounce
+## arrows' hits do both (plan Task 7: "a primary or bounce arrow hit").
+func test_secondary_hits_never_mark_or_count_freeze():
+	var r := ""
+	var hb := _build(["homing", "execute"])
+	var d := _dummy(Vector2(60, 0))
+	var a := _arrow(Vector2.RIGHT, [d], hb)
+	a.blast(d.hurt_point(), 32.0, 0.5, false)
+	if d.is_marked(): r = "a blast marked"
+	var fb := _build(["ice", "split"])
+	var e := _dummy(Vector2(60, 0))
+	var f := _arrow(Vector2.RIGHT, [e], fb)
+	for i in 3: f.blast(e.hurt_point(), 32.0, 0.5, false)
+	if r == "" and (e.freezes != 0 or e.hits.size() != 3): r = "3 blasts froze (%d) or missed (%d hits)" % [e.freezes, e.hits.size()]
+	_free([a, d, f, e])
+	if r == "":
+		var bounce := _arrow(Vector2.RIGHT, [], hb, false)     # a bounce arrow (not primary) of a hawk_eye press
+		bounce.crit_chance = 0.0
+		var g := _dummy(Vector2(60, 0))
+		bounce.targets = [g]
+		for i in 120: bounce.advance(DT)
+		if g.hits.size() != 1: r = "setup: the bounce arrow hit %d times" % g.hits.size()
+		elif not g.is_marked(): r = "a bounce arrow's hit did not mark"
+		var fb2 := _build(["ice", "split"])
+		var k := _dummy(Vector2(60, 0))
+		var xs: Array = []
+		for i in 3:
+			var x := _arrow(Vector2.RIGHT, [k], fb2, i == 0)       # 1 primary + 2 bounce arrows of one press
+			for j in 120: x.advance(DT)
+			xs.append(x)
+		if r == "" and k.freezes != 1: r = "1 primary + 2 bounce hits of one press: %d freezes, want 1" % k.freezes
+		_free(xs + [bounce, g, k])
+	return r
+
+## The mark shows on the monster while it lasts (Wolf._update_status_fx): the recipe's "mark" effect (lock_on; ครุฑ
+## gold #edbb55, ตาเหยี่ยว untinted), one per monster, swapped when a stronger mark from the other recipe takes over,
+## gone when the mark ends or the monster dies; never shed by the PerfSaver (it tells the player where +20/30 % lands).
+func test_wolf_shows_the_mark_while_marked():
+	var w: Wolf = load("res://scenes/wolf.tscn").instantiate()
+	tree.root.add_child(w)
+	w.setup()
+	var r := ""
+	w.apply_mark(0.2, 4.0, ComboCast.new("hawk_eye"))
+	w._update_status_fx()
+	if w._mark_fx.size() != 1 or w._mark_fx[0].animation != "lock_on" or w._mark_fx[0].modulate != Color.WHITE: r = "hawk_eye mark fx %s" % [w._mark_fx]
+	w.apply_mark(0.3, 4.0, ComboCast.new("garuda"))
+	PerfSaver.active = true
+	w._update_status_fx()
+	if r == "" and (w._mark_fx.size() != 1 or not w._mark_fx[0].modulate.is_equal_approx(Color("#edbb55"))): r = "garuda mark fx %s (want one, gold, kept under the saver)" % [w._mark_fx]
+	PerfSaver.active = false
+	var shown: Node = w._mark_fx[0] if not w._mark_fx.is_empty() else null
+	w.status.tick(4.01)
+	w._update_status_fx()
+	if r == "" and (not w._mark_fx.is_empty() or (shown != null and not shown.is_queued_for_deletion())): r = "mark fx left after the mark ended"
+	w.queue_free()
+	await tree.process_frame
+	return r
+
+## ศรเกล็ดน้ำแข็ง / ผลึกอโนดาต: a primary arrow carries the recipe's "trail" streak (piercing_trail tinted #7fd4ff) as
+## a child, in place of the test ground's plain streak (has_combo_streak); fire recipes lay a FireTrail instead and keep
+## the plain streak; no combo, no streak.
+func test_frost_streak_rides_the_arrow():
+	var p := Node2D.new()
+	tree.root.add_child(p)
+	var r := ""
+	var fb := _build(["ice", "split"])
+	var a := _arrow(Vector2.RIGHT, [], fb)
+	p.add_child(a)
+	a.advance(DT)
+	var streaks := a.get_children().filter(func(c): return c is FxSprite and c.animation == "piercing_trail")
+	if not a.has_combo_streak(): r = "a frost arrow has no combo streak"
+	elif streaks.size() != 1 or not streaks[0].modulate.is_equal_approx(Color("#7fd4ff")): r = "frost streak %s, want one #7fd4ff piercing_trail" % [streaks]
+	for keys in [["split", "fire"], ["split"]]:
+		if r != "": break
+		var x := _arrow(Vector2.RIGHT, [], _build(keys), true)
+		if x.has_combo_streak(): r = "%s has a combo streak" % [keys]
+		x.free()
+	var bounce := _arrow(Vector2.RIGHT, [], fb, false)
+	if r == "" and bounce.has_combo_streak(): r = "a bounce arrow has a combo streak"
+	bounce.free()
+	p.queue_free()
+	await tree.process_frame
+	return r
+
+## tools/gem_combo_sim.py `--press` (mark / frost rows): ศรทะลวง Lv10 on a single target (the sim's boss: every split
+## line hits it), per press, units of the press's first hit, crit counted as expected value (hero crit 0.05 + the
+## build's, crit.mult 1.5): ตาเหยี่ยว 1.175 · ครุฑ 1.451 (the sim: 15 % of presses on an unmarked target × 1.175, 85 %
+## marked × 1.5) · เกล็ดน้ำแข็ง 3.613 (3 hits, 70 % of them +25 %) · อโนดาต 4.550 (3 hits + shatter 0.5, half the
+## presses sure crit). Pack of 6 (7 hits on 5): เกล็ดน้ำแข็ง 8.072 · อโนดาต 12.350.
+const SIM_PRESS7 := {"hawk_eye": 1.175, "garuda": 1.451, "frost_shard": 3.613, "anodard": 4.550, "frost_shard pack": 8.072, "anodard pack": 12.350}
+
+## Σ mult × (1 + crit chance × (crit.mult − 1)) of every hit on `ds` / am (the expected damage, no roll).
+func _expected(ds: Array, am: float) -> float:
+	var cm := Balance.num("crit.mult")
+	var s := 0.0
+	for d in ds:
+		for i in d.hits.size(): s += float(d.hits[i][1]) * (1.0 + clampf(float(d.crit_chances[i]), 0.0, 1.0) * (cm - 1.0))
+	return s / am
+
+## Game vs the sim per press. Single target, fresh (unchilled, unmarked: ศรทะลวง's cooldown 3.64 s at Lv10 outlasts the
+## ice gem's 3 s slow, so each frost press starts on an unchilled target): ตาเหยี่ยว, เกล็ดน้ำแข็ง, อโนดาต within ±3 %.
+## ครุฑ: the game's two presses equal the sim's two branches exactly (unmarked 1.175, marked 1.5); the sim's 85 % mix is
+## its own assumption (in game the 4 s mark outlasts the 3.64 s cooldown, so every press after the first is marked:
+## +3.4 % over the mix per press). Pack: printed and checked against the game's own hit counts only (the sim assumes
+## every distinct target shatters / half the pack hits chilled; risks.md B31).
+func test_mark_frost_press_matches_sim():
+	var lines: Array = []
+	var r := ""
+	for id in ["hawk_eye", "garuda", "frost_shard", "anodard"]:
+		var keys: Array = {"hawk_eye": ["homing", "execute"], "garuda": ["homing", "execute", "multiply"], "frost_shard": ["ice", "split"], "anodard": ["ice", "split", "execute"]}[id]
+		var b := _build(keys)
+		var am := float(b.arrow_mult)
+		var d := _dummy(Vector2(60, 0))
+		_spawned = []
+		var arrows: Array = []
+		for i in int(b.arrows): arrows.append(_shoot(b, [d], i))
+		var game := _expected([d], am)
+		var sim: float = SIM_PRESS7[id]
+		if id == "garuda":
+			var b2 := _build(keys)
+			d.hits.clear()
+			d.crit_chances.clear()
+			arrows.append(_shoot(b2, [d]))             # the next press, on the marked target
+			var marked := _expected([d], am)
+			lines.append("garuda: unmarked press %.3f, marked press %.3f vs sim mix %.3f (sim branches 1.175 / 1.500)" % [game, marked, sim])
+			if not is_equal_approx(snappedf(game, 0.001), 1.175) or not is_equal_approx(marked, 1.5): r = "garuda presses %.4f / %.4f, want the sim's branches 1.175 / 1.5" % [game, marked]
+		else:
+			lines.append("%s: game %.3f vs sim %.3f = %+.1f %%" % [id, game, sim, (game / sim - 1.0) * 100.0])
+			if absf(game / sim - 1.0) > 0.03: r = "%s: game %.3f vs sim %.3f (> ±3 %%)" % [id, game, sim]
+		_free(arrows + [d] + _spawned)
+		if r != "": break
+	if r == "":
+		for id in ["frost_shard", "anodard"]:
+			var keys: Array = {"frost_shard": ["ice", "split"], "anodard": ["ice", "split", "execute"]}[id]
+			var b := _build(keys)
+			var am := float(b.arrow_mult)
+			# the sim's pack for a split ศรทะลวง: 7 hits on 5 monsters (the near one on all 3 lines), a 6th untouched
+			var up := Vector2.RIGHT.rotated(deg_to_rad(12.0)) * 130.0
+			var all := [_dummy(Vector2(40, 0)), _dummy(Vector2(130, 0)), _dummy(up), _dummy(Vector2(up.x, -up.y)), _dummy(Vector2(180, 0)), _dummy(Vector2(40, -60))]
+			_spawned = []
+			var arrows := _fan(b, all)
+			for a in arrows:
+				a.crit_chance = float(b.crit)
+				a.crit_mult = Balance.num("crit.mult")
+			for i in 150: _step(arrows, [])
+			var hits := 0
+			for d in all: hits += d.hits.size()
+			var game := _expected(all, am)
+			var sim: float = SIM_PRESS7[id + " pack"]
+			lines.append("%s pack: game %.3f vs sim %.3f = %+.1f %% (%d hits)" % [id, game, sim, (game / sim - 1.0) * 100.0, hits])
+			var want_hits := 7 if id == "frost_shard" else 8       # อโนดาต: + 1 shatter (only the near monster is hit twice)
+			if hits != want_hits: r = "%s pack: %d hits, want %d" % [id, hits, want_hits]
+			_free(arrows + all + _spawned)
+			if r != "": break
+	print("  mark / frost per press (units of the first hit, expected crit):\n    " + "\n    ".join(lines))
+	return r

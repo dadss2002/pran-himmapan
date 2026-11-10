@@ -180,6 +180,13 @@ if __name__ == '__main__':
                 _, pk, *_rest = cast(s_, o, 10, 0.0, 0.0)
                 k = SK[s_]; h = k['m'] * (1 + 0.05 * (10 - k['u'])) * GEM['lightning'][0] * (0.6 if 'split' in o else 1)
                 print(f"press {nm_} {combo_name(o)}: {pk / h:.2f} x first hit")
+        # mark / frost (M5b Task 7): ศรทะลวง Lv10, crit counted (hero 0.05, crit dmg x1.5 = cdm 0), units of the press's
+        # first hit (homing_full: the game's arrow has no x0.9, the sim's one/pack are divided back by 0.9 too)
+        for o in (['homing', 'execute'], ['homing', 'execute', 'multiply'], ['ice', 'split'], ['ice', 'split', 'execute']):
+            on, pk, *_rest = cast('pierce', o, 10, 0.05, 0.0)
+            h = SK['pierce']['m'] * (1 + 0.05 * 9) * (0.6 if 'split' in o else 1)
+            for g in o: h *= 1 if g == 'homing' else GEM[g][0]
+            print(f"press ศรทะลวง {combo_name(o)}: single {on / h:.3f} · pack {pk / h:.3f} x first hit (crit counted)")
     if '--all' in sys.argv:  # each combo on one skill, other skills no gem, Lv10 ปกติ
         L, g = 10, 'ปกติ'; b0, p0 = run(L, g, {})[0], run(L, g, {}, 'pack')[0]
         one1 = {s_: max(run(L, g, {s_: [x]})[0] for x in GEM if fits(x, s_)) / b0 for s_ in SK}

@@ -628,7 +628,7 @@ func _notification(what: int) -> void:
 		save_now()
 
 func _on_arrow(a: Arrow) -> void:
-	if a.pierce and is_inside_tree():
+	if a.pierce and is_inside_tree() and not a.has_combo_streak():   # frost combos carry their own tinted streak
 		var trail := FxSprite.make("piercing_trail", true)
 		trail.show_behind_parent = true
 		a.add_child(trail)

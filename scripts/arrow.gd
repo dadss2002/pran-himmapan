@@ -72,8 +72,7 @@ func advance(delta: float) -> void:
 	for t in targets:
 		if is_instance_valid(t) and t.is_alive() and not _hit.has(t) and _pos().distance_to(t.hurt_point()) <= (t.hurt_radius() if t.has_method("hurt_radius") else radius):
 			_hit[t] = true
-			var amount: int = t.receive_hit(atk, mult, _pos(), crit_chance, crit_mult)
-			_after_hit(t, amount)
+			_arrow_hit(t)
 			if pierce: continue
 			if _pierce_left > 0:
 				_pierce_left -= 1
@@ -82,6 +81,59 @@ func advance(delta: float) -> void:
 			return
 	if travelled >= range_px - 0.0001:
 		_finish()
+
+## One ARROW hit on t: a primary or a bounce arrow (secondary hits, chains and trail ticks never come here). M5b Task 7
+## (mark / frost combos), read BEFORE the hit (the ice gem's slow from this very hit does not count for it):
+## - sure crit (crit chance 1.0): ศรเนตรพญาครุฑ (sure_crit_marked) on a marked target, ศรผลึกอโนดาต (sure_crit_chilled) on
+##   a chilled (slowed or frozen) one;
+## - ศรเกล็ดน้ำแข็ง (bonus_vs_chilled): × (1 + 0.25) on a chilled target (this arrow's hit only: its bounce, chain and burn
+##   are computed from the arrow's own mult).
+## Then the gems' on-hit (_after_hit) and the combo's on-hit (_combo_on_hit). Returns the damage dealt.
+func _arrow_hit(t: Node2D) -> int:
+	var chilled := _chilled(t)
+	var m := mult
+	var bonus := _cp("bonus_vs_chilled")
+	if bonus > 0.0 and chilled: m *= 1.0 + bonus
+	var chance := crit_chance
+	if (chilled and _cp("sure_crit_chilled") > 0.0) or (_cp("sure_crit_marked") > 0.0 and t.has_method("is_marked") and t.is_marked()):
+		chance = 1.0
+	var amount: int = t.receive_hit(atk, m, _pos(), chance, crit_mult)
+	_after_hit(t, amount)
+	_combo_on_hit(t, chilled)
+	return amount
+
+func _chilled(t: Node2D) -> bool:
+	return t.has_method("is_chilled") and t.is_chilled()
+
+## The mark / frost combos' on-hit (Task 7), after an arrow hit on t (was_chilled: before the hit). Arrow hits only:
+## a secondary hit never marks, never counts toward the freeze and never shatters (Global Constraints).
+## - mark (ศรตาเหยี่ยว +20 % / ครุฑ +30 %, 4 s): every arrow hit marks; the monster shows it (Wolf._update_status_fx).
+## - freeze (เกล็ดน้ำแข็ง / อโนดาต): the press's ledger counts this press's arrow hits per target; the 3rd one freezes
+##   (1 s, then the monster's own 5 s lock, StatusEffects). Exactly once per target per press (no retry on a 4th hit).
+##   Without a ledger (no press) there is no count and no freeze. Its look is the monster's own frost overlay (shown
+##   while slowed or frozen), so the recipe's "freeze" row is not played again here.
+## - shatter (อโนดาต): a hit on a target that was chilled blasts r32 × 0.50 of this arrow's hit around it, the target
+##   included, once per target per press (cast.once("shatter"); no ledger = no limit). A secondary hit: it rolls the
+##   arrow's own crit chance (no sure crit), no element, no further combo effect.
+## The combos' "crit" row (crit_hit) is the hit effect TestGround already plays for every crit; not doubled here.
+func _combo_on_hit(t: Node2D, was_chilled: bool) -> void:
+	if not is_instance_valid(t): return
+	var cast = build.get("cast")
+	var ledger: ComboCast = cast if cast is ComboCast else null
+	var key := t.get_instance_id()
+	var secs := _cp("mark_secs")
+	if secs > 0.0 and t.has_method("apply_mark"):
+		t.apply_mark(_cp("mark_taken"), secs, ledger)
+	var need := int(_cp("freeze_hits"))
+	if need > 0 and ledger != null and t.has_method("apply_freeze") and ledger.count_hit(key) == need:
+		t.apply_freeze(_cp("freeze_secs"), _cp("freeze_lock_secs"), ledger)
+	if _cp("blast_on_chilled") > 0.0 and was_chilled and (ledger == null or ledger.once("shatter", key)):
+		var r := _cp("blast_radius")
+		var at: Vector2 = t.hurt_point()
+		blast(at, r, _cp("blast_frac"), false, t)
+		if is_inside_tree():
+			for s in ComboFx.play(get_parent(), combo_id(), "shatter", at):
+				s.scale = Vector2.ONE * (2.0 * r / maxf(1.0, s._cell.x))   # as wide as the shatter (r32: 64 px)
 
 func _after_hit(t: Node2D, amount: int) -> void:
 	_leech(amount)
@@ -144,11 +196,20 @@ func _cp(key: String) -> float:
 	var cp = build.get("combo_p", {})
 	return float(cp.get(key, 0.0)) if typeof(cp) == TYPE_DICTIONARY else 0.0
 
-## A primary arrow of a trail recipe lays one FireTrail from where it starts (once, on its first step).
+## True for a primary arrow whose recipe has a "trail" look but no fire line (ศรเกล็ดน้ำแข็ง / ผลึกอโนดาต: a
+## piercing_trail streak tinted #7fd4ff riding the arrow). TestGround then skips its plain white streak for it.
+func has_combo_streak() -> bool:
+	return primary and _cp("trail_secs") <= 0.0 and ComboFx.has(combo_id(), "trail")
+
+## A primary arrow of a trail recipe lays one FireTrail from where it starts (once, on its first step); a streak
+## recipe (has_combo_streak) puts its streak on the arrow instead (a child: it turns and goes with the arrow).
 func _lay_trail() -> void:
 	_trail_checked = true
 	var secs := _cp("trail_secs")
-	if secs <= 0.0: return
+	if secs <= 0.0:
+		if is_inside_tree() and has_combo_streak():
+			for s in ComboFx.play(self, combo_id(), "trail", Vector2.ZERO): s.show_behind_parent = true
+		return
 	trail = FireTrail.new()
 	# per tick × the press's expected crit factor (no per-tick roll; the approved sim, Task 5 review I3)
 	trail.setup(_pos(), atk, mult, _cp("trail_frac"), secs, targets, shooter, build.get("cast"), float(build.get("leech", 0.0)), combo_id(),

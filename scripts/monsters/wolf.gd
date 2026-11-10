@@ -97,6 +97,8 @@ var status := StatusEffects.new()
 const STATUS_FX_SCALE := 1.5
 var _burn_fx: FxSprite = null
 var _frost_fx: FxSprite = null
+var _mark_fx: Array = []         # M5b Task 7: the mark's effect (ComboFx "mark" of the marking recipe) while marked
+var _mark_shown := ""            # the recipe id whose mark effect is up ("" = none)
 ## Owner 2026-11-09 (PixelFX decision B): the monster itself is tinted while burning (red-orange) or slowed
 ## (ice), as well as its PixelFX overlay; both at once: frost wins (one clear colour; the burn keeps its
 ## flames and damage numbers). Visual only. *_AMOUNT = how far the body's colours go toward the tint (flash.gdshader).
@@ -358,6 +360,23 @@ func _update_status_fx() -> void:
 	var shed := PerfSaver.active
 	_burn_fx = _toggle_fx(_burn_fx, "status_burn", status.is_burning() and is_alive() and not (shed and PerfSaver.decorative("status_burn")))
 	_frost_fx = _toggle_fx(_frost_fx, "status_frost", is_chilled() and not (shed and PerfSaver.decorative("status_frost")))
+	_update_mark_fx()
+
+## M5b Task 7: while marked (ศรตาเหยี่ยว / ครุฑ), the marking recipe's "mark" effect (lock_on; ครุฑ gold) on the body at
+## the hurt point; swapped when the mark that counts (StatusEffects.mark_cast: the highest) comes from the other recipe,
+## freed when the mark ends or the monster dies. Gameplay information (+20 / 30 % taken): never shed by the PerfSaver
+## (lock_on is not PerfSaver.DECORATIVE). One string compare per step when nothing changes.
+func _update_mark_fx() -> void:
+	var want := ""
+	if is_alive() and status.is_marked() and status.mark_cast != null: want = status.mark_cast.id
+	if want == _mark_shown: return
+	for s in _mark_fx:
+		if is_instance_valid(s): s.queue_free()
+	_mark_fx = []
+	_mark_shown = want
+	if want != "":
+		_mark_fx = ComboFx.play(self, want, "mark", HURT_POINT * size_scale())
+		for s in _mark_fx: s.scale = Vector2.ONE * size_scale()
 
 ## The body's status tint now: frost (slowed or frozen), else burn, else none; alpha = its tint amount (0 = none).
 ## Dead monsters are never tinted.

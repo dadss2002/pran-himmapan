@@ -176,3 +176,6 @@
 
 ## เอฟเฟกต์ท่าผสม M5b Task 5 (ศรพัดเพลิง / พัดเพลิงพรหมาสตร์): **0 gen**
 ใช้เอฟเฟกต์เดิมใน assets/fx/manifest.json ปรับสีด้วย modulate เท่านั้น (ComboFx): ทางไฟ = piercing_trail สีส้ม #ff8a3d + status_burn (PixelFX ④) · ปลายแนวพรหมาสตร์ = spread_burst สีส้ม ขยายเท่าวงระเบิด r32 · ภาพ docs/preview/m5b/fire_fan_ingame.png, brahmastra_ingame.png
+
+## เอฟเฟกต์ท่าผสม M5b Task 7 (ศรตาเหยี่ยว / ครุฑ / ศรเกล็ดน้ำแข็ง / ผลึกอโนดาต): **0 gen**
+ใช้ของเดิมใน manifest ปรับสีด้วย modulate (ComboFx): มาร์ก = lock_on บนตัวมอนตลอดที่ติดมาร์ก (ครุฑสีทอง #edbb55) · เส้นลูกศรน้ำแข็ง = piercing_trail สีฟ้า #7fd4ff ติดไปกับลูกศร · แตกผลึก = spread_burst สีฟ้า กว้างเท่าวง r32 · แข็ง = ชั้นน้ำแข็งเดิมบนตัวมอน (status_frost) · คริ = ประกายคริเดิม

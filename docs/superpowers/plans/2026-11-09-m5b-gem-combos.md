@@ -415,7 +415,7 @@ func test_lightning_gem_chain_still_works():      # element lightning's own +1 t
 - Consumes: `ComboCast.count_hit`, `ComboCast.once`, the Wolf status API, `Arrow.blast`, `ComboFx.play`
 - Produces: none new. Arrow behaviour only.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```gdscript
 func test_hawk_eye_marks_20pct_4s():               # hit → dummy.is_marked(), taken_mult ≈ 1.2, gone after 4.01 s
@@ -429,10 +429,12 @@ func test_anodard_has_no_frost_bonus():            # anodard on a slowed dummy: 
 func test_boss_size_target_freezes():              # a wolf with set_elite(true) hit 3 times by frost_shard → is_frozen() (owner: bosses freeze like others)
 ```
 
-- [ ] **Step 2: Run and check it fails.**
-- [ ] **Step 3: Implement.** Before a primary or bounce arrow hit, the arrow checks: `sure_crit_marked` and the target is marked → crit_chance 1.0; `sure_crit_chilled` and the target is chilled → 1.0; `bonus_vs_chilled` and the target is chilled → mult × (1 + bonus). After the hit: `mark_secs` → `apply_mark(mark_taken, mark_secs)` plus ComboFx "mark"; `freeze_hits` → if `cast.count_hit(id) == freeze_hits`, call `apply_freeze(freeze_secs, freeze_lock_secs)` plus FX; `blast_on_chilled` and the target was chilled and `cast.once("shatter", id)` → `blast(t.hurt_point(), r, frac, false, t)`.
-- [ ] **Step 4: Run and check it passes.**
-- [ ] **Step 5: Commit** `git commit -m "M5b Task 7: mark (ตาเหยี่ยว/ครุฑ) and freeze (เกล็ดน้ำแข็ง/อโนดาต) combos"`
+- [x] **Step 2: Run and check it fails.**
+- [x] **Step 3: Implement.** Before a primary or bounce arrow hit, the arrow checks: `sure_crit_marked` and the target is marked → crit_chance 1.0; `sure_crit_chilled` and the target is chilled → 1.0; `bonus_vs_chilled` and the target is chilled → mult × (1 + bonus). After the hit: `mark_secs` → `apply_mark(mark_taken, mark_secs)` plus ComboFx "mark"; `freeze_hits` → if `cast.count_hit(id) == freeze_hits`, call `apply_freeze(freeze_secs, freeze_lock_secs)` plus FX; `blast_on_chilled` and the target was chilled and `cast.once("shatter", id)` → `blast(t.hurt_point(), r, frac, false, t)`.
+- [x] **Step 4: Run and check it passes.**
+- [x] **Step 5: Commit** `git commit -m "M5b Task 7: mark (ตาเหยี่ยว/ครุฑ) and freeze (เกล็ดน้ำแข็ง/อโนดาต) combos"`
+
+**Done (2026-11-10):** `Arrow._arrow_hit(t)` = every primary / bounce arrow hit: reads chilled / marked BEFORE the hit (the ice gem's slow from the same hit does not count), sure crit 1.0 for `sure_crit_marked` on a marked target and `sure_crit_chilled` on a chilled one, ×1.25 `bonus_vs_chilled` on this arrow's hit only (bounce / chain / burn from the arrow's own mult); then `_after_hit` and `_combo_on_hit(t, was_chilled)`: mark on every arrow hit (`apply_mark(mark_taken, mark_secs, cast)`), freeze when `cast.count_hit(target) == freeze_hits` (exactly once per target per press; no ledger = no freeze), shatter when it was chilled and `cast.once("shatter", target)` → `blast(hurt_point, 32, 0.5, false, t)` + the recipe's `shatter` FX (spread_burst #7fd4ff scaled to 64 px). Secondary hits never mark / count / shatter. Readings (plan decisions): sure crit applies to arrow hits only (Step 3 "a primary or bounce arrow hit"); the shatter rolls the arrow's own crit chance (Global Constraints "shatters can crit with the arrow's crit chance"), so it is not a sure crit even on the frozen target. FX: mark = the recipe's `mark` row (lock_on; garuda #edbb55) on the monster while marked (`Wolf._update_mark_fx`: swapped to the stronger mark's recipe, freed at expiry / death, never shed); frost recipes' `trail` row = a piercing_trail #7fd4ff streak riding the primary arrow (`Arrow.has_combo_streak`; TestGround then skips its plain streak); the `freeze` row = the monster's own frost overlay (not doubled); the `crit` row = TestGround's crit spark (not doubled). `ComboFx.has(id, event)`. `tests/dummy_enemy.gd` records `crit_chances`. `tools/gem_combo_sim.py --press` prints the mark / frost rows (no number changed). Tests (test_arrow_combos, 13 new): the plan's 9 + `test_secondary_hits_never_mark_or_count_freeze` (bounce arrows do mark and count), `test_wolf_shows_the_mark_while_marked`, `test_frost_streak_rides_the_arrow`, `test_mark_frost_press_matches_sim`. Game vs sim per press (ศรทะลวง Lv10, single target, expected crit): hawk_eye 1.175 vs 1.175 (0 %), frost_shard 3.588 vs 3.613 (−0.7 %), anodard 4.650 vs 4.550 (+2.2 %), asserted ±3 %; garuda presses 1.175 / 1.5 = the sim's two branches (the sim mixes them 15 / 85 = 1.451; in game every press after the first is marked: +3.4 %). Pack (7 hits on 5): frost_shard 7.69 vs 8.07 (−4.8 %), anodard 9.05 vs 12.35 (−26.7 %): printed, not asserted (the sim lets every pack monster shatter; owner question, risks B31). Seen failing first (12 fails); mutation checks, each caught: shatter without once-per-target, chilled read after the hit for the shatter. Task 6 review fix first (5abccd4). Full suite: `RESULT passed=636 failed=0`: `carries_lightning()` read-only, `claim_lightning_line()` the one claiming place. Risk B31 added.
 
 ---
 

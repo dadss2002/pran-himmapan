@@ -8,6 +8,7 @@ var alive := true
 var hp := 40
 var def := 0
 var hits: Array = []   # [atk, mult, from]
+var crit_chances: Array = []   # the crit chance of each hit, in step with hits (M5b Task 7: sure crits)
 var status := StatusEffects.new()
 var freezes := 0       # successful apply_freeze calls
 var statuses: Array = []   # [kind, value, cast] from apply_status
@@ -18,8 +19,9 @@ func is_alive() -> bool:
 func hurt_point() -> Vector2:
 	return position + Vector2(0, -14)
 
-func receive_hit(atk: float, mult: float, from: Vector2, _crit_chance := -1.0, _crit_mult := -1.0) -> int:
+func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, _crit_mult := -1.0) -> int:
 	hits.append([atk, mult, from])
+	crit_chances.append(crit_chance)
 	return 1
 
 func apply_status(kind: String, value := 0.0, leech := 0.0, source: Object = null, cast: ComboCast = null) -> void:
