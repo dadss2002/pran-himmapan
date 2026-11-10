@@ -15,7 +15,9 @@ static var _tints := {}          # "#hex" → Color, parsed once
 
 ## Spawns recipe `combo_id`'s effects for `event` as children of `parent` at `at` (parent-local) and plays them.
 ## dir: the line's direction for DIRECTIONAL effects (ZERO = no turn). decor = false skips the decorative extras
-## (a trail lays flames on every other mark only). Returns the FxSprites spawned ([] for no parent, no combo, no
+## (PerfSaver.DECORATIVE) outright. No game caller passes it today: FireTrail never sheds a patch (owner 2026-11-10),
+## and PerfSaver never hides hazards, telegraphs or hit effects (only DECORATIVE extras are shed or swapped for their
+## fallback). Returns the FxSprites spawned ([] for no parent, no combo, no
 ## entry, or all shed). One-shot effects free themselves; looping ones live as long as their parent.
 static func play(parent: Node, combo_id: String, event: String, at: Vector2, dir := Vector2.ZERO, decor := true) -> Array:
 	var out: Array = []

@@ -83,7 +83,7 @@ static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dicti
 ## The line (0 .. b.lines − 1) of arrow i of a press of build `b` (Hero._release's fan order). Lines = the approved sim's
 ## "arrow lines" (tools/gem_combo_sim.py: 1, 3 with the split gem): ศรทะลวง 1 arrow per line; ศรกระจาย 5 arrows = 1 line,
 ## +split 7 arrows in 3 lines, in fan order and symmetric (2 / 3 / 2). Owner 2026-11-10: the lightning combo's +1 bounce
-## and bolts come from one arrow per line per press (Arrow.carries_lightning).
+## and bolts come from one arrow per line per press (Arrow.claim_lightning_line).
 static func line_of(b: Dictionary, i: int) -> int:
 	var n := int(b.get("arrows", 1))
 	var lines := int(b.get("lines", 1))

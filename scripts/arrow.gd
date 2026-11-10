@@ -29,7 +29,7 @@ func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier :
 ## M5b combos (plan Task 5): a primary arrow is one the hero's skill press fired (Hero._fire with a build); bounce
 ## arrows and basic shots are not. Per-line combo effects belong to primary arrows only: the fire trail (FireTrail,
 ## ศรพัดเพลิง / พรหมาสตร์) and the line-end blast (พรหมาสตร์). Per-bounce effects (Task 6: the lightning combos'
-## extra bounce and bolts) belong to every arrow of ONE chain per line per press (carries_lightning, owner 2026-11-10). Secondary hits (blasts, bolts) never trigger combo or
+## extra bounce and bolts) belong to every arrow of ONE chain per line per press (claim_lightning_line, owner 2026-11-10). Secondary hits (blasts, bolts) never trigger combo or
 ## gem on-hit effects: no trail, bounce, element status, bolt, mark or freeze count (Global Constraints).
 var primary := false
 ## Owner 2026-11-10 ("สายฟ้าคอมโบจาก 1 ลูกต่อการกด", "ลูกเด้งไม่แตกสายโซ่"): `line` = the press's line this primary arrow
@@ -112,15 +112,22 @@ func _after_hit_bounce(t: Node2D) -> void:
 		# (Task 6 review, "เด้งจากตัวแรกที่โดนเท่านั้น"), an arrow piercing by the pierce gem (ศรกระจาย); a plain
 		# ricochet arrow stops at that hit anyway, its chain goes on through the bounce arrows
 		_bounced = true
-		var carry := carries_lightning()         # claimed at the arrow's first hit, bounce target or not
+		var carry := claim_lightning_line()      # claimed at the arrow's first hit, bounce target or not
 		if next:
 			_spawn_bounce(t.hurt_point(), next, carry)
 			if carry: _bounce_event(t, next)
 
-## True when this arrow's chain carries the press's lightning combo (+1 bounce, bolts) for its line: decided once, at
-## the arrow's first hit, by the press's ledger (the first arrow of the line to hit wins; no ledger = no limit). Bounce
-## arrows inherit it from the arrow that spawned them. Builds without a lightning combo never carry.
+## Read-only: true when this arrow's chain carries the press's lightning combo (+1 bounce, bolts) for its line. Never
+## claims anything: an arrow that has not hit yet (undecided) answers false and leaves its line free.
 func carries_lightning() -> bool:
+	return _carrier == 1
+
+## THE one place that decides who carries a line's lightning combo (owner 2026-11-10: one arrow per line per press).
+## Called only from the real hit path (_after_hit_bounce, the arrow's first hit): decided once per arrow, through the
+## press's ledger (cast.once("lightning_line", line): the FIRST arrow of the line to hit wins; no ledger = no limit).
+## Bounce arrows inherit the result (_spawn_bounce). Builds without a lightning combo never carry. (Pending owner
+## question: "the first arrow that can actually bounce" instead: change only this function.)
+func claim_lightning_line() -> bool:
 	if _carrier < 0:
 		var lightning := _cp("bolts") > 0.0 or int(build.get("extra_bounces", 0)) > 0
 		var cast = build.get("cast")
@@ -170,7 +177,7 @@ func root_mult() -> float:
 
 ## One bounce, from `struck` to `next` (Task 6): the recipe's "bounce" effect at the bounce point, and the lightning
 ## combos' bolts (ศรอสนีกระโดด 1, ศรอสนีพันสาย 2) at the nearest others, never the struck monster or the bounce's own
-## target. Every bounce event of a carrier chain bolts (bounce arrows too; carries_lightning: one chain per line per
+## target. Every bounce event of a carrier chain bolts (bounce arrows too; claim_lightning_line: one chain per line per
 ## press, owner 2026-11-10). Owner 2026-11-09 (Task 6 review, "50% ของนัดแรก
 ## คงที่"): each bolt is bolt_frac of the press's FIRST hit (root_mult), flat at every bounce, not of the bouncing arrow.
 func _bounce_event(struck: Node2D, next: Node2D) -> void:

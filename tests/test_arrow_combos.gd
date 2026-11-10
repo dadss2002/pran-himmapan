@@ -1314,6 +1314,29 @@ func test_lightning_combo_one_arrow_per_line():
 		if r != "": break
 	return r
 
+## carries_lightning() is a read-only query (Task 6 review fix): asking an arrow that never hit, before and after its
+## flight, never takes its line; only the real hit path (claim_lightning_line, the arrow's first hit) claims. Two arrows
+## of one press on line 0: A flies away from every monster and is queried; B then hits and still carries the line.
+func test_query_never_claims_the_line():
+	var b := _build(["ricochet", "lightning"])
+	if String(b.combo.get("id", "")) != "thunder_hop": return "setup: combo %s" % b.combo
+	var ds := [_dummy(Vector2(60, 0)), _dummy(Vector2(60, 60))]
+	_spawned = []
+	var a := _arrow(Vector2.LEFT, ds, b)
+	var r := ""
+	if a.carries_lightning(): r = "an undecided arrow answered true"
+	for i in 150: _step([a], [])
+	if r == "" and a.carries_lightning(): r = "an arrow that never hit carries the line"
+	var bb := _arrow(Vector2.RIGHT, ds, b)
+	for i in 150: _step([bb], [])
+	if r == "":
+		if ds[0].hits.size() != 1: r = "setup: B hit the first dummy %d times" % ds[0].hits.size()
+		elif not bb.carries_lightning(): r = "the arrow that hit lost its line to a query of one that never hit"
+		elif a.carries_lightning(): r = "the queried arrow carries after B claimed"
+		elif b.cast.once("lightning_line", 0): r = "line 0 is still free after B's hit"
+	_free([a, bb] + _spawned + ds)
+	return r
+
 ## ศรอสนีพันสาย on ศรกระจาย (+split, 3 lines): one carrier per line (arrows 0, 2, 5: the first of each line to hit),
 ## 2 bolts per carrier bounce; arrows 1 and 3 bounce plain. With the homing gem (char Lv12, slot 3) the arrows turn
 ## onto other monsters but the ledger still gives exactly one carrier per line.
