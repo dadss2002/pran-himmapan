@@ -34,8 +34,8 @@ func launch(direction: Vector2, attack: float, enemies: Array = [], multiplier :
 var primary := false
 ## Owner 2026-11-10 ("สายฟ้าคอมโบจาก 1 ลูกต่อการกด", "ลูกเด้งไม่แตกสายโซ่"): `line` = the press's line this primary arrow
 ## belongs to (SkillBuild.line_of: ศรทะลวง 1 line, +split 3; ศรกระจาย's 5 arrows 1 line, +split 7 arrows in 3). Only the
-## FIRST arrow of a line to hit a monster carries the lightning combo (its +1 bounce and the bolts) for its whole chain,
-## claimed through the press's ledger (build.cast.once("lightning_line", line)); the line's other arrows keep the
+## FIRST arrow of a line that hits a monster AND bounces (a bounce target in range; owner 2026-11-10, Task 6 review 3)
+## carries the lightning combo (its +1 bounce and the bolts) for its whole chain, claimed through the press's ledger (build.cast.once("lightning_line", line)); the line's other arrows keep the
 ## plain ricochet gem's bounces. `is_bounce`: a ricochet arrow (_spawn_bounce); it never fires the lightning gem's own
 ## ×0.8 chain (only the press's primary hits do).
 var line := 0
@@ -164,7 +164,7 @@ func _after_hit_bounce(t: Node2D) -> void:
 		# (Task 6 review, "เด้งจากตัวแรกที่โดนเท่านั้น"), an arrow piercing by the pierce gem (ศรกระจาย); a plain
 		# ricochet arrow stops at that hit anyway, its chain goes on through the bounce arrows
 		_bounced = true
-		var carry := claim_lightning_line()      # claimed at the arrow's first hit, bounce target or not
+		var carry := claim_lightning_line(next != null)   # claimed only by an arrow that bounces (owner 2026-11-10)
 		if next:
 			_spawn_bounce(t.hurt_point(), next, carry)
 			if carry: _bounce_event(t, next)
@@ -175,15 +175,18 @@ func carries_lightning() -> bool:
 	return _carrier == 1
 
 ## THE one place that decides who carries a line's lightning combo (owner 2026-11-10: one arrow per line per press).
-## Called only from the real hit path (_after_hit_bounce, the arrow's first hit): decided once per arrow, through the
-## press's ledger (cast.once("lightning_line", line): the FIRST arrow of the line to hit wins; no ledger = no limit).
-## Bounce arrows inherit the result (_spawn_bounce). Builds without a lightning combo never carry. (Pending owner
-## question: "the first arrow that can actually bounce" instead: change only this function.)
-func claim_lightning_line() -> bool:
+## Called only from the real hit path (_after_hit_bounce, the arrow's first hit), with can_bounce = a bounce target was
+## found in ricochet.range. Owner 2026-11-10 (Task 6 review 3, "ลูกแรกที่เด้งได้จริง"): the line goes to the FIRST arrow
+## of the line that can actually bounce, not merely the first to hit: an arrow whose first hit has no bounce target
+## never claims (it never bounces later either: every arrow tries once, from its first hit) and leaves the line free
+## for the next arrow of the line that bounces. Decided once per arrow, through the press's ledger
+## (cast.once("lightning_line", line); no ledger = no limit), in hit order (deterministic, homing too). Bounce arrows
+## inherit the result (_spawn_bounce). Builds without a lightning combo never carry.
+func claim_lightning_line(can_bounce := true) -> bool:
 	if _carrier < 0:
 		var lightning := _cp("bolts") > 0.0 or int(build.get("extra_bounces", 0)) > 0
 		var cast = build.get("cast")
-		_carrier = 1 if lightning and (not (cast is ComboCast) or cast.once("lightning_line", line)) else 0
+		_carrier = 1 if lightning and can_bounce and (not (cast is ComboCast) or cast.once("lightning_line", line)) else 0
 	return _carrier == 1
 
 ## The press's combo id ("" for none).

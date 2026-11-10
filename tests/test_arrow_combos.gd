@@ -1365,6 +1365,99 @@ func test_thousand_bolts_one_carrier_per_line():
 		_free(arrows + _spawned + all)
 	return r
 
+## Owner 2026-11-10 (Task 6 review 3, "ลูกแรกที่เด้งได้จริง"): a line's lightning combo goes to the first arrow of the
+## line that can actually bounce (a bounce target within ricochet.range when it hits), not merely the first to hit.
+## ศรกระจาย + ศรอสนีกระโดด (1 line): arrow 3 hits a lone monster L at 60 px first (nothing within 120 px of it), so it
+## does not claim and leaves the line free; arrows 0, 1, 2, 4 then hit the pack (arrow 0 first, at 180 px; the others
+## at 200 px) and all can bounce: only arrow 0 claims (two+ bouncers: only the first), its chain bounces 1 + 1 and
+## bolts twice; the other three bounce plain.
+func test_lightning_line_goes_to_first_arrow_that_bounces():
+	var b := _build(["ricochet", "lightning"], "spread")
+	if String(b.combo.get("id", "")) != "thunder_hop": return "setup: combo %s" % b.combo
+	var n := int(b.arrows)
+	var fan := deg_to_rad(float(b.fan_deg))
+	var ray := func(i: int) -> Vector2: return Vector2.RIGHT.rotated(-fan / 2.0 + fan * i / (n - 1))
+	var lone := _dummy(ray.call(3) * 60.0)
+	var all: Array = [lone]
+	for i in n:
+		if i != 3: all.append(_dummy(ray.call(i) * (180.0 if i == 0 else 200.0)))
+	var r := ""
+	for d in all:
+		if d != lone and d.hurt_point().distance_to(lone.hurt_point()) <= Balance.num("ricochet.range"): r = "setup: a pack monster within ricochet range of L"
+	_spawned = []
+	var arrows := _fan(b, all)
+	for i in 150: _step(arrows, [])
+	var carriers: Array = []
+	for i in n:
+		if arrows[i].carries_lightning(): carriers.append(i)
+	var am := float(b.arrow_mult)
+	var bolts := 0
+	for d in all:
+		for h in d.hits:
+			if is_equal_approx(float(h[1]), am * 0.5): bolts += 1
+	var carried := _spawned.filter(func(x): return x.carries_lightning()).size()
+	if r != "": pass
+	elif lone.hits.size() != 1 or arrows[3]._hit.keys() != [lone]: r = "setup: L took %d hits, arrow 3 hit %d monsters" % [lone.hits.size(), arrows[3]._hit.size()]
+	elif carriers != [0]: r = "carriers %s, want [0] (arrow 3 hit first but cannot bounce; arrow 0 is the first that bounces)" % [carriers]
+	elif carried != 2: r = "the carrier's chain bounced %d times, want 1 + 1" % carried
+	elif _spawned.size() != 5: r = "%d bounce arrows, want 5 (carrier 2 + 3 plain)" % _spawned.size()
+	elif bolts != 2: r = "%d bolts, want 2 (the carrier's 2 bounces)" % bolts
+	_free(arrows + _spawned + all)
+	return r
+
+## A monster that dies at its first hit (the homing test's weak lone monster).
+class FragileDummy extends "res://tests/dummy_enemy.gd":
+	func receive_hit(atk: float, mult: float, from: Vector2, c := -1.0, cm := -1.0) -> int:
+		alive = false
+		return super(atk, mult, from, c, cm)
+
+## Same rule with the homing gem (char Lv12, slot 3): a weak lone monster L at 40 px pulls every homing arrow onto it
+## first; the first arrow there kills it and cannot bounce (nothing within 120 px), so it does not claim; the others
+## turn onto the pack, and the first of them to hit (and bounce) is the line's one carrier. Exactly one carrier per
+## press, and its first hit is not L.
+func test_lightning_line_first_bouncer_with_homing():
+	var b := _build_lv({"ricochet": 1, "lightning": 1, "homing": 1}, "spread", 12)
+	if String(b.combo.get("id", "")) != "thunder_hop" or not bool(b.homing): return "setup homing: combo %s" % b.combo
+	var lone := FragileDummy.new()
+	lone.position = Vector2.RIGHT.rotated(deg_to_rad(-22.5)) * 40.0 + Vector2(0, 14)
+	var all: Array = [lone]
+	for p in [Vector2(180, 0), Vector2(185, 35), Vector2(175, 70), Vector2(205, 15), Vector2(200, 55), Vector2(160, 100)]:
+		all.append(_dummy(p))
+	var r := ""
+	for d in all:
+		if d != lone and d.hurt_point().distance_to(lone.hurt_point()) <= Balance.num("ricochet.range"): r = "setup: a pack monster within ricochet range of L"
+	_spawned = []
+	var arrows := _fan(b, all)
+	for i in 150: _step(arrows, [])
+	var carriers := arrows.filter(func(x): return x.carries_lightning())
+	var on_lone := arrows.filter(func(x): return not x._hit.is_empty() and x._hit.keys()[0] == lone).size()
+	if r != "": pass
+	elif on_lone == 0 or on_lone == arrows.size(): r = "setup: %d of %d arrows hit L first, want some but not all" % [on_lone, arrows.size()]
+	elif carriers.size() != 1: r = "%d carriers, want 1 (the first arrow that bounces)" % carriers.size()
+	elif carriers[0]._hit.keys()[0] == lone: r = "the carrier's first hit was L, which has no bounce target"
+	_free(arrows + _spawned + all)
+	return r
+
+## ศรทะลวง unchanged by the rule: its line has one arrow, which bounces only from its first target. A at 60 px has no
+## bounce target, so no bounce, no bolt, and the line is never claimed; the arrow pierces on to P (200 px) and does not
+## bounce from it to its neighbour Q (a piercing arrow bounces from its first target only), as before the rule. (Q may
+## take P's lightning-gem ×0.8 chain: that is the gem, not the combo.)
+func test_piercing_first_target_without_bounce_unchanged():
+	var b := _build(["ricochet", "lightning"])
+	if String(b.combo.get("id", "")) != "thunder_hop": return "setup: combo %s" % b.combo
+	var ds := {"A": _dummy(Vector2(60, 0)), "P": _dummy(Vector2(200, 0)), "Q": _dummy(Vector2(200, 60))}
+	_spawned = []
+	var a := _arrow(Vector2.RIGHT, ds.values(), b)
+	for i in 150: _step([a], [])
+	var r := ""
+	if ds.A.hits.size() != 1 or ds.P.hits.size() < 1: r = "setup: A %d / P %d hits" % [ds.A.hits.size(), ds.P.hits.size()]
+	elif not _spawned.is_empty(): r = "%d bounce arrows, want 0" % _spawned.size()
+	elif ds.values().any(func(d): return d.hits.any(func(h): return is_equal_approx(float(h[1]), float(b.arrow_mult) * 0.5))): r = "a bolt was fired without a bounce"
+	elif a.carries_lightning(): r = "the arrow carries without bouncing"
+	elif not b.cast.once("lightning_line", 0): r = "line 0 was claimed by an arrow that never bounced"
+	_free([a] + _spawned + ds.values())
+	return r
+
 ## Owner 2026-11-10 ("ลูกเด้งไม่แตกสายโซ่"): a bounce arrow's hit never fires the lightning gem's own ×0.8 chain; the
 ## press's primary hits still do. ศรทะลวง + ศรอสนีกระโดด through A, P (on the line): 2 primary hits → 2 chains (from A
 ## and from P); the bounce arrows' hits on B and C → no chain from B or C.
