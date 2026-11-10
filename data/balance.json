@@ -609,7 +609,7 @@
           "mark": [
             {
               "fx": "lock_on",
-              "tint": "#ffffff"
+              "tint": "#ff3050"
             }
           ],
           "crit": [

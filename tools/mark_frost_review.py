@@ -11,6 +11,14 @@ Thai legend:
   5 the อโนดาต shatter at 0.07 / 0.13 / 0.33 s vs the r32 ring (as played, and with the other hit effects hidden)
   6 the frost arrow streak (ศรเกล็ดน้ำแข็ง)
 Nothing is drawn by hand except the labels, the dotted r32 ring and the red circles: every effect pixel is the game's.
+
+Task 7 review fix (owner 2026-11-10): after `T7_FIX=1 xvfb-run -a godot ... --script tests/screenshots_m5b_mark_frost.gd`
+    python3 -I tools/mark_frost_review.py --fix
+writes docs/preview/m5b/t7_fix_*.png and t7_fix_review.png:
+  1 the red ตาเหยี่ยว mark vs the targeting ring, game size and x3, light (c1r0) and dark (c2r0) ground
+  2 plain / slowed / frozen with the ice block, light c1r0
+  3 the same on c2r0
+  4 the ครุฑ gold mark next to the red ตาเหยี่ยว mark (and the targeting ring on a third monster)
 """
 import json, math, os
 from PIL import Image, ImageDraw, ImageFont
@@ -237,5 +245,68 @@ def main():
     save(col([title, p1, p1g, p2, p3, p4, p5, p6, leg]), "t7_mark_frost_review.png")
 
 
+def fix_main():
+    os.makedirs(OUT, exist_ok=True)
+    hk = mark_case("mark_hawk", "fix_mark_hawk")
+    hd = mark_case("mark_hawk_dark", "fix_mark_hawk_dark")
+    fl = frost_case("frost_light", "fix_frost_light", "light c1r0")
+    fd = frost_case("frost_dark", "fix_frost_dark", "dark c2r0")
+    pm = meta["marks_pair"]
+    full = shot("marks_pair", "a")
+    save(full, "t7_fix_marks_pair_full.png")
+    feet = [px(p) for p in pm["feet"]]
+    hurt = [px(p) for p in pm["hurt"]]
+    cx = (min(p[0] for p in feet) + max(p[0] for p in feet)) / 2
+    cy = (min(p[1] for p in hurt) + max(p[1] for p in feet)) / 2
+    pg, _ = crop(full, (cx, cy - 40), 420, 300)
+    label(pg, "game size: A red (ตาเหยี่ยว) / B gold (ครุฑ) / C target ring")
+    ab = ((hurt[0][0] + hurt[1][0]) / 2, (hurt[0][1] + hurt[1][1]) / 2)
+    p3, o3 = crop(full, (ab[0], ab[1] - 5), 300, 150, 3)
+    label(p3, "x3  A red mark (ตาเหยี่ยว) | B gold mark (ครุฑ)")
+    save(pg, "t7_fix_marks_pair.png")
+    save(p3, "t7_fix_marks_pair_x3.png")
+
+    W = 1290
+    def fit(im, w=W):
+        return im if im.width <= w else im.resize((w, round(im.height * w / im.width)), Image.NEAREST)
+
+    def x3_pair(out):
+        return row([out["a"][3], out["b"][3]])
+
+    p1 = fit(col([x3_pair(hk), row([hk["a"][1], hk["b"][1]]), x3_pair(hd), row([hd["a"][1], hd["b"][1]])]))
+    k1 = p1.width / max(x3_pair(hk).width, 1)
+    ma = meta["mark_hawk"]["moments"]["a"]; o = hk["a"][4]
+    hx, hy = (px(ma["a_hurt"])[0] - o[0]) * 3 * k1, (px(ma["a_hurt"])[1] - o[1]) * 3 * k1
+    circle(p1, (hx - 120 * k1, hy - 90 * k1, hx + 120 * k1, hy + 90 * k1), 1)
+    p2 = fit(col([fl[1], fl[0]]))
+    circle(p2, (p2.width // 3 - 20, 30, p2.width - 20, fl[1].height * p2.width / max(fl[1].width, 1) - 30), 2)
+    p3b = fit(col([fd[1], fd[0]]))
+    circle(p3b, (p3b.width // 3 - 20, 30, p3b.width - 20, fd[1].height * p3b.width / max(fd[1].width, 1) - 30), 3)
+    p4 = fit(col([p3, pg]))
+    k4 = p4.width / p3.width
+    xa, ya = (hurt[0][0] - o3[0]) * 3 * k4, (hurt[0][1] - o3[1]) * 3 * k4
+    xb = (hurt[1][0] - o3[0]) * 3 * k4
+    circle(p4, (max(4, xa - 110 * k4), max(4, ya - 100 * k4), min(p4.width - 4, xb + 110 * k4), min(p3.height * k4 - 4, ya + 100 * k4)), 4)
+    kl, kd = meta["frost_light"]["kind"], meta["frost_dark"]["kind"]
+    legend = [
+        "1. ศรตาเหยี่ยว: มาร์กเปลี่ยนเป็นสีแดง #ff3050 (lock_on ย้อมแดง) บนลำตัว เทียบวงล็อกเป้าปกติ (สีเหลือง) ที่เท้า",
+        "   แถว 1–2 พื้นสว่าง c1r0 (×3 แล้วขนาดเกม) · แถว 3–4 พื้นเข้ม c2r0 · ซ้าย A ติดมาร์กและเป็นเป้า · ขวา เป้าย้ายไป B A ติดมาร์กอย่างเดียว",
+        "2. พื้นสว่าง c1r0 (%s): ปกติ / ช้า (เหมือนเดิม) / แข็ง = สีซีดขาวขึ้น #dcf3ff + ก้อนน้ำแข็งรอบตัว (วาดเอง 0 gen) · ×3 แล้วขนาดเกม" % kl,
+        "3. พื้นเข้ม c2r0 (%s): ปกติ / ช้า / แข็ง (ก้อนน้ำแข็งพอดีลำตัวตามชนิดและทิศที่หัน)" % kd,
+        "4. มาร์กครุฑสีทอง #edbb55 (B) ข้างมาร์กตาเหยี่ยวสีแดง (A) ×3 · ภาพล่างขนาดเกม: C ที่ใกล้ฮีโร่สุดมีวงล็อกเป้าที่เท้า",
+        "   ก้อนน้ำแข็งหายทันทีเมื่อหมดแข็ง และไม่ถูกโหมดประหยัด (PerfSaver) ตัดทิ้ง · มาร์กไม่ถูกตัดเช่นกัน",
+    ]
+    lh = 30
+    leg = Image.new("RGB", (W, lh * len(legend) + 20), PAPER)
+    d = ImageDraw.Draw(leg)
+    for i, t in enumerate(legend):
+        d.text((12, 10 + i * lh), t, font=f_small, fill=INK)
+    title = Image.new("RGB", (W, 44), PAPER)
+    ImageDraw.Draw(title).text((12, 8), "M5b Task 7 แก้ตามรีวิว: มาร์กตาเหยี่ยวสีแดง · แข็ง = ก้อนน้ำแข็ง — ภาพจริงในเกม 1280×720",
+                               font=f_big, fill=INK)
+    save(col([title, p1, p2, p3b, p4, leg]), "t7_fix_review.png")
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    fix_main() if "--fix" in sys.argv else main()

@@ -18,6 +18,13 @@ extends SceneTree
 ##                 the other hit effects (crit glare, hit sparks, damage numbers) hidden (o*: the shatter alone).
 ##   streak      - ศรเกล็ดน้ำแข็ง (ice + split): the three arrows in flight 0.25 s after the release with their frost
 ##                 streaks (piercing_trail #7fd4ff).
+## Task 7 review fix (owner 2026-11-10: red ตาเหยี่ยว mark, ice block on a frozen monster), for t7_fix_review.png
+## (python3 -I tools/mark_frost_review.py --fix):
+##   mark_hawk_dark - mark_hawk on the darker ground of c2r0.
+##   marks_pair     - c1r0: A with the ตาเหยี่ยว mark (red), B with the ครุฑ mark (gold) side by side, C nearest the hero
+##                 with the targeting ring; the marks are put on directly (apply_mark with each recipe's ledger, as an
+##                 arrow hit does), no press.
+## T7_FIX=1 runs only the cases the fix review needs (mark_hawk, mark_hawk_dark, frost_light, frost_dark, marks_pair).
 
 const TMP := "/tmp/t7_shots/"
 const SAVE := "user://shots_m5b_t7_save.json"
@@ -37,12 +44,16 @@ func _watchdog() -> void:
 
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(TMP)
+	var fix := OS.get_environment("T7_FIX") == "1"
 	await _mark("mark_hawk", ["homing", "execute"])
-	await _mark("mark_garuda", ["homing", "execute", "multiply"])
+	if fix: await _mark("mark_hawk_dark", ["homing", "execute"], "c2r0", Vector2(-90, 150))
+	if not fix: await _mark("mark_garuda", ["homing", "execute", "multiply"])
 	await _frost("frost_light", "c1r0", Vector2(0, 20))
 	await _frost("frost_dark", "c2r0", Vector2(-60, 140))
-	await _shatter()
-	await _streak()
+	if fix: await _pair()
+	if not fix:
+		await _shatter()
+		await _streak()
 	var f := FileAccess.open(TMP + "meta.json", FileAccess.WRITE)
 	f.store_string(JSON.stringify(meta, "  "))
 	f.close()
@@ -150,8 +161,8 @@ func _press(wolves: Array) -> int:
 		frames += 1
 	return frames
 
-func _mark(name: String, keys: Array) -> void:
-	var s: Array = await _setup("c1r0", keys, Vector2(-110, 30))
+func _mark(name: String, keys: Array, room := "c1r0", hero_off := Vector2(-110, 30)) -> void:
+	var s: Array = await _setup(room, keys, hero_off)
 	var wolves: Array = s[0]
 	var h: Hero = g.hero
 	var a: Wolf = wolves[0]
@@ -166,7 +177,7 @@ func _mark(name: String, keys: Array) -> void:
 		await _tick(wolves)
 		frames += 1
 	for i in 30: await _tick(wolves)           # the hit spark is gone; the mark loops on
-	var m := {"room": "c1r0", "kind": s[1], "combo": String(bd.combo.get("id", "")), "scale": _scale(), "moments": {}}
+	var m := {"room": room, "kind": s[1], "combo": String(bd.combo.get("id", "")), "scale": _scale(), "moments": {}}
 	paused = true
 	m.moments["a"] = {"file": await _snap(name + "_a.png"), "marked": a.is_marked(), "target_a": h.current_target() == a,
 		"a_feet": _scr(a.global_position), "a_hurt": _scr(a.hurt_point()), "hero": _scr(h.global_position),
@@ -194,13 +205,40 @@ func _frost(name: String, room: String, at: Vector2) -> void:
 	for i in 20: await _tick(wolves)
 	paused = true
 	g.lock_ring.visible = false
+	var ir: Rect2 = trio[2].ice_block_rect()
 	var m := {"room": room, "kind": s[1], "scale": _scale(), "froze": froze,
+		"ice_block": [trio[0]._ice_block != null, trio[1]._ice_block != null, trio[2]._ice_block != null],
+		"ice_rect": [ir.position.x, ir.position.y, ir.size.x, ir.size.y],
 		"slowed": [trio[0].is_chilled(), trio[1].status.is_slowed(), trio[2].status.is_slowed()],
 		"frozen": [trio[0].is_frozen(), trio[1].is_frozen(), trio[2].is_frozen()],
 		"feet": trio.map(func(w): return _scr(w.global_position)), "hurt": trio.map(func(w): return _scr(w.hurt_point())),
 		"moments": {"a": {"file": await _snap(name + "_a.png")}}}
 	print(name, ": kind ", s[1], " slowed ", m.slowed, " frozen ", m.frozen)
 	meta[name] = m
+	await _close()
+
+## marks_pair: A (ตาเหยี่ยว, red) and B (ครุฑ, gold) side by side, C nearest the hero wears the targeting ring.
+func _pair() -> void:
+	var s: Array = await _setup("c1r0", [], Vector2(-110, 30))
+	var wolves: Array = s[0]
+	var h: Hero = g.hero
+	var a: Wolf = wolves[0]
+	var b: Wolf = wolves[1]
+	var c: Wolf = wolves[2]
+	_show(a, h.global_position + Vector2(100, -20))
+	_show(b, h.global_position + Vector2(160, -20))
+	_show(c, h.global_position + Vector2(55, 40))
+	a.apply_mark(0.2, 4.0, ComboCast.new("hawk_eye"))
+	b.apply_mark(0.3, 4.0, ComboCast.new("garuda"))
+	for i in 20: await _tick(wolves)
+	paused = true
+	var m := {"room": "c1r0", "kind": s[1], "scale": _scale(), "marked": [a.is_marked(), b.is_marked(), c.is_marked()],
+		"target_c": h.current_target() == c, "ring": _scr(g.lock_ring.global_position), "ring_visible": g.lock_ring.visible,
+		"feet": [a, b, c].map(func(w): return _scr(w.global_position)), "hurt": [a, b, c].map(func(w): return _scr(w.hurt_point())),
+		"tints": [a, b].map(func(w): return w._mark_fx[0].modulate.to_html(false) if not w._mark_fx.is_empty() else "-"),
+		"moments": {"a": {"file": await _snap("marks_pair_a.png")}}}
+	print("marks_pair: marked ", m.marked, " target_c ", m.target_c, " tints ", m.tints)
+	meta["marks_pair"] = m
 	await _close()
 
 func _shatter() -> void:

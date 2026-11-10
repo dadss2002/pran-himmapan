@@ -610,14 +610,68 @@ func test_marked_wolf_takes_20pct_more():
 	b.free()
 	return "" if absi(marked - int(round(plain * 1.2))) <= 1 else "marked hit %d vs plain %d (want ≈ ×1.2)" % [marked, plain]
 
-func test_frozen_tint_is_frost():
+## Owner 2026-11-10 (Task 7 review): frozen reads differently from slowed: a paler, whiter ice (FROZEN_TINT) over a burn
+## and over the ice slow; slowed alone keeps the frost tint; back to frost when the freeze ends and the slow lasts.
+func test_frozen_tint_is_paler_than_slowed():
 	var w := _wolf()
 	w.apply_status("burn", 1.0)
+	w.apply_status("slow")
 	w.apply_freeze(1.0, 5.0)
-	var want := Color(Wolf.FROST_TINT, Wolf.FROST_AMOUNT)
-	var r := "" if w.status_tint() == want else "frozen + burning tint %s, want frost (frost wins)" % w.status_tint()
+	var want := Color(Wolf.FROZEN_TINT, Wolf.FROZEN_AMOUNT)
+	var r := "" if w.status_tint() == want else "frozen + slowed + burning tint %s, want frozen (paler ice)" % w.status_tint()
 	if r == "" and not w.is_chilled(): r = "frozen wolf is not chilled"
+	var fz := Color(Wolf.FROZEN_TINT)
+	var fr := Color(Wolf.FROST_TINT)
+	if r == "" and not (fz.s < fr.s and fz.v >= fr.v and fz.h > 0.5 and fz.h < 0.6): r = "frozen tint %s is not a paler ice than %s" % [Wolf.FROZEN_TINT.to_html(false), Wolf.FROST_TINT.to_html(false)]
+	w.status.tick(1.01)
+	if r == "" and w.status_tint() != Color(Wolf.FROST_TINT, Wolf.FROST_AMOUNT): r = "thawed but still slowed: tint %s, want frost" % w.status_tint()
 	w.free()
+	return r
+
+## Owner 2026-11-10 (Task 7 review): a frozen monster wears an ice block (assets/fx/ice_block.png nine-patch, 0 gen) sized
+## to its body: the kind's body box for its direction × size_scale, + inset + pad, enclosing the hurt point and the feet;
+## shown on the step the freeze starts, gone on the step it ends (not a frame later), kept under the PerfSaver
+## (gameplay information), none while only slowed, none after death. Every monster kind has a box for all 8 directions.
+func test_frozen_wears_ice_block_sized_to_body():
+	var r := ""
+	var meta := Wolf._ice_meta()
+	for k in ["wolf", "boar", "deer", "kongkoi", "macaque", "shroom", "viper"]:
+		var per: Dictionary = meta.get("boxes", {}).get(k, {})
+		if per.size() != 8: return "ice_block_boxes.json: %s has %d directions, want 8" % [k, per.size()]
+	var w: Wolf = load("res://scenes/wolf.tscn").instantiate()
+	tree.root.add_child(w)
+	w.setup()
+	w.apply_status("slow")
+	w._update_status_fx()
+	if w._ice_block != null: r = "a slowed-only wolf wears an ice block"
+	PerfSaver.active = true
+	w.apply_freeze(1.0, 5.0)
+	var blk := w._ice_block
+	if r == "" and (blk == null or not blk.visible or blk.texture == null or blk.texture.resource_path != "res://assets/fx/ice_block.png"): r = "no ice block on the step of the freeze (saver on)"
+	if r == "":
+		var rect := Rect2(blk.position, blk.size)
+		var want := w.ice_block_rect()
+		var box: Array = meta.boxes.wolf[String(w.body.animation).split("_", true, 1)[1]]
+		var body := Rect2(Vector2(box[0], box[1]) * Wolf.size_scale(), Vector2(box[2], box[3]) * Wolf.size_scale())
+		if rect != want: r = "ice block rect %s, want %s" % [rect, want]
+		elif not rect.encloses(body): r = "ice block %s does not enclose the body box %s" % [rect, body]
+		elif rect.size.x > body.size.x + 14 or rect.size.y > body.size.y + 14: r = "ice block %s far bigger than the body %s" % [rect, body]
+		elif not rect.has_point(Wolf.HURT_POINT * Wolf.size_scale()) or not rect.has_point(Vector2(0, -1)): r = "ice block misses the hurt point / feet"
+		elif blk.patch_margin_left != int(meta.nine) or blk.texture_filter != CanvasItem.TEXTURE_FILTER_NEAREST: r = "ice block nine-patch %d / filter %d" % [blk.patch_margin_left, blk.texture_filter]
+	w.status.tick(0.99)
+	w._update_status_fx()
+	if r == "" and w._ice_block != blk: r = "ice block gone or swapped before the freeze ended (saver on)"
+	w.status.tick(0.02)
+	w._update_status_fx()
+	if r == "" and (w._ice_block != null or not blk.is_queued_for_deletion() or blk.visible): r = "ice block left on the step the freeze ended"
+	PerfSaver.active = false
+	w.status.freeze_lock = 0.0
+	w.apply_freeze(1.0, 5.0)
+	var blk2 := w._ice_block
+	w.health.take_hit(999999, false)
+	if r == "" and (w._ice_block != null or blk2 == null or not blk2.is_queued_for_deletion()): r = "ice block left on a dead monster"
+	w.queue_free()
+	await tree.process_frame
 	return r
 
 ## The frost overlay shows while frozen (not only while slowed); the PerfSaver sheds the overlay, the tint stays.

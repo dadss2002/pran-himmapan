@@ -1883,7 +1883,7 @@ func test_secondary_hits_never_mark_or_count_freeze():
 	return r
 
 ## The mark shows on the monster while it lasts (Wolf._update_status_fx): the recipe's "mark" effect (lock_on; ครุฑ
-## gold #edbb55, ตาเหยี่ยว untinted), one per monster, swapped when a stronger mark from the other recipe takes over,
+## gold #edbb55, ตาเหยี่ยว red #ff3050 so it never reads as the plain targeting ring, owner 2026-11-10), one per monster, swapped when a stronger mark from the other recipe takes over,
 ## gone when the mark ends or the monster dies; never shed by the PerfSaver (it tells the player where +20/30 % lands).
 func test_wolf_shows_the_mark_while_marked():
 	var w: Wolf = load("res://scenes/wolf.tscn").instantiate()
@@ -1892,7 +1892,7 @@ func test_wolf_shows_the_mark_while_marked():
 	var r := ""
 	w.apply_mark(0.2, 4.0, ComboCast.new("hawk_eye"))
 	w._update_status_fx()
-	if w._mark_fx.size() != 1 or w._mark_fx[0].animation != "lock_on" or w._mark_fx[0].modulate != Color.WHITE: r = "hawk_eye mark fx %s" % [w._mark_fx]
+	if w._mark_fx.size() != 1 or w._mark_fx[0].animation != "lock_on" or not w._mark_fx[0].modulate.is_equal_approx(Color("#ff3050")): r = "hawk_eye mark fx %s (want one red #ff3050 lock_on)" % [w._mark_fx]
 	w.apply_mark(0.3, 4.0, ComboCast.new("garuda"))
 	PerfSaver.active = true
 	w._update_status_fx()

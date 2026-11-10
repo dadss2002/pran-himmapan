@@ -99,6 +99,7 @@ var _burn_fx: FxSprite = null
 var _frost_fx: FxSprite = null
 var _mark_fx: Array = []         # M5b Task 7: the mark's effect (ComboFx "mark" of the marking recipe) while marked
 var _mark_shown := ""            # the recipe id whose mark effect is up ("" = none)
+var _ice_block: NinePatchRect = null   # M5b Task 7 review: the ice block round the body while frozen
 ## Owner 2026-11-09 (PixelFX decision B): the monster itself is tinted while burning (red-orange) or slowed
 ## (ice), as well as its PixelFX overlay; both at once: frost wins (one clear colour; the burn keeps its
 ## flames and damage numbers). Visual only. *_AMOUNT = how far the body's colours go toward the tint (flash.gdshader).
@@ -109,6 +110,9 @@ var _mark_shown := ""            # the recipe id whose mark effect is up ("" = n
 ## The shader's numbers (TINT_BASE + TINT_GAIN x luma, outline weight OUTLINE_LO..OUTLINE_HI) are mirrored here.
 const BURN_TINT := Color("#ff5a1f")
 const FROST_TINT := Color("#90ccff")
+## Owner 2026-11-10 (Task 7 review): frozen differs from slowed: a paler, whiter ice (+ the ice block, _update_ice_block).
+const FROZEN_TINT := Color("#dcf3ff")
+const FROZEN_AMOUNT := 0.95
 const BURN_AMOUNT := 0.9
 const FROST_AMOUNT := 0.92
 const TINT_BASE := 0.65
@@ -360,7 +364,56 @@ func _update_status_fx() -> void:
 	var shed := PerfSaver.active
 	_burn_fx = _toggle_fx(_burn_fx, "status_burn", status.is_burning() and is_alive() and not (shed and PerfSaver.decorative("status_burn")))
 	_frost_fx = _toggle_fx(_frost_fx, "status_frost", is_chilled() and not (shed and PerfSaver.decorative("status_frost")))
+	_update_ice_block()
 	_update_mark_fx()
+
+## Owner 2026-11-10 (Task 7 review, "แข็งต่างจากช้า"): while frozen, an ice block round the body: the hand-drawn nine-patch
+## assets/fx/ice_block.png (tools/ice_block_art.py, 0 gen) stretched to this kind's body box for the direction it faces
+## (assets/fx/ice_block_boxes.json, sprite px from the feet, × size_scale) plus 2 px, the frame drawn 1:1 in world px.
+## Shown from the step the freeze starts, freed on the step it ends (or death / restore). Gameplay information (the
+## monster cannot move or attack): never shed by the PerfSaver. A slowed-only monster has none (its look is unchanged).
+const ICE_BLOCK_PAD := 2.0
+static var _ice_boxes := {}
+func _update_ice_block() -> void:
+	var on := is_frozen()
+	if on and _ice_block == null:
+		_ice_block = NinePatchRect.new()
+		_ice_block.texture = preload("res://assets/fx/ice_block.png")
+		var m := int(_ice_meta().get("nine", 10))
+		_ice_block.patch_margin_left = m
+		_ice_block.patch_margin_top = m
+		_ice_block.patch_margin_right = m
+		_ice_block.patch_margin_bottom = m
+		_ice_block.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_ice_block.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var r := ice_block_rect()
+		_ice_block.position = r.position
+		_ice_block.size = r.size
+		add_child(_ice_block)
+	elif not on and _ice_block != null:
+		_ice_block.visible = false          # gone this very frame (freed at its end)
+		_ice_block.queue_free()
+		_ice_block = null
+
+## The ice block's rect (this node's space, world px): the body box of this kind for the body's current direction
+## × size_scale, grown by the art's inset (its corner shards) + ICE_BLOCK_PAD, snapped to whole pixels.
+func ice_block_rect() -> Rect2:
+	var boxes: Dictionary = _ice_meta().get("boxes", {})
+	var per: Dictionary = boxes.get(manifest_path().get_base_dir().get_file(), boxes.get("wolf", {}))
+	var dir := "south"
+	if body != null and String(body.animation).contains("_"): dir = String(body.animation).split("_", true, 1)[1]
+	var b: Array = per.get(dir, per.get("south", [-16, -40, 32, 42]))
+	var s := size_scale()
+	var grow := float(_ice_meta().get("inset", 3)) + ICE_BLOCK_PAD
+	var pos := (Vector2(b[0], b[1]) * s - Vector2(grow, grow)).round()
+	var end := (Vector2(b[0] + b[2], b[1] + b[3]) * s + Vector2(grow, grow)).round()
+	return Rect2(pos, end - pos)
+
+static func _ice_meta() -> Dictionary:
+	if _ice_boxes.is_empty():
+		var f := FileAccess.open("res://assets/fx/ice_block_boxes.json", FileAccess.READ)
+		if f != null: _ice_boxes = JSON.parse_string(f.get_as_text())
+	return _ice_boxes
 
 ## M5b Task 7: while marked (ศรตาเหยี่ยว / ครุฑ), the marking recipe's "mark" effect (lock_on; ครุฑ gold) on the body at
 ## the hurt point; swapped when the mark that counts (StatusEffects.mark_cast: the highest) comes from the other recipe,
@@ -378,11 +431,12 @@ func _update_mark_fx() -> void:
 		_mark_fx = ComboFx.play(self, want, "mark", HURT_POINT * size_scale())
 		for s in _mark_fx: s.scale = Vector2.ONE * size_scale()
 
-## The body's status tint now: frost (slowed or frozen), else burn, else none; alpha = its tint amount (0 = none).
-## Dead monsters are never tinted.
+## The body's status tint now: frozen (paler ice, owner 2026-11-10), else frost (slowed), else burn, else none; alpha =
+## its tint amount (0 = none). Dead monsters are never tinted.
 func status_tint() -> Color:
 	if not is_alive(): return Color(0, 0, 0, 0)
-	if status.is_slowed() or status.is_frozen(): return Color(FROST_TINT, FROST_AMOUNT)
+	if status.is_frozen(): return Color(FROZEN_TINT, FROZEN_AMOUNT)
+	if status.is_slowed(): return Color(FROST_TINT, FROST_AMOUNT)
 	if status.is_burning(): return Color(BURN_TINT, BURN_AMOUNT)
 	return Color(0, 0, 0, 0)
 
