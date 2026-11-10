@@ -201,6 +201,14 @@ if __name__ == '__main__':
             h = SK['pierce']['m'] * (1 + 0.05 * 9) * (0.6 if 'split' in o else 1)
             for g in o: h *= 1 if g == 'homing' else GEM[g][0]
             print(f"press ศรทะลวง {combo_name(o)}: single {on / h:.3f} · pack {pk / h:.3f} x first hit (crit counted)")
+        # sustain (M5b Task 8): ศรทะลวง Lv10, crit counted (hero 0.05, crit dmg x1.5), units of the press's first hit
+        # before ราหู's bonus. ราหู's +30 % is the sim's time mix (HP >= 70 % on ~70 % of the presses: x1.21); the MP
+        # refund is the pack's ~2 kills per press (2 x 2 / 2 x 3), so a pack press costs MP - refund (tests SIM_SUSTAIN)
+        for o in (['leech', 'multiply'], ['leech', 'multiply', 'execute']):
+            on, pk, mp, cdv, _mk, nm, rf = cast('pierce', o, 10, 0.05, 0.0)
+            h = SK['pierce']['m'] * (1 + 0.05 * 9)
+            for g in o: h *= GEM[g][0]
+            print(f"press ศรทะลวง {nm}: single {on / h:.3f} x first hit (crit counted) · MP {mp:.2f} - refund {rf} = {max(1, mp - rf):.2f} per pack press")
     if '--all' in sys.argv:  # each combo on one skill, other skills no gem, Lv10 ปกติ
         L, g = 10, 'ปกติ'; b0, p0 = run(L, g, {})[0], run(L, g, {}, 'pack')[0]
         one1 = {s_: max(run(L, g, {s_: [x]})[0] for x in GEM if fits(x, s_)) / b0 for s_ in SK}

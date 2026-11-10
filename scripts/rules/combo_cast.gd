@@ -6,6 +6,8 @@ extends RefCounted
 ## - MP on kill: bloodthirst +2 / kill, at most 6 per press; rahu +3 / kill, at most 9 (owner 2026-11-08).
 ##   Burn / fire-trail kills count too (owner 2026-11-09 "นับทุกแบบ"), through the press that applied them: every
 ##   monster status keeps the ComboCast of the press that applied it (StatusEffects.*_cast, M5b Task 4).
+##   Every damage source reports through ONE hook (Hero.combo_hit, Task 8): a kill (alive before, dead after) is
+##   credited once (claim_kill) to the ledger of the press that dealt it.
 ## - once(tag, target): once-per-target-per-press effects (shatter, freeze, ...).
 ## - count_hit(target): hits of this press on one target (frost: freeze on the 3rd).
 ## - dmg_bonus(): rahu +30 % when HP ≥ 70 % at the press.
@@ -70,6 +72,14 @@ func count_hit(target_key: int) -> int:
 	var n := int(_hits.get(target_key, 0)) + 1
 	_hits[target_key] = n
 	return n
+
+## M5b Task 8: true the first time this press credits the kill of `target_key` (once("kill", …)), false after. The kill
+## hook (Hero.combo_hit) already credits only a hit that kills (alive before, dead after); this is the second guard, so
+## two sources of one press landing on the same death can never pay twice. A press's ledger lives ≤ ~3.9 s (its last
+## trail / burn), far less than any respawn (wolf.respawn 9 s; a re-roll clears statuses), so a revived monster is
+## never refused by a key left from its earlier death.
+func claim_kill(target_key: int) -> bool:
+	return once("kill", target_key)
 
 ## True the first time (tag, target) is seen in this press, false after.
 func once(tag: String, target_key: int) -> bool:

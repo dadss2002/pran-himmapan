@@ -113,6 +113,47 @@ func leech_heal(amount: float) -> void:
 	_leech_carry -= whole
 	if whole > 0: health.hp = mini(health.max_hp, health.hp + whole)
 
+## M5b Task 8 (sustain combos): THE kill / crit hook of every damage source of a press, so a kill pays once, to the
+## press that paid for it. Arrow calls it after every hit it deals (primary and bounce arrows, the lightning gem's chain,
+## bolts, blasts: line end, shatter, ...); Wolf.tick_burn (and the test dummy) after a burn / fire-trail tick, with the
+## tick's ledger (StatusEffects.tick_cast / tick_source: the press that applied that DoT). `cast` = that press's
+## ComboCast; `source` = the hero (anything with on_combo_kill / on_combo_crit); `was_alive` = the target was alive
+## before this hit; `amount` = the damage it dealt; `crit` = it was a crit (DoT ticks never are).
+## - crit (amount > 0): source.on_combo_crit(cast) (ราหู heals 1 % max HP).
+## - kill: only the hit that kills (alive before, dead after, amount > 0), and once per target per ledger
+##   (cast.claim_kill): two sources the same frame (a hit and a burn tick, two blasts) credit one kill once; a hit on a
+##   target already dead is not a kill. Then source.on_combo_kill(cast, where).
+## Untyped on purpose: a freed target / source or a missing ledger is skipped, never an error (rooms free monsters).
+## Client-side only (risks.md S1, B25): online play needs the server to own the ledger and count the kills.
+static func combo_hit(source, cast, target, was_alive: bool, amount: int, crit := false) -> void:
+	if amount <= 0 or not (cast is ComboCast) or not is_instance_valid(source): return
+	if crit and source.has_method("on_combo_crit"): source.on_combo_crit(cast)
+	if not was_alive or not is_instance_valid(target) or target.is_alive(): return
+	if not cast.claim_kill(target.get_instance_id()): return
+	if source.has_method("on_combo_kill"): source.on_combo_kill(cast, target.hurt_point())
+
+## A kill credited to a press's ledger (combo_hit): ศรกระหายเลือด heals kill_heal_frac × max HP (3 %, through
+## leech_heal, so never above max HP) and both sustain recipes refund the ledger's kill_mp under its per-press cap (6 / 9,
+## ComboCast.refund_kill), never above max MP. Like on_kill / leech_heal: nothing while dead (and the cap is not spent);
+## during a warp it pays like on_kill gives EXP (no kill can land then anyway: arrows and trails halt, the old room's
+## packs stop). `at` (the monster): the recipe's "kill" effect plays there when the kill paid something. Returns the MP
+## refunded.
+func on_combo_kill(cast: ComboCast, at := Vector2.INF) -> int:
+	if cast == null or state == "dead": return 0
+	var heal := cast.kill_heal_frac * health.max_hp
+	if heal > 0.0: leech_heal(heal)
+	var got := cast.refund_kill()
+	if got > 0: mp = minf(max_mp(), mp + got)
+	if (heal > 0.0 or got > 0) and at != Vector2.INF and is_inside_tree() and get_parent() != null:
+		ComboFx.play(get_parent(), cast.id, "kill", at)
+	return got
+
+## A crit credited to a press's ledger (combo_hit): ราหู heals crit_heal_frac × max HP (1 %) per crit hit, through
+## leech_heal (never above max HP; nothing while dead). No cap (spec).
+func on_combo_crit(cast: ComboCast) -> void:
+	if cast == null or state == "dead" or cast.crit_heal_frac <= 0.0: return
+	leech_heal(cast.crit_heal_frac * health.max_hp)
+
 ## Gold from a drop with the gear bonus; the fraction carries to the next drop.
 func bonus_gold(amount: int) -> int:
 	var raw: float = amount * stats().gold_mult + _gold_carry

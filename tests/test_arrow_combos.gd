@@ -2006,3 +2006,626 @@ func test_mark_frost_press_matches_sim():
 			if r != "": break
 	print("  mark / frost per press (units of the first hit, expected crit):\n    " + "\n    ".join(lines))
 	return r
+
+# ---------- sustain combos (Task 8: ศรกระหายเลือด, ศรราหูอมจันทร์) and the one kill hook ----------
+
+## A stand-in shooter / DoT source that records what the one kill hook (Hero.combo_hit) credits to it.
+class KillSink extends Node:
+	var kills: Array = []        # the ledger of each credited kill
+	var crits: Array = []        # the ledger of each credited crit
+	var healed := 0.0
+	func leech_heal(a: float) -> void:
+		healed += a
+	func on_combo_kill(c: ComboCast, _at := Vector2.INF) -> int:
+		kills.append(c)
+		return 0
+	func on_combo_crit(c: ComboCast) -> void:
+		crits.append(c)
+
+var _rel_frames := 0
+
+## A hero (char Lv`level`) with `keys` on `skill`, at the origin facing east (its arrows start at (18, -24)); the
+## arrows of its presses and their bounces go to _spawned.
+func _sus_hero(skill: String, keys: Array, level := 10) -> Hero:
+	var h: Hero = load("res://scenes/hero.tscn").instantiate()
+	h.setup_sprites()
+	h.set_progress(level, 0)
+	h.inventory.slots.clear()
+	var gems: Array = []
+	for k in keys: gems.append(_g(k))
+	h.set_skill_gems({skill: gems})
+	h.facing = 2
+	_spawned = []
+	h.shot.connect(func(a): _spawned.append(a))
+	return h
+
+## Dummies on the rays of a press of `skill`: rays[i] = distances along fan arrow i from the arrow start (the centre ray
+## due east). The centre ray's nearest dummy is the hero's nearest target, so the press aims due east. die: die at the
+## first hit. Sets the hero's targets.
+func _rays(h: Hero, skill: String, rays: Array, die := true) -> Array:
+	var b := h.build(skill)
+	var n := int(b.arrows)
+	var fan := deg_to_rad(float(b.fan_deg))
+	var start := h._arrow_origin()
+	var out: Array = []
+	for i in rays.size():
+		var dir := Vector2.RIGHT if n == 1 else Vector2.RIGHT.rotated(-fan / 2.0 + fan * i / (n - 1))
+		for dist in rays[i]:
+			var d := _dummy(start + dir * float(dist))
+			d.die_on_hit = die
+			out.append(d)
+	h.test_enemies = out
+	return out
+
+## Presses `skill`, steps the hero until the press's arrows are out (_rel_frames frames), then flies them (bounces,
+## trails, `ds`' statuses) for `secs` without stepping the hero again (no MP regen in what is measured). Returns the
+## hero's MP right after the release (-1 when the press did not fire).
+func _sus_press(h: Hero, skill: String, ds: Array, secs := 2.5) -> float:
+	var had := _spawned.size()
+	if not h.try_skill(skill): return -1.0
+	_rel_frames = 0
+	while _spawned.size() == had and _rel_frames < 60:
+		h.step(DT, Vector2.ZERO)
+		_rel_frames += 1
+	if _spawned.size() == had: return -1.0
+	var mp_rel := h.mp
+	for i in int(round(secs / DT)): _step([], ds)
+	return mp_rel
+
+func _sus_done(h: Hero, ds: Array) -> void:
+	_free(_spawned + ds)
+	_spawned = []
+	h.free()
+
+## The press's ledger (the arrows' build.cast).
+func _cast_of(i := 0) -> ComboCast:
+	return _spawned[i].build.get("cast") if _spawned.size() > i else null
+
+## ศรกระหายเลือด: +2 MP per kill, at most 6 per press. ศรกระจาย [leech, multiply] (char Lv10, MP 12 × 1.2 × 1.5 =
+## 21.6): its 5 arrows kill 5 monsters → +6, not +10.
+func test_bloodthirst_mp_cap_6_per_press():
+	var h := _sus_hero("spread", ["leech", "multiply"])
+	var b := h.build("spread")
+	var ds := _rays(h, "spread", [[90], [90], [60], [90], [90]])
+	h.mp = 40.0
+	var r := "" if String(b.combo.get("id", "")) == "bloodthirst" else "setup: combo %s" % b.combo
+	if r == "":
+		var mp_rel := _sus_press(h, "spread", ds)
+		var dead := ds.filter(func(d): return not d.alive).size()
+		var regen := float(h.stats().mp_regen) * _rel_frames * DT
+		if mp_rel < 0.0: r = "the press did not fire"
+		elif not is_equal_approx(float(b.mp), 21.6): r = "press MP %.2f, want 21.6" % b.mp
+		elif absf(40.0 + regen - 21.6 - mp_rel) > 1e-3: r = "MP at release %.3f, want 40 − 21.6 + regen %.3f" % [mp_rel, regen]
+		elif dead != 5: r = "%d of 5 monsters killed" % dead
+		elif not is_equal_approx(h.mp - mp_rel, 6.0): r = "MP +%.2f from 5 kills, want +6 (cap 6 per press, not +10)" % (h.mp - mp_rel)
+		elif _cast_of().mp_refunded() != 6: r = "the ledger refunded %d" % _cast_of().mp_refunded()
+	_sus_done(h, ds)
+	return r
+
+## A new press is a new ledger: after the first press's 6, a second press that kills 3 refunds +6 again.
+func test_cap_resets_each_press():
+	var h := _sus_hero("spread", ["leech", "multiply"])
+	var ds := _rays(h, "spread", [[90], [90], [60], [90], [90]])
+	h.mp = 60.0
+	var r := ""
+	var mp1 := _sus_press(h, "spread", ds)
+	if mp1 < 0.0 or not is_equal_approx(h.mp - mp1, 6.0): r = "setup: first press +%.2f" % (h.mp - mp1)
+	var c1 := _cast_of()
+	if r == "":
+		_free(_spawned + ds)
+		_spawned = []
+		h.state = "idle"
+		h._skill_cd.clear()
+		ds = _rays(h, "spread", [[], [90], [60], [90], []])
+		var mp2 := _sus_press(h, "spread", ds)
+		var dead := ds.filter(func(d): return not d.alive).size()
+		if mp2 < 0.0: r = "the second press did not fire"
+		elif dead != 3: r = "second press killed %d, want 3" % dead
+		elif is_same(_cast_of(), c1): r = "the second press reused the first press's ledger"
+		elif not is_equal_approx(h.mp - mp2, 6.0): r = "second press +%.2f MP from 3 kills, want +6 again" % (h.mp - mp2)
+		elif c1.mp_refunded() != 6: r = "the first press's ledger changed (%d)" % c1.mp_refunded()
+	_sus_done(h, ds)
+	return r
+
+## ศรกระหายเลือด: a kill heals 3 % of max HP (through leech_heal, with the press's leech of the killing hit's 1 damage:
+## 0.06 HP, carried) and refunds +2 MP.
+func test_bloodthirst_kill_heals_3pct():
+	var h := _sus_hero("piercing", ["leech", "multiply"])
+	var b := h.build("piercing")
+	var ds := _rays(h, "piercing", [[60]])
+	h.health.hp = h.health.max_hp / 2
+	h.mp = 40.0
+	var hp0 := h.health.hp
+	var carry0 := h._leech_carry
+	var r := "" if String(b.combo.get("id", "")) == "bloodthirst" and is_equal_approx(float(b.leech), 0.06) else "setup: %s leech %s" % [b.combo, b.leech]
+	if r == "":
+		var mp_rel := _sus_press(h, "piercing", ds)
+		var want := int(floor(carry0 + 0.03 * h.health.max_hp + 0.06 * 1 + 1e-6))
+		if ds[0].alive: r = "not killed"
+		elif h.health.hp - hp0 != want: r = "healed %d HP, want %d (3 %% of %d + leech)" % [h.health.hp - hp0, want, h.health.max_hp]
+		elif not is_equal_approx(h.mp - mp_rel, 2.0): r = "MP +%.2f, want +2" % (h.mp - mp_rel)
+	_sus_done(h, ds)
+	return r
+
+## ศรราหูอมจันทร์: +3 MP per kill, at most 9 per press (5 kills in the piercing line → +9, not +15).
+func test_rahu_mp_cap_9():
+	var h := _sus_hero("piercing", ["leech", "multiply", "execute"])
+	var b := h.build("piercing")
+	var ds := _rays(h, "piercing", [[60, 85, 110, 135, 160]])
+	h.mp = 40.0
+	var r := "" if String(b.combo.get("id", "")) == "rahu" else "setup: combo %s" % b.combo
+	if r == "":
+		var mp_rel := _sus_press(h, "piercing", ds)
+		var dead := ds.filter(func(d): return not d.alive).size()
+		if dead != 5: r = "%d of 5 killed" % dead
+		elif not is_equal_approx(h.mp - mp_rel, 9.0): r = "MP +%.2f from 5 kills, want +9 (cap)" % (h.mp - mp_rel)
+	_sus_done(h, ds)
+	return r
+
+## ราหู's +30 % at exactly 70 % HP (the smallest whole HP ≥ 70 %), none one HP below (checked at the release).
+func test_rahu_bonus_only_at_70pct_hp():
+	var h := _hero(10, ["leech", "multiply", "execute"])
+	var b := h.build("piercing")
+	var at70 := int(ceil(0.70 * h.health.max_hp - 1e-9))
+	var r := "" if String(b.combo.get("id", "")) == "rahu" else "setup: combo %s" % b.combo
+	if r == "":
+		h.health.hp = at70
+		_press(h)
+		if _spawned.size() != 1 or not is_equal_approx(_spawned[0].mult, float(b.arrow_mult) * 1.3): r = "HP %d/%d (≥ 70 %%): mult %s, want × 1.3" % [at70, h.health.max_hp, _spawned[0].mult if _spawned.size() > 0 else -1.0]
+	if r == "":
+		_free(_spawned)
+		_spawned = []
+		h._skill_cd.clear()
+		h.mp = h.max_mp()
+		h.health.hp = at70 - 1
+		_press(h)
+		if _spawned.size() != 1 or not is_equal_approx(_spawned[0].mult, float(b.arrow_mult)): r = "HP %d/%d (< 70 %%): mult %s, want no bonus" % [at70 - 1, h.health.max_hp, _spawned[0].mult if _spawned.size() > 0 else -1.0]
+	_done(h)
+	return r
+
+## ราหู: a crit hit heals 1 % of max HP (on_combo_crit; the dummy reports a sure crit as a crit); a hit that does not
+## crit heals only its leech.
+func test_rahu_crit_heals_1pct():
+	var h := _sus_hero("piercing", ["leech", "multiply", "execute"])
+	var b := h.build("piercing")
+	b["cast"] = ComboCast.from_build(b, 0.5)
+	var d := _dummy(Vector2(60, 0))
+	var e := _dummy(Vector2(60, 0))
+	h.health.hp = h.health.max_hp / 2
+	var r := ""
+	var hp0 := h.health.hp
+	var carry0 := h._leech_carry
+	var a := _arrow(Vector2.RIGHT, [d], b, true, h)
+	a.crit_chance = 1.0
+	for i in 60: _step([a], [])
+	var want := int(floor(carry0 + 0.01 * h.health.max_hp + float(b.leech) * 1 + 1e-6))
+	if d.hits.size() != 1: r = "setup: %d hits" % d.hits.size()
+	elif h.health.hp - hp0 != want: r = "a crit healed %d HP, want %d (1 %% of %d + leech)" % [h.health.hp - hp0, want, h.health.max_hp]
+	var a2 := _arrow(Vector2.RIGHT, [e], b, true, h)
+	if r == "":
+		var hp1 := h.health.hp
+		var carry1 := h._leech_carry
+		for i in 60: _step([a2], [])
+		var want2 := int(floor(carry1 + float(b.leech) * 1 + 1e-6))
+		if h.health.hp - hp1 != want2: r = "a hit that did not crit healed %d HP, want %d (leech only)" % [h.health.hp - hp1, want2]
+	_free([a, a2, d, e])
+	h.free()
+	return r
+
+## MP never goes above max MP (and HP never above max HP): MP max − 1, HP max − 1, 3 kills → both exactly at max.
+func test_refund_never_exceeds_max_mp():
+	var h := _sus_hero("piercing", ["leech", "multiply"])
+	var b := h.build("piercing")
+	b["cast"] = ComboCast.from_build(b)
+	var ds := [_dummy(Vector2(60, 0)), _dummy(Vector2(90, 0)), _dummy(Vector2(120, 0))]
+	for d in ds: d.die_on_hit = true
+	h.mp = h.max_mp() - 1.0
+	h.health.hp = h.health.max_hp - 1
+	var a := _arrow(Vector2.RIGHT, ds, b, true, h)
+	for i in 60: _step([a], ds)
+	var r := ""
+	if ds.filter(func(d): return d.alive).size() > 0: r = "setup: not all killed"
+	elif h.mp != float(h.max_mp()): r = "MP %.2f, want max %d" % [h.mp, h.max_mp()]
+	elif h.health.hp != h.health.max_hp: r = "HP %d, want max %d" % [h.health.hp, h.health.max_hp]
+	elif b.cast.mp_refunded() != 6: r = "ledger refunded %d (the cap is still spent at full MP)" % b.cast.mp_refunded()
+	_free([a] + ds)
+	h.free()
+	return r
+
+## Owner "นับทุกแบบ": burn kills count, through the press that applied the burn, sharing its cap. ศรทะลวง [leech,
+## multiply, element fire] (bloodthirst, slot 3 at skill Lv10): 4 monsters in the line, 2 die to the hit (+4), 2 burn and
+## die to their first burn tick 1 s later (+2, then +0: cap 6). Every kill heals 3 % of max HP (+ the press's leech of
+## the hits and of the burn ticks).
+func test_burn_kill_counts_and_shares_cap():
+	var h := _sus_hero("piercing", ["leech", "multiply", "fire"])
+	var b := h.build("piercing")
+	var ds := _rays(h, "piercing", [[60, 90, 120, 150]])
+	for i in [1, 3]:
+		ds[i].die_on_hit = false
+		ds[i].deal = 10                    # burn 10 × 0.2 = 2 per tick
+		ds[i].hp = 2
+	h.health.hp = h.health.max_hp / 2
+	h.mp = 40.0
+	var hp0 := h.health.hp
+	var carry0 := h._leech_carry
+	var r := "" if String(b.combo.get("id", "")) == "bloodthirst" else "setup: combo %s" % b.combo
+	if r == "":
+		var mp_rel := _sus_press(h, "piercing", ds, 0.8)
+		if ds[0].alive or ds[2].alive: r = "the hit did not kill"
+		elif not ds[1].alive or not ds[3].alive: r = "a burner died before its first tick"
+		elif not is_equal_approx(h.mp - mp_rel, 4.0): r = "two hit kills: +%.2f MP, want +4" % (h.mp - mp_rel)
+		if r == "":
+			for i in int(round(1.7 / DT)): _step([], ds)
+			var leech := float(b.leech)
+			var want := int(floor(carry0 + 4 * 0.03 * h.health.max_hp + leech * (1 + 10 + 1 + 10) + leech * (2 + 2) + 1e-6))
+			if ds[1].alive or ds[3].alive: r = "the burns did not kill"
+			elif not is_equal_approx(h.mp - mp_rel, 6.0): r = "after the burn kills: +%.2f MP, want +6 (+2 then +0)" % (h.mp - mp_rel)
+			elif _cast_of().mp_refunded() != 6: r = "ledger %d" % _cast_of().mp_refunded()
+			elif h.health.hp - hp0 != want: r = "healed %d HP, want %d (4 kills × 3 %% + leech)" % [h.health.hp - hp0, want]
+	_sus_done(h, ds)
+	return r
+
+## A fire-trail tick that kills calls the hook once, with the trail's press ledger (a dummy and a real Wolf). A trail
+## only comes from ศรพัดเพลิง / พรหมาสตร์, never with a sustain combo on the same skill, so it pays 0: the hook is for
+## consistency ("นับทุกแบบ").
+func test_trail_kill_calls_hook():
+	var sink := KillSink.new()
+	var c := ComboCast.new("fire_fan")
+	var d := _dummy(Vector2(60, 0), 1)
+	for i in 90:
+		d.apply_trail(5.0, 0.25, sink, c)
+		d.tick_status(DT)
+	var r := ""
+	if d.alive: r = "setup: the dummy survived"
+	elif sink.kills.size() != 1 or not is_same(sink.kills[0], c): r = "dummy: hook got %s, want [the trail's cast] once" % [sink.kills]
+	var w: Wolf = load("res://scenes/wolf.tscn").instantiate()
+	w.setup()
+	w.health.hp = 1
+	var c2 := ComboCast.new("brahmastra")
+	if r == "":
+		for i in 90:
+			w.apply_trail(50.0, 0.25, sink, c2)
+			if w.is_alive(): w.tick_burn(DT)
+		if w.is_alive(): r = "setup: the wolf survived"
+		elif sink.kills.size() != 2 or not is_same(sink.kills[1], c2): r = "wolf: hook got %s, want the trail's cast once more" % [sink.kills]
+	w.free()
+	d.free()
+	sink.free()
+	return r
+
+## A press that already refunded its 6 gives 0 MP for a later burn kill of the same press; the kill still heals 3 %.
+func test_dot_kill_after_cap_gives_nothing():
+	var h := _sus_hero("piercing", ["leech", "multiply"])
+	var b := h.build("piercing")
+	var c := ComboCast.from_build(b)
+	for i in 3: c.refund_kill()
+	var d := _dummy(Vector2(60, 0), 1)
+	d.apply_status("burn", 5.0, 0.0, h, c)
+	h.mp = 40.0
+	h.health.hp = h.health.max_hp / 2
+	var hp0 := h.health.hp
+	var carry0 := h._leech_carry
+	for i in 70: d.tick_status(DT)
+	var r := ""
+	var want := int(floor(carry0 + 0.03 * h.health.max_hp + 1e-6))
+	if d.alive: r = "setup: the burn did not kill"
+	elif h.mp != 40.0: r = "MP %.2f after a capped press's burn kill, want 40" % h.mp
+	elif h.health.hp - hp0 != want: r = "healed %d, want %d (3 %%)" % [h.health.hp - hp0, want]
+	elif c.mp_refunded() != 6: r = "ledger %d" % c.mp_refunded()
+	d.free()
+	h.free()
+	return r
+
+## Kills by bounce arrows count toward the press's same 6 (ศรทะลวง [leech, multiply, ricochet]: the line kills L1 and
+## L2, L1's bounce kills B: +6, not +4). Bolt kills too: a thunder_hop press's bolts carrying that same ledger (only a
+## 4-slot skill could hold both recipes, one combo per skill: the ledger is shared to test the hook) give 0 more.
+func test_bounce_and_bolt_kills_share_cap():
+	var h := _sus_hero("piercing", ["leech", "multiply", "ricochet"])
+	var b := h.build("piercing")
+	b["cast"] = ComboCast.from_build(b)
+	var l1 := _dummy(Vector2(60, 0))
+	var l2 := _dummy(Vector2(150, 0))
+	var bb := _dummy(Vector2(60, 70))
+	var ds := [l1, l2, bb]
+	for d in ds: d.die_on_hit = true
+	h.mp = 40.0
+	var r := "" if String(b.combo.get("id", "")) == "bloodthirst" and int(b.bounces) > 0 else "setup: %s bounces %s" % [b.combo, b.get("bounces")]
+	_spawned = []
+	var a := _arrow(Vector2.RIGHT, ds, b, true, h)
+	for i in 90: _step([a], ds)
+	if r != "": pass
+	elif ds.filter(func(d): return d.alive).size() > 0: r = "setup: not all 3 killed"
+	elif bb.hits.size() != 1 or _spawned.size() != 1: r = "setup: B was not killed by the bounce arrow"
+	elif not is_equal_approx(h.mp, 46.0): r = "MP %.2f: the bounce kill did not count (+%.0f, want +6)" % [h.mp, h.mp - 40.0]
+	var tb := _build(["ricochet", "lightning"])
+	tb["cast"] = b.cast
+	var x := _dummy(Vector2(60, 0))
+	var y := _dummy(Vector2(60, 40))
+	var e := _dummy(Vector2(60, -60))
+	e.die_on_hit = true
+	var a2 := _arrow(Vector2.RIGHT, [x, y, e], tb, true, h)
+	if r == "":
+		for i in 90: _step([a2], [])
+		if e.alive or e.hits.size() != 1 or not is_equal_approx(float(e.hits[0][1]), float(tb.arrow_mult) * 0.5): r = "setup: E was not killed by a bolt (%s)" % [e.hits]
+		elif not is_equal_approx(h.mp, 46.0): r = "a bolt kill on a capped ledger gave MP (%.2f)" % h.mp
+		elif b.cast.mp_refunded() != 6: r = "ledger %d" % b.cast.mp_refunded()
+	_free([a, a2, x, y, e] + ds + _spawned)
+	_spawned = []
+	h.free()
+	return r
+
+## Plan note (Task 6 review): the lightning gem's own chain hit (Arrow._after_hit calls receive_hit directly) goes through
+## the same hook: a chain kill by a [leech, multiply, element lightning] press refunds +2 within the press's cap.
+func test_lightning_chain_kill_refunds_mp():
+	var h := _sus_hero("piercing", ["leech", "multiply", "lightning"])
+	var b := h.build("piercing")
+	b["cast"] = ComboCast.from_build(b)
+	var a_ := _dummy(Vector2(60, 0))
+	var c := _dummy(Vector2(60, 50))
+	c.die_on_hit = true
+	h.mp = 40.0
+	var r := "" if String(b.combo.get("id", "")) == "bloodthirst" else "setup: combo %s" % b.combo
+	var a := _arrow(Vector2.RIGHT, [a_, c], b, true, h)
+	for i in 60: _step([a], [])
+	if r != "": pass
+	elif c.alive or c.hits.size() != 1 or not is_equal_approx(float(c.hits[0][1]), float(b.arrow_mult) * Balance.num("elements.lightning.mult")): r = "setup: C was not killed by the chain (%s)" % [c.hits]
+	elif not is_equal_approx(h.mp, 42.0): r = "chain kill: MP %.2f, want 42" % h.mp
+	elif b.cast.mp_refunded() != 2: r = "ledger %d" % b.cast.mp_refunded()
+	_free([a, a_, c])
+	h.free()
+	return r
+
+## The one kill hook for every damage source: primary, bounce, bolt, gem chain, line-end blast, shatter, burn tick and
+## trail tick each credit the press's ledger exactly once for the monster they kill (KillSink as the shooter).
+func test_every_source_kills_through_one_hook():
+	var r := ""
+	for src in ["primary", "bounce", "bolt", "chain", "line_end", "shatter", "burn", "trail"]:
+		var sink := KillSink.new()
+		var keys: Array = {"primary": [], "bounce": ["ricochet"], "bolt": ["ricochet", "lightning"], "chain": ["lightning"],
+			"line_end": ["split", "fire", "multiply"], "shatter": ["ice", "split", "execute"], "burn": ["fire"], "trail": ["split", "fire"]}[src]
+		var b := _build(keys)
+		var ds: Array = []
+		var victim: Node2D
+		match src:
+			"primary":
+				victim = _dummy(Vector2(60, 0))
+				ds = [victim]
+			"bounce":
+				victim = _dummy(Vector2(60, 70))
+				ds = [_dummy(Vector2(60, 0)), victim]
+			"bolt":
+				victim = _dummy(Vector2(60, -60))
+				ds = [_dummy(Vector2(60, 0)), _dummy(Vector2(60, 40)), victim]
+			"chain":
+				victim = _dummy(Vector2(60, 50))
+				ds = [_dummy(Vector2(60, 0)), victim]
+			"line_end":
+				victim = _dummy(Vector2(Balance.num("skills.piercing.range"), 20))
+				ds = [victim]
+			"shatter":
+				var s := _dummy(Vector2(60, 0))
+				s.status.apply_slow()
+				victim = _dummy(Vector2(60, 30))
+				ds = [s, victim]
+			"burn":
+				victim = _dummy(Vector2(60, 0), 2)
+				victim.deal = 10
+				ds = [victim]
+			"trail":
+				victim = _dummy(Vector2(100, 0), 1)
+		if src not in ["burn", "trail"]: victim.die_on_hit = true
+		_spawned = []
+		var arrows := _fan(b, ds, sink)
+		for i in 45: _step(arrows, ds)
+		if src == "trail": ds.append(victim)        # in the fire only after the arrows are gone: no direct hit
+		for i in 120: _step(arrows, ds)
+		var why := ""
+		if victim.alive: why = "the victim survived"
+		elif src == "trail" and victim.hits.size() > 0: why = "setup: the trail victim was hit directly"
+		elif src == "bolt" and (victim.hits.size() != 1 or not is_equal_approx(float(victim.hits[0][1]), float(b.arrow_mult) * 0.5)): why = "setup: not a bolt kill (%s)" % [victim.hits]
+		elif sink.kills.size() != 1: why = "%d kills credited, want 1" % sink.kills.size()
+		elif not is_same(sink.kills[0], b.cast): why = "credited to %s, not the press's ledger" % [sink.kills[0]]
+		if why != "": r = "%s: %s" % [src, why]
+		_free(arrows + _spawned + ds + ([victim] if not victim in ds else []))
+		_spawned = []
+		sink.free()
+		if r != "": break
+	return r
+
+## The hook itself (Hero.combo_hit): once per kill per ledger, only for a hit that kills (alive before, dead after,
+## damage > 0), safe with freed targets / sources and with no ledger.
+func test_kill_hook_once_per_kill_and_safe():
+	var sink := KillSink.new()
+	var c := ComboCast.new("bloodthirst")
+	var d := _dummy(Vector2(60, 0))
+	d.alive = false
+	var r := ""
+	Hero.combo_hit(sink, c, d, true, 5)
+	Hero.combo_hit(sink, c, d, true, 5)          # a second source on the same kill (same frame, same press)
+	if sink.kills.size() != 1: r = "same kill credited %d times" % sink.kills.size()
+	Hero.combo_hit(sink, ComboCast.new("bloodthirst"), d, false, 5)   # another press's hit on the already dead target
+	if r == "" and sink.kills.size() != 1: r = "a hit on a target already dead was credited"
+	var e := _dummy(Vector2(60, 0))
+	e.alive = false
+	Hero.combo_hit(sink, c, e, true, 0)
+	if r == "" and sink.kills.size() != 1: r = "a 0-damage hit was credited"
+	Hero.combo_hit(sink, null, e, true, 5)
+	Hero.combo_hit(sink, {}, e, true, 5)
+	if r == "" and sink.kills.size() != 1: r = "a hit with no ledger was credited"
+	var gone := _dummy(Vector2(60, 0))
+	gone.free()
+	Hero.combo_hit(sink, c, gone, true, 5)       # freed target: no error, nothing
+	var gone_src := KillSink.new()
+	gone_src.free()
+	Hero.combo_hit(gone_src, c, e, true, 5)      # freed source: no error, nothing
+	if r == "" and sink.kills.size() != 1: r = "a freed target / source was credited"
+	e.last_hit_crit = true
+	var alive := _dummy(Vector2(60, 0))
+	Hero.combo_hit(sink, c, alive, true, 5, true)
+	if r == "" and (sink.crits.size() != 1 or sink.kills.size() != 1): r = "a crit that does not kill: crits %d kills %d, want 1 / 1" % [sink.crits.size(), sink.kills.size()]
+	_free([d, e, alive])
+	sink.free()
+	return r
+
+## Two sources the same frame on a real Wolf (a burn of press A ticking and press B's arrow): one kill, one credit,
+## whichever lands first (B's arrow skips the dead wolf; A's tick never runs on it).
+func test_dot_and_hit_same_frame_credit_once():
+	var r := ""
+	for arrow_first in [true, false]:
+		var sink := KillSink.new()
+		var w: Wolf = load("res://scenes/wolf.tscn").instantiate()
+		w.setup()
+		w.position = Vector2(60, 0) - Wolf.HURT_POINT * Wolf.size_scale()   # hurt point at (60, 0)
+		var ca := ComboCast.new("bloodthirst")
+		w.apply_status("burn", 50.0, 0.0, sink, ca)
+		for i in 59: w.tick_burn(DT)               # the burn's first tick is due on the next step
+		w.health.hp = 1
+		var bb := _build([])
+		bb["cast"] = ComboCast.new("bloodthirst")
+		var a := _arrow(Vector2.RIGHT, [w], bb, true, sink)
+		var guard := 0
+		while a.travelled + Balance.num("shot.arrow_speed") * DT < 60.0 - 12.0 and guard < 60:   # the frame before it reaches the wolf
+			a.advance(DT)
+			guard += 1
+		if arrow_first:
+			a.advance(DT)
+			a.advance(DT)
+			if w.is_alive(): w.tick_burn(DT)
+		else:
+			if w.is_alive(): w.tick_burn(DT)
+			a.advance(DT)
+			a.advance(DT)
+		var who := "arrow" if arrow_first else "burn"
+		if w.is_alive(): r = "%s first: setup: the wolf survived" % who
+		elif sink.kills.size() != 1: r = "%s first: %d credits for one kill, want 1" % [who, sink.kills.size()]
+		elif not is_same(sink.kills[0], bb.cast if arrow_first else ca): r = "%s first: credited to the wrong press" % who
+		_free([a])
+		w.free()
+		sink.free()
+		if r != "": break
+	return r
+
+## Many fire trails of ONE press share its cap: three trails carrying one bloodthirst ledger kill 5 monsters → +6.
+func test_many_trails_one_press_share_cap():
+	var h := _sus_hero("piercing", ["leech", "multiply"])
+	var c := ComboCast.new("bloodthirst")
+	var ds := [_dummy(Vector2(50, 0), 1), _dummy(Vector2(150, 0), 1), _dummy(Vector2(100, 15), 1), _dummy(Vector2(100, -15), 1), _dummy(Vector2(180, -27), 1)]
+	var trails: Array = []
+	for end in [Vector2(200, 0), Vector2(200, 30), Vector2(200, -30)]:
+		var t := FireTrail.new()
+		t.setup(Vector2.ZERO, 5.0, 1.0, 1.0, 2.0, ds, h, c, 0.0, "bloodthirst")
+		t.extend_to(end)
+		t.finish()
+		trails.append(t)
+	h.mp = 40.0
+	for i in 90:
+		for t in trails: t.step(DT)
+		for d in ds: d.tick_status(DT)
+	var r := ""
+	if ds.filter(func(d): return d.alive).size() > 0: r = "setup: not all 5 killed by the trails"
+	elif not is_equal_approx(h.mp, 46.0): r = "MP +%.2f from 5 trail kills of one press, want +6" % (h.mp - 40.0)
+	_free(trails + ds)
+	h.free()
+	return r
+
+## A ledger is never reused across presses: press 1's burn kills after press 2 was fired → credited to press 1 (capped:
+## 0 MP), press 2's ledger untouched.
+func test_late_burn_kill_credits_its_own_press():
+	var h := _sus_hero("piercing", ["leech", "multiply", "fire"])
+	var ds := _rays(h, "piercing", [[60, 90, 120, 150]])
+	ds[3].die_on_hit = false
+	ds[3].deal = 10
+	ds[3].hp = 2
+	h.mp = 60.0
+	var r := ""
+	var mp1 := _sus_press(h, "piercing", ds, 0.6)
+	var c1 := _cast_of()
+	if mp1 < 0.0 or c1 == null or c1.mp_refunded() != 6 or not ds[3].alive or not ds[3].status.is_burning(): r = "setup: press 1 refunded %s, burner alive %s" % [c1.mp_refunded() if c1 else -1, ds[3].alive]
+	if r == "":
+		h.state = "idle"
+		h._skill_cd.clear()
+		h.test_enemies = []
+		var mp2 := _sus_press(h, "piercing", [], 0.0)
+		var c2 := _cast_of(_spawned.size() - 1)
+		if mp2 < 0.0 or is_same(c2, c1): r = "setup: press 2"
+		else:
+			for i in int(round(1.5 / DT)): _step([], ds)
+			if ds[3].alive: r = "setup: the burn did not kill"
+			elif c2.mp_refunded() != 0: r = "press 2's ledger was credited %d for press 1's burn" % c2.mp_refunded()
+			elif h.mp != mp2: r = "MP %.2f → %.2f: a capped press's burn kill gave MP" % [mp2, h.mp]
+			elif c1.mp_refunded() != 6: r = "press 1's ledger %d" % c1.mp_refunded()
+	_sus_done(h, ds)
+	return r
+
+## tools/gem_combo_sim.py `--press` (sustain rows): ศรทะลวง Lv10, crit counted (hero 0.05 + execute 0.15, crit.mult
+## 1.5), units of the press's first hit before ราหู's bonus: ศรกระหายเลือด single 1.025 · ราหู 1.331 (the sim mixes
+## HP ≥ 70 % on 70 % of the presses: 1.1 × (1 + 0.3 × 0.7)) · a pack press (3 hits, ~2 kills) costs MP − refund:
+## กระหายเลือด 14.4 − 4 = 10.40 · ราหู 17.28 − 6 = 11.28.
+const SIM_SUSTAIN := {"bloodthirst": 1.025, "rahu": 1.331, "bloodthirst mp": 10.40, "rahu mp": 11.28, "bloodthirst refund": 4, "rahu refund": 6}
+
+## Game vs the sim per press: single target (the dummy records each hit's multiplier; ราหู's two presses at HP ≥ 70 %
+## and < 70 % mixed 70 / 30 as the sim) and the pack press's net MP (a real hero press into the sim's pack: 3 hits in
+## the line, 2 kills) within ±3 %; the refund equals the sim's.
+func test_sustain_press_matches_sim():
+	var lines: Array = []
+	var r := ""
+	for id in ["bloodthirst", "rahu"]:
+		var keys: Array = ["leech", "multiply"] if id == "bloodthirst" else ["leech", "multiply", "execute"]
+		var b := _build(keys)
+		var am := float(b.arrow_mult)
+		var game := 0.0
+		for hp_mix in ([[1.0, 1.0]] if id == "bloodthirst" else [[1.0, 0.7], [0.5, 0.3]]):
+			var bp: Dictionary = b.duplicate()
+			bp["cast"] = ComboCast.from_build(b, float(hp_mix[0]))
+			var d := _dummy(Vector2(60, 0))
+			_spawned = []
+			var a := _arrow(Vector2.RIGHT, [d], bp)
+			a.mult = am * (1.0 + bp.cast.dmg_bonus())     # as Hero._release
+			a.crit_chance = float(b.crit)
+			a.crit_mult = Balance.num("crit.mult")
+			for i in 60: _step([a], [])
+			game += float(hp_mix[1]) * _expected([d], am)
+			_free([a, d])
+		var sim: float = SIM_SUSTAIN[id]
+		lines.append("%s single: game %.3f vs sim %.3f = %+.1f %%" % [id, game, sim, (game / sim - 1.0) * 100.0])
+		if absf(game / sim - 1.0) > 0.03: r = "%s single: game %.3f vs sim %.3f (> ±3 %%)" % [id, game, sim]
+		if r != "": break
+		var h := _sus_hero("piercing", keys)
+		var hb := h.build("piercing")
+		var ds := _rays(h, "piercing", [[60, 90, 120]])
+		ds[2].die_on_hit = false
+		h.mp = 60.0
+		var mp_rel := _sus_press(h, "piercing", ds)
+		var refund := h.mp - mp_rel
+		var net := float(hb.mp) - refund
+		var sim_mp: float = SIM_SUSTAIN[id + " mp"]
+		lines.append("%s pack press: MP %.2f − refund %.0f = %.2f vs sim %.2f = %+.1f %%" % [id, hb.mp, refund, net, sim_mp, (net / sim_mp - 1.0) * 100.0])
+		if ds.filter(func(x): return not x.alive).size() != 2: r = "%s pack: setup: 2 kills wanted" % id
+		elif not is_equal_approx(refund, float(SIM_SUSTAIN[id + " refund"])): r = "%s pack: refund %.2f, want the sim's %d" % [id, refund, SIM_SUSTAIN[id + " refund"]]
+		elif absf(net / sim_mp - 1.0) > 0.03: r = "%s pack: net MP %.3f vs sim %.3f (> ±3 %%)" % [id, net, sim_mp]
+		_sus_done(h, ds)
+		if r != "": break
+	print("  sustain per press:\n    " + "\n    ".join(lines))
+	return r
+
+## The recipe's "kill" effect (pickup_pop, red for กระหายเลือด) plays at the monster when a kill pays (heal or MP), in the
+## hero's parent like his arrows; a kill that pays nothing (ราหู at its 9 MP cap: no kill heal) plays nothing.
+func test_kill_fx_plays_when_paid():
+	var world := Node2D.new()
+	tree.root.add_child(world)
+	var h: Hero = load("res://scenes/hero.tscn").instantiate()
+	world.add_child(h)
+	h.set_physics_process(false)
+	var count := func(): return world.get_children().filter(func(c): return c is FxSprite and not c.is_queued_for_deletion()).size()
+	var r := ""
+	var n0: int = count.call()
+	h.on_combo_kill(ComboCast.new("bloodthirst"), Vector2(40, 0))
+	var n1: int = count.call()
+	if n1 != n0 + 1: r = "a paying kill played %d effects, want 1" % (n1 - n0)
+	var spent := ComboCast.new("rahu")
+	for i in 3: spent.refund_kill()
+	h.on_combo_kill(spent, Vector2(40, 0))
+	if r == "" and count.call() != n1: r = "a kill that paid nothing played an effect"
+	world.queue_free()
+	await tree.process_frame
+	return r

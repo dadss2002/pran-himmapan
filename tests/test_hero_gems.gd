@@ -304,3 +304,70 @@ func test_open_gems_padded_to_open_slots():
 	elif h.open_gems("arrow_rain") != []: r = "arrow_rain %s, want []" % [h.open_gems("arrow_rain")]
 	_done(h)
 	return r
+
+# ---------- M5b Task 8: the hero's side of the sustain combos (on_combo_kill / on_combo_crit) ----------
+
+## Each kill credited to a bloodthirst ledger refunds +2 under the press's cap of 6 and never lifts MP above max; the
+## 3 % heal never lifts HP above max.
+func test_combo_kill_pays_under_cap_and_max():
+	var h := _hero(10)
+	var c := ComboCast.new("bloodthirst")
+	h.mp = h.max_mp() - 3.0
+	h.health.hp = h.health.max_hp - 1
+	var got: Array = []
+	for i in 4: got.append(h.on_combo_kill(c))
+	var r := ""
+	if got != [2, 2, 2, 0]: r = "refunds %s, want [2, 2, 2, 0] (cap 6)" % [got]
+	elif h.mp != float(h.max_mp()): r = "MP %.2f, want max %d" % [h.mp, h.max_mp()]
+	elif h.health.hp != h.health.max_hp: r = "HP %d, want max %d" % [h.health.hp, h.health.max_hp]
+	_done(h)
+	return r
+
+## Dead: a kill pays nothing (like on_kill's EXP and leech_heal) and does not spend the press's cap.
+func test_combo_kill_while_dead_pays_nothing_and_keeps_cap():
+	var h := _hero(10)
+	var c := ComboCast.new("bloodthirst")
+	h.mp = 10.0
+	h.health.hp = 50
+	h.state = "dead"
+	var r := ""
+	if h.on_combo_kill(c) != 0 or h.mp != 10.0 or h.health.hp != 50: r = "a dead hero was paid"
+	elif c.mp_refunded() != 0: r = "the cap was spent while dead (%d)" % c.mp_refunded()
+	h.on_combo_crit(ComboCast.new("rahu"))
+	if r == "" and h.health.hp != 50: r = "a dead hero was healed by a crit"
+	_done(h)
+	return r
+
+## During a warp the hook pays as on_kill gives EXP (the existing behaviour; no kill can land then: arrows and trails
+## halt and the old room's packs stop, B20).
+func test_combo_kill_during_warp_pays_like_on_kill():
+	var h := _hero(5)                     # below the level cap, so a kill gives EXP
+	h.begin_warp()
+	h.mp = 10.0
+	var exp0 := h.exp
+	h.on_kill(10, 5)
+	var r := ""
+	if h.exp == exp0: r = "setup: on_kill gives no EXP while warping"
+	elif h.on_combo_kill(ComboCast.new("bloodthirst")) != 2 or h.mp != 12.0: r = "a kill during a warp did not pay like on_kill (MP %.2f)" % h.mp
+	h.end_warp()
+	_done(h)
+	return r
+
+## ราหู: a crit heals 1 % of max HP, never above max; a ledger without crit_heal_frac heals nothing.
+func test_combo_crit_heals_1pct_never_over_max():
+	var h := _hero(10)
+	h.health.hp = h.health.max_hp / 2
+	var hp0 := h.health.hp
+	var carry0 := h._leech_carry
+	h.on_combo_crit(ComboCast.new("rahu"))
+	var r := ""
+	var want := int(floor(carry0 + 0.01 * h.health.max_hp + 1e-6))
+	if h.health.hp - hp0 != want: r = "a crit healed %d, want %d" % [h.health.hp - hp0, want]
+	var hp1 := h.health.hp
+	h.on_combo_crit(ComboCast.new("bloodthirst"))
+	if r == "" and h.health.hp != hp1: r = "a bloodthirst crit healed"
+	h.health.hp = h.health.max_hp
+	h.on_combo_crit(ComboCast.new("rahu"))
+	if r == "" and h.health.hp != h.health.max_hp: r = "a crit lifted HP above max"
+	_done(h)
+	return r

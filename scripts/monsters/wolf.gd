@@ -279,12 +279,17 @@ func telegraph_visible() -> bool:
 
 # ---------- events ----------
 
+var last_hit_crit := false
+
 ## Hit by the hero. Returns damage dealt (0 when dead). Knockback, except during the bite windup, on elites and
 ## while frozen (owner 2026-11-09: a frozen monster is not knocked back, "ไม่กระเด็น ติดอยู่กับที่").
+## last_hit_crit: the last hit that landed was a crit (M5b Task 8: Arrow reads it for ราหู's crit heal).
 func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, crit_mult := -1.0) -> int:
+	last_hit_crit = false
 	if not is_alive(): return 0
 	var r := Combat.roll_damage(atk, mult * status.taken_mult(), stats().def, true, crit_chance, crit_mult)   # mark / zone
 	var lands := not health.is_dead() and not health.is_invulnerable()
+	last_hit_crit = lands and r.crit
 	if lands: Sfx.play("crit_hit" if r.crit else "arrow_hit", _pos())
 	health.take_hit(r.amount, r.crit)              # a killing hit cries "die" in _on_died
 	if lands and is_alive(): Sfx.play_monster(sound_kind(), "hurt")
@@ -484,7 +489,10 @@ func _on_died() -> void:
 ## burn's source, the trail's part with the trail's own leech to its source; read before the damage, as a killing
 ## tick clears the statuses. A part under one whole HP (kept in the status's carry for a later tick) still leeches
 ## its share (Task 4 review), so the heal is leech × the damage the DoT deals over time, not only the ticks that
-## round up. status.tick_cast is the ledger a kill by this tick belongs to (M5b Task 8 hook). Nothing is allocated.
+## round up. A tick that kills goes through the one kill hook (Hero.combo_hit, M5b Task 8, owner "นับทุกแบบ") with
+## status.tick_cast / tick_source: the ONE ledger of the DoT that dealt it (the press that applied that burn / trail;
+## clear() on death leaves them), so a burn or trail kill heals / refunds through that press, under its cap, once.
+## Only a live monster ticks (step), so a tick never "kills" a corpse. Never a crit. Nothing is allocated.
 func tick_burn(delta: float) -> void:
 	var burn := status.tick(delta)
 	if status.last_burn_dmg <= 0.0 and status.last_trail_dmg <= 0.0: return
@@ -492,12 +500,14 @@ func tick_burn(delta: float) -> void:
 	var bh := status.last_burn_dmg * status.last_burn_leech
 	var ts: Object = status.last_trail_source
 	var th := status.last_trail_dmg * status.last_trail_leech
+	var was := is_alive()
 	if burn > 0:
 		dot_tick = true
 		health.take_hit(burn, false)
 		dot_tick = false
 	leech_to(bs, bh)
 	leech_to(ts, th)
+	if was and not is_alive(): Hero.combo_hit(status.tick_source, status.tick_cast, self, true, burn)
 
 ## Heals `source` (the hero) by `amount` through its leech_heal (fractions carried there); nothing for none / 0.
 static func leech_to(source: Object, amount: float) -> void:

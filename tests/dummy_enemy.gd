@@ -3,6 +3,9 @@ extends Node2D
 ## Task 4, the same status API (apply_status / apply_freeze / apply_mark / apply_trail / apply_zone, is_frozen /
 ## is_chilled / is_marked) on a real StatusEffects. receive_hit records the multiplier it was given (no taken_mult),
 ## so older tests keep their numbers; combo tests read `status` and the counters.
+## M5b Task 8 (sustain combos, the one kill hook): `die_on_hit` dies at its first hit (a kill by any hit), `deal` = the
+## damage receive_hit reports (a burn from it is deal × burn_frac), `last_hit_crit` = the last hit was a crit (a sure
+## crit: crit chance ≥ 1.0; no roll), and a DoT kill in tick_status goes through Hero.combo_hit like Wolf.tick_burn.
 
 var alive := true
 var hp := 40
@@ -12,6 +15,9 @@ var crit_chances: Array = []   # the crit chance of each hit, in step with hits 
 var status := StatusEffects.new()
 var freezes := 0       # successful apply_freeze calls
 var statuses: Array = []   # [kind, value, cast] from apply_status
+var die_on_hit := false
+var deal := 1
+var last_hit_crit := false
 
 func is_alive() -> bool:
 	return alive
@@ -22,7 +28,9 @@ func hurt_point() -> Vector2:
 func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, _crit_mult := -1.0) -> int:
 	hits.append([atk, mult, from])
 	crit_chances.append(crit_chance)
-	return 1
+	last_hit_crit = crit_chance >= 1.0
+	if die_on_hit: alive = false
+	return deal
 
 func apply_status(kind: String, value := 0.0, leech := 0.0, source: Object = null, cast: ComboCast = null) -> void:
 	if not alive: return
@@ -63,5 +71,7 @@ func tick_status(delta: float) -> int:
 	Wolf.leech_to(status.last_trail_source, status.last_trail_dmg * status.last_trail_leech)
 	if dmg > 0:
 		hp -= dmg
-		if hp <= 0: alive = false
+		if hp <= 0:
+			alive = false
+			Hero.combo_hit(status.tick_source, status.tick_cast, self, true, dmg)   # as Wolf.tick_burn
 	return dmg

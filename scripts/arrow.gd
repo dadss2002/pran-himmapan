@@ -97,7 +97,9 @@ func _arrow_hit(t: Node2D) -> int:
 	var chance := crit_chance
 	if (chilled and _cp("sure_crit_chilled") > 0.0) or (_cp("sure_crit_marked") > 0.0 and t.has_method("is_marked") and t.is_marked()):
 		chance = 1.0
+	var was: bool = t.is_alive()
 	var amount: int = t.receive_hit(atk, m, _pos(), chance, crit_mult)
+	_credit(t, was, amount)
 	_after_hit(t, amount)
 	_combo_on_hit(t, chilled)
 	return amount
@@ -153,7 +155,10 @@ func _after_hit(t: Node2D, amount: int) -> void:
 			# bounce arrows never chain (owner 2026-11-10 "ลูกเด้งไม่แตกสายโซ่"): only the press's primary hits do
 			var other: Node2D = null if is_bounce else _nearest(t.hurt_point(), Balance.num("elements.lightning.range"), [t])
 			if other:
-				_leech(other.receive_hit(atk, mult * Balance.num("elements.lightning.mult"), t.hurt_point(), crit_chance, crit_mult))
+				var was: bool = other.is_alive()
+				var dealt: int = other.receive_hit(atk, mult * Balance.num("elements.lightning.mult"), t.hurt_point(), crit_chance, crit_mult)
+				_credit(other, was, dealt)   # Task 8 (plan note): a chain kill counts too ("นับทุกแบบ")
+				_leech(dealt)
 				if is_inside_tree():
 					var z := FxSprite.make("chain_zap")
 					z.position = other.hurt_point()
@@ -293,12 +298,22 @@ func blast(at: Vector2, radius: float, frac: float, burn: bool, include: Node2D 
 	return n
 
 ## One secondary hit (blast, bolt): frac of this arrow's hit (of `base` when >= 0: a bolt's first-hit multiplier), with
-## its crit chance; leeches. Never _after_hit (no element, no bounce, no combo on-hit). Task 8: the kill hook (MP / heal
-## on kill through build.cast) goes here too.
+## its crit chance; leeches and goes through the kill / crit hook (Task 8). Never _after_hit (no element, no bounce, no
+## combo on-hit).
 func _secondary_hit(t: Node2D, frac: float, base := -1.0) -> int:
+	var was: bool = t.is_alive()
 	var amount: int = t.receive_hit(atk, (base if base >= 0.0 else mult) * frac, _pos(), crit_chance, crit_mult)
+	_credit(t, was, amount)
 	_leech(amount)
 	return amount
+
+## M5b Task 8: every hit this arrow deals (_arrow_hit, the lightning gem's chain, _secondary_hit: bolts, line-end and
+## shatter blasts) reports to THE one kill / crit hook (Hero.combo_hit) with the press's ledger (build.cast) and the
+## shooter: a kill (alive before, dead after) refunds / heals once, through the press that fired it, under its cap; a
+## crit heals for ราหู. A target that reports no crit flag (last_hit_crit) never counts as a crit.
+func _credit(t: Node2D, was_alive: bool, amount: int) -> void:
+	var crit: bool = is_instance_valid(t) and t.get("last_hit_crit") == true
+	Hero.combo_hit(shooter, build.get("cast"), t, was_alive, amount, crit)
 
 func _leech(amount: int) -> void:
 	var frac := float(build.get("leech", 0.0))
