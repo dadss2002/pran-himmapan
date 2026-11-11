@@ -133,18 +133,20 @@ static func combo_hit(source, cast, target, was_alive: bool, amount: int, crit :
 	if source.has_method("on_combo_kill"): source.on_combo_kill(cast, target.hurt_point())
 
 ## A kill credited to a press's ledger (combo_hit): ศรกระหายเลือด heals kill_heal_frac × max HP (3 %, through
-## leech_heal, so never above max HP) and both sustain recipes refund the ledger's kill_mp under its per-press cap (6 / 9,
-## ComboCast.refund_kill), never above max MP. Like on_kill / leech_heal: nothing while dead (and the cap is not spent);
+## leech_heal, so never above max HP; no cap, owner 2026-11-11 "คงไว้ ดูตอนเล่นจริง") and both sustain recipes refund
+## the ledger's kill_mp under its per-press cap (6 / 9), never above max MP. Owner 2026-11-11 ("นับเฉพาะ MP ที่ได้จริง"):
+## the cap counts only the MP really gained (ComboCast.refund_kill_into with the room left below max MP): a kill at full
+## MP gives 0 and spends none of the cap. Like on_kill / leech_heal: nothing while dead (and the cap is not spent);
 ## during a warp it pays like on_kill gives EXP (no kill can land then anyway: arrows and trails halt, the old room's
 ## packs stop). `at` (the monster): the recipe's "kill" effect plays there when the kill paid something. Returns the MP
-## refunded.
-func on_combo_kill(cast: ComboCast, at := Vector2.INF) -> int:
-	if cast == null or state == "dead": return 0
+## really gained.
+func on_combo_kill(cast: ComboCast, at := Vector2.INF) -> float:
+	if cast == null or state == "dead": return 0.0
 	var heal := cast.kill_heal_frac * health.max_hp
 	if heal > 0.0: leech_heal(heal)
-	var got := cast.refund_kill()
-	if got > 0: mp = minf(max_mp(), mp + got)
-	if (heal > 0.0 or got > 0) and at != Vector2.INF and is_inside_tree() and get_parent() != null:
+	var got := cast.refund_kill_into(maxf(0.0, max_mp() - mp))
+	if got > 0.0: mp = minf(max_mp(), mp + got)
+	if (heal > 0.0 or got > 0.0) and at != Vector2.INF and is_inside_tree() and get_parent() != null:
 		ComboFx.play(get_parent(), cast.id, "kill", at)
 	return got
 

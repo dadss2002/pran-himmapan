@@ -51,11 +51,13 @@ var build := {}
 var shooter: Node = null
 var _pierce_left := 0
 var _bounces_left := 0
+var _spark := Color(0, 0, 0, 0)   # the press's hit-spark tint (spark_tint), read once; alpha 0 = not read yet
 var _bounced := false
 var _home: Node2D = null
 func configure(b: Dictionary, from: Node = null) -> void:
 	build = b
 	shooter = from
+	_spark = Color(0, 0, 0, 0)
 	_pierce_left = int(b.get("pierce_extra", 0))
 	_bounces_left = int(b.get("bounces", 0))
 
@@ -98,7 +100,7 @@ func _arrow_hit(t: Node2D) -> int:
 	if (chilled and _cp("sure_crit_chilled") > 0.0) or (_cp("sure_crit_marked") > 0.0 and t.has_method("is_marked") and t.is_marked()):
 		chance = 1.0
 	var was: bool = t.is_alive()
-	var amount: int = t.receive_hit(atk, m, _pos(), chance, crit_mult)
+	var amount := _receive(t, m, _pos(), chance)
 	_credit(t, was, amount)
 	_after_hit(t, amount)
 	_combo_on_hit(t, chilled)
@@ -156,7 +158,7 @@ func _after_hit(t: Node2D, amount: int) -> void:
 			var other: Node2D = null if is_bounce else _nearest(t.hurt_point(), Balance.num("elements.lightning.range"), [t])
 			if other:
 				var was: bool = other.is_alive()
-				var dealt: int = other.receive_hit(atk, mult * Balance.num("elements.lightning.mult"), t.hurt_point(), crit_chance, crit_mult)
+				var dealt := _receive(other, mult * Balance.num("elements.lightning.mult"), t.hurt_point(), crit_chance)
 				_credit(other, was, dealt)   # Task 8 (plan note): a chain kill counts too ("นับทุกแบบ")
 				_leech(dealt)
 				if is_inside_tree():
@@ -302,10 +304,29 @@ func blast(at: Vector2, radius: float, frac: float, burn: bool, include: Node2D 
 ## combo on-hit).
 func _secondary_hit(t: Node2D, frac: float, base := -1.0) -> int:
 	var was: bool = t.is_alive()
-	var amount: int = t.receive_hit(atk, (base if base >= 0.0 else mult) * frac, _pos(), crit_chance, crit_mult)
+	var amount := _receive(t, (base if base >= 0.0 else mult) * frac, _pos(), crit_chance)
 	_credit(t, was, amount)
 	_leech(amount)
 	return amount
+
+## Every hit this arrow deals (_arrow_hit: primary and bounce arrows; the lightning gem's chain; _secondary_hit: bolts,
+## blasts) lands through here. Owner 2026-11-11 (Task 8 review, "ย้อมสีประกายตีแทน"): a sustain recipe's hits show the
+## normal hit spark recoloured (spark_tint): the target's `spark_tint` holds the press's tint for the length of this one
+## receive_hit (the hit spark is played from its health.damaged signal, inside it; TestGround._on_wolf_hit) and is
+## WHITE again after, so a hit from anything else (another press, a DoT tick) is never tinted.
+func _receive(t: Node2D, m: float, from: Vector2, chance: float) -> int:
+	var tint := spark_tint()
+	var tinted := tint != Color.WHITE and "spark_tint" in t
+	if tinted: t.spark_tint = tint
+	var amount: int = t.receive_hit(atk, m, from, chance, crit_mult)
+	if tinted and is_instance_valid(t): t.spark_tint = Color.WHITE
+	return amount
+
+## The press's hit-spark tint: its recipe's "hit" row when that row is the hit spark (ศรกระหายเลือด #ff4a4a,
+## ศรราหูอมจันทร์ #6a2a8a, balance.json gem_combos fx; ComboFx.spark_tint), else WHITE (no recolour).
+func spark_tint() -> Color:
+	if _spark.a == 0.0: _spark = ComboFx.spark_tint(combo_id())
+	return _spark
 
 ## M5b Task 8: every hit this arrow deals (_arrow_hit, the lightning gem's chain, _secondary_hit: bolts, line-end and
 ## shatter blasts) reports to THE one kill / crit hook (Hero.combo_hit) with the press's ledger (build.cast) and the

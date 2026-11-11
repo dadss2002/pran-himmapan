@@ -769,3 +769,73 @@ func test_dummy_has_status_api():
 	if r == "" and not d.is_chilled(): r = "frozen dummy not chilled"
 	d.free()
 	return r
+
+# ---------- Task 8 review (owner 2026-11-11) ----------
+
+## The text of `fname`'s body in `text` (from "func fname" to the next top-level func), "" when absent.
+func _func_body(text: String, fname: String) -> String:
+	var at := text.find("func " + fname + "(")
+	if at < 0: return ""
+	var end := text.find("\nfunc ", at + 1)
+	return text.substr(at, (end - at) if end >= 0 else -1)
+
+## Contract (like test_no_monster_opts_out_of_freeze): ราหู's crit heal reads `last_hit_crit` after every hit, so every
+## monster script (scripts/monsters at any depth, any script whose chain reaches wolf.gd, and any script that joins the
+## "enemies" group the arrows hit) that writes its own receive_hit must set last_hit_crit there, or (a Wolf subclass)
+## go through super.receive_hit(. Wolf's own receive_hit resets it before the dead check (a hit on a corpse is never a
+## crit) and sets it from the roll. A future boss that forgets would heal on a stale crit or never heal.
+func test_every_monster_sets_last_hit_crit():
+	var checked := 0
+	for path in _scripts():
+		var text := FileAccess.get_file_as_string(path)
+		var monster: bool = path.begins_with("res://scripts/monsters/") or _extends_wolf(path) or "add_to_group(\"enemies\")" in text
+		var body := _func_body(text, "receive_hit")
+		if not monster or body == "": continue
+		checked += 1
+		if "last_hit_crit =" in body: continue
+		if "super.receive_hit(" in body and _extends_wolf(path): continue
+		return "%s: receive_hit neither sets last_hit_crit nor calls super.receive_hit(...) (ราหู's crit heal would read a stale flag)" % path
+	var wb := _func_body(FileAccess.get_file_as_string("res://scripts/monsters/wolf.gd"), "receive_hit")
+	var reset := wb.find("last_hit_crit = false")
+	var dead := wb.find("if not is_alive()")
+	var rolled := wb.find("last_hit_crit = lands and r.crit")
+	if reset < 0 or dead < 0 or rolled < 0 or reset > dead: return "wolf.gd receive_hit must reset last_hit_crit before the dead check and set it from the roll"
+	return "" if checked >= 2 else "scan found only %d monster receive_hit (wolf.gd, monster.gd, ...): the scan is broken" % checked
+
+## Review M1 (Task 8): a press's ledger can deal damage only until its last arrow has flown (primary range + the longest
+## bounce chain) and its longest DoT has run out (burn elements.fire.duration; fire trail trail_secs + the trail hold,
+## FireTrail.HOLD), both × the extend gem's top value (1 + value + per_level × (cap − 1)) in case it ever lengthens
+## them (labels "dot"). Every respawn time in balance.json (wolf.respawn, and any monsters.*.respawn added later) must
+## be longer, so ComboCast.claim_kill's key from a monster's earlier death never refuses its revived self.
+func test_respawn_outlasts_every_dot_window():
+	var speed := Balance.num("shot.arrow_speed")
+	var leg := maxf(Balance.num("ricochet.range"), Balance.num("homing.search")) / speed
+	var rc: Dictionary = Gem.data("ricochet")
+	var gem_bounces := maxi(int(rc.get("bounces", 0)), int(rc.get("bounces_at_10", 0)))
+	var extra := 0
+	var trail := 0.0
+	for row in GemCombo.recipes():
+		extra = maxi(extra, int(row.get("extra_bounces", 0)))
+		trail = maxf(trail, float(row.get("trail_secs", 0.0)))
+	var flight := _longest_flight() + (gem_bounces + extra) * leg
+	var ext: Dictionary = Gem.data("extend")
+	var ext_mult := 1.0 + float(ext.get("value", 0.0)) + float(ext.get("per_level", 0.0)) * (Gem.cap() - 1)
+	var dot := maxf(Balance.num("elements.fire.duration"), trail + FireTrail.HOLD) * ext_mult
+	var window := flight + dot
+	if gem_bounces <= 0 or trail <= 0.0 or ext_mult <= 1.0 or window < 4.0: return "setup: bounces %d, trail %.2f s, extend ×%.2f, window %.2f s look wrong" % [gem_bounces, trail, ext_mult, window]
+	var found: Array = []
+	_find_key(Balance.data(), "respawn", "", found)
+	if found.is_empty(): return "no respawn time found in balance.json"
+	for f in found:
+		if float(f[1]) <= window: return "%s = %s s is not longer than a ledger's damage window %.2f s (flight %.2f + DoT %.2f)" % [f[0], f[1], window, flight, dot]
+	print("  ledger damage window %.2f s (flight %.2f + DoT %.2f, extend ×%.2f) < respawns %s" % [window, flight, dot, ext_mult, found])
+	return ""
+
+func _find_key(node, key: String, path: String, out: Array) -> void:
+	if typeof(node) == TYPE_DICTIONARY:
+		for k in node:
+			var p := (path + "." + String(k)) if path != "" else String(k)
+			if String(k) == key and (typeof(node[k]) == TYPE_INT or typeof(node[k]) == TYPE_FLOAT): out.append([p, node[k]])
+			else: _find_key(node[k], key, p, out)
+	elif typeof(node) == TYPE_ARRAY:
+		for i in node.size(): _find_key(node[i], key, "%s[%d]" % [path, i], out)

@@ -602,11 +602,14 @@ func _on_level_up(lv: int) -> void:
 
 ## Task 3f (PixelFX): a critical shows crit_hit instead of hit_spark (as crit_hit replaces arrow_hit in sound);
 ## both fly along the blow, so they are mirrored when it goes left (the hero on the monster's right). A burn tick
-## (Wolf.dot_tick) is not a blow: its number shows, no spark.
+## (Wolf.dot_tick) is not a blow: its number shows, no spark. Owner 2026-11-11 (Task 8 review, "ย้อมสีประกายตีแทน"): a
+## hit from a sustain recipe's press (w.spark_tint, set by the arrow for that hit) recolours the hit spark (ComboFx.recolor:
+## ศรกระหายเลือด red, ราหู dark purple), the PerfSaver's crit fallback spark too; the crit glare keeps its own look.
 func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	_number(w.hurt_point() + Vector2(randf_range(-6, 6), -30 * Wolf.size_scale()), amount, crit, false)
 	if w.dot_tick: return
 	var f := _fx("crit_hit" if crit else "hit_spark", w.hurt_point())
+	if f and f.animation == "hit_spark" and w.spark_tint != Color.WHITE: ComboFx.recolor(f, w.spark_tint)
 	if f and hero: f.face(hero.global_position.x > w.global_position.x)
 
 func save_now() -> bool:

@@ -12,6 +12,8 @@ class_name ComboFx
 ## Effects that point along a line (their art points east): turned to `dir` when one is given.
 const DIRECTIONAL := ["piercing_trail"]
 static var _tints := {}          # "#hex" → Color, parsed once
+static var _recolors := {}       # Color → ShaderMaterial (recolor), made once per tint
+const RECOLOR := preload("res://shaders/recolor.gdshader")
 
 ## Spawns recipe `combo_id`'s effects for `event` as children of `parent` at `at` (parent-local) and plays them.
 ## dir: the line's direction for DIRECTIONAL effects (ZERO = no turn). decor = false skips the decorative extras
@@ -53,3 +55,31 @@ static func has(combo_id: String, event: String) -> bool:
 static func tint(hex: String) -> Color:
 	if not _tints.has(hex): _tints[hex] = Color.html(hex) if Color.html_is_valid(hex) else Color.WHITE
 	return _tints[hex]
+
+## Owner 2026-11-11 (Task 8 review, "ย้อมสีประกายตีแทน"): the sustain recipes show their hits by recolouring the normal
+## hit spark instead of an extra effect. The tint = the recipe's "hit" row whose fx is hit_spark (ศรกระหายเลือด
+## #ff4a4a, ศรราหูอมจันทร์ #6a2a8a); WHITE for any other recipe or none (no recolour).
+static func spark_tint(combo_id: String) -> Color:
+	if combo_id == "": return Color.WHITE
+	var fx = GemCombo.recipe(combo_id).get("fx", {})
+	if typeof(fx) != TYPE_DICTIONARY: return Color.WHITE
+	var rows = fx.get("hit", [])
+	if typeof(rows) != TYPE_ARRAY: return Color.WHITE
+	for row in rows:
+		if typeof(row) == TYPE_DICTIONARY and String(row.get("fx", "")) == "hit_spark": return tint(String(row.get("tint", "#ffffff")))
+	return Color.WHITE
+
+## Recolours sprite `s` to `c` by brightness (shaders/recolor.gdshader): the orange hit spark's brightest pixels become
+## the tint, darker ones a darker tint, alpha kept. Plain modulate cannot do it (orange × dark purple = dark red).
+## WHITE removes the recolour. One shared material per tint.
+static func recolor(s: CanvasItem, c: Color) -> void:
+	if s == null: return
+	if c == Color.WHITE:
+		s.material = null
+		return
+	if not _recolors.has(c):
+		var m := ShaderMaterial.new()
+		m.shader = RECOLOR
+		m.set_shader_parameter("tint", c)
+		_recolors[c] = m
+	s.material = _recolors[c]

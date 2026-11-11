@@ -2212,7 +2212,8 @@ func test_rahu_crit_heals_1pct():
 	h.free()
 	return r
 
-## MP never goes above max MP (and HP never above max HP): MP max − 1, HP max − 1, 3 kills → both exactly at max.
+## MP never goes above max MP (and HP never above max HP): MP max − 1, HP max − 1, 3 kills → both exactly at max, and
+## the ledger counts only the 1 MP really gained (owner 2026-11-11, "นับเฉพาะ MP ที่ได้จริง").
 func test_refund_never_exceeds_max_mp():
 	var h := _sus_hero("piercing", ["leech", "multiply"])
 	var b := h.build("piercing")
@@ -2227,7 +2228,7 @@ func test_refund_never_exceeds_max_mp():
 	if ds.filter(func(d): return d.alive).size() > 0: r = "setup: not all killed"
 	elif h.mp != float(h.max_mp()): r = "MP %.2f, want max %d" % [h.mp, h.max_mp()]
 	elif h.health.hp != h.health.max_hp: r = "HP %d, want max %d" % [h.health.hp, h.health.max_hp]
-	elif b.cast.mp_refunded() != 6: r = "ledger refunded %d (the cap is still spent at full MP)" % b.cast.mp_refunded()
+	elif b.cast.mp_refunded() != 1.0: r = "ledger refunded %.2f, want 1: only the MP really gained (owner 2026-11-11)" % b.cast.mp_refunded()
 	_free([a] + ds)
 	h.free()
 	return r
@@ -2628,4 +2629,157 @@ func test_kill_fx_plays_when_paid():
 	if r == "" and count.call() != n1: r = "a kill that paid nothing played an effect"
 	world.queue_free()
 	await tree.process_frame
+	return r
+
+# ---------- Task 8 review (owner 2026-11-11): real Wolf crit flag, tinted hit spark ----------
+
+## A REAL Wolf (and a Monster: Monster.receive_hit goes through Wolf's) reports its crit roll in last_hit_crit, and a
+## ราหู press's arrow heals 1 % of max HP on that crit (+ its leech): crit chance 1.0 → true and the heal; crit chance 0
+## → false and the leech only; a hit on a dead wolf → false (reset before the dead check) and no heal.
+func test_real_wolf_crit_flag_heals_rahu():
+	var r := ""
+	for scene in ["res://scenes/wolf.tscn", "res://scenes/monster.tscn"]:
+		for row in [[1.0, true], [0.0, false]]:
+			var h := _sus_hero("piercing", ["leech", "multiply", "execute"])
+			var b := h.build("piercing")
+			b["cast"] = ComboCast.from_build(b, 0.5)
+			if b.cast.id != "rahu": r = "setup: combo %s, want rahu" % b.cast.id
+			var w: Wolf = load(scene).instantiate()
+			if w is Monster: w.kind = "boar"
+			w.setup()
+			w.health.setup(100000)
+			w.position = Vector2(60, 0) - Wolf.HURT_POINT * Wolf.size_scale()
+			w.last_hit_crit = not row[1]                  # stale opposite value: the hit must set it
+			h.health.hp = h.health.max_hp / 2
+			var hp0 := h.health.hp
+			var carry0 := h._leech_carry
+			var a := _arrow(Vector2.RIGHT, [w], b, true, h)
+			a.crit_chance = row[0]
+			a.crit_mult = 1.5
+			for i in 60: _step([a], [])
+			var dealt := 100000 - w.health.hp
+			var heal := (0.01 * h.health.max_hp if row[1] else 0.0) + float(b.leech) * dealt
+			var want := int(floor(carry0 + heal + 1e-6))
+			var tag := "%s crit chance %.0f" % [scene.get_file(), row[0]]
+			if r == "" and dealt <= 0: r = "%s: setup: the arrow did not hit" % tag
+			elif r == "" and w.last_hit_crit != row[1]: r = "%s: last_hit_crit %s, want %s" % [tag, w.last_hit_crit, row[1]]
+			elif r == "" and h.health.hp - hp0 != want: r = "%s: healed %d, want %d (crit 1 %% of %d: %s + leech of %d)" % [tag, h.health.hp - hp0, want, h.health.max_hp, row[1], dealt]
+			if r == "" and row[1]:
+				w.health.take_hit(1000000, false)          # dead now; a sure crit on the corpse
+				var hp1 := h.health.hp
+				var amount := w.receive_hit(20.0, 1.0, Vector2.ZERO, 1.0, 1.5)
+				Hero.combo_hit(h, b.cast, w, false, amount, w.last_hit_crit)
+				if w.is_alive(): r = "%s: setup: the wolf did not die" % tag
+				elif amount != 0 or w.last_hit_crit: r = "%s: a hit on a dead wolf dealt %d, last_hit_crit %s (want 0, false)" % [tag, amount, w.last_hit_crit]
+				elif h.health.hp != hp1: r = "%s: a hit on a dead wolf healed" % tag
+			_free([a])
+			w.free()
+			h.free()
+			if r != "": return r
+	return r
+
+## Owner 2026-11-11 ("ย้อมสีประกายตีแทน"): a sustain press's hits carry its recipe's spark tint (balance.json fx "hit" row:
+## กระหายเลือด #ff4a4a, ราหู #6a2a8a) for exactly that hit — primary arrows, bounce arrows, the lightning gem's chain,
+## bolts and blasts (_secondary_hit) — and the target is back to WHITE after; another recipe's or a plain press's hits
+## carry WHITE. ศรทะลวง [leech, multiply, ricochet] (bounce) and [leech, multiply, lightning] (chain) for กระหายเลือด.
+func test_sustain_hits_carry_the_spark_tint():
+	var red := Color("#ff4a4a")
+	var purple := Color("#6a2a8a")
+	var r := ""
+	if ComboFx.spark_tint("bloodthirst") != red or ComboFx.spark_tint("rahu") != purple: r = "spark tints %s / %s, want the recipes' #ff4a4a / #6a2a8a" % [ComboFx.spark_tint("bloodthirst"), ComboFx.spark_tint("rahu")]
+	for id in ["", "thunder_hop", "hawk_eye", "fire_fan", "nope"]:
+		if r == "" and ComboFx.spark_tint(id) != Color.WHITE: r = "%s has a spark tint %s, want none" % [id, ComboFx.spark_tint(id)]
+	# primary + bounce (ricochet) and the lightning gem's chain
+	for row in [[["leech", "multiply", "ricochet"], red, "bounce"], [["leech", "multiply", "lightning"], red, "chain"], [["leech", "multiply", "execute"], purple, "primary"], [["ricochet", "multiply"], Color.WHITE, "plain bounce"]]:
+		if r != "": break
+		_spawned = []
+		var b := _build(row[0])
+		var d := _dummy(Vector2(60, 0))
+		var e := _dummy(Vector2(60, 50))
+		var a := _arrow(Vector2.RIGHT, [d, e], b, true)
+		for i in 60: _step([a], [d, e])
+		var tints: Array = d.spark_tints + e.spark_tints
+		if row[2] != "primary" and e.hits.is_empty(): r = "%s: setup: the second dummy took no %s hit" % [row[2], row[2]]
+		elif tints.is_empty(): r = "%s: setup: no hit" % row[2]
+		for t in tints:
+			if r == "" and t != row[1]: r = "%s %s: a hit carried %s, want %s" % [row[0], row[2], t, row[1]]
+		if r == "" and (d.spark_tint != Color.WHITE or e.spark_tint != Color.WHITE): r = "%s: the tint stayed on the target after the hit" % row[2]
+		_free([a, d, e] + _spawned)
+	# secondary hits (blasts / bolts: _secondary_hit) of a sustain press
+	if r == "":
+		var b := _build(["leech", "multiply"])
+		var f := _dummy(Vector2(100, 0))
+		var g := _dummy(Vector2(110, 0))
+		var a := _arrow(Vector2.RIGHT, [f, g], b, true)
+		a.blast(Vector2(100, 0), 32.0, 0.5, false)
+		if f.hits.size() != 1 or g.hits.size() != 1: r = "setup: the blast hit %d / %d" % [f.hits.size(), g.hits.size()]
+		elif f.spark_tints != [red] or g.spark_tints != [red]: r = "blast hits carried %s / %s, want red" % [f.spark_tints, g.spark_tints]
+		_free([a, f, g])
+	return r
+
+## In game (TestGround): a sustain press's hit on a real monster plays the normal hit spark recoloured to the recipe's tint
+## (ComboFx.recolor, shaders/recolor.gdshader), a plain press's hit an unrecoloured one; with the PerfSaver on the spark
+## still plays (never hidden) and is still recoloured; a crit keeps its crit_hit glare (the saver's fallback spark is
+## recoloured).
+func test_hit_spark_recoloured_in_game():
+	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	var g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = TMP_SAVE
+	g.layout_seed = 1
+	tree.root.add_child(g)
+	await tree.process_frame
+	await tree.process_frame
+	var h: Hero = g.hero
+	h.set_physics_process(false)
+	for p in g.packs: p.process_mode = Node.PROCESS_MODE_DISABLED
+	var w: Wolf = null
+	for p in g.packs:
+		for x in p.wolves:
+			if w == null and x.is_alive(): w = x
+	var r := "" if w != null else "setup: no monster in the room"
+	var sparks := func():
+		return g.stage.find_children("*", "", true, false).filter(func(c): return c is FxSprite and c.animation in ["hit_spark", "crit_hit"] and not c.is_queued_for_deletion())
+	var cases := [[["leech", "multiply"], 0.0, false, "hit_spark", Color("#ff4a4a")], [["leech", "multiply", "execute"], 0.0, true, "hit_spark", Color("#6a2a8a")],
+		[["split"], 0.0, false, "hit_spark", Color.WHITE], [["leech", "multiply", "execute"], 1.0, false, "crit_hit", Color.WHITE],
+		[["leech", "multiply", "execute"], 1.0, true, "hit_spark", Color("#6a2a8a")]]
+	for c in cases:
+		if r != "": break
+		g.saver.on = c[2]
+		g.apply_saver()
+		w.health.setup(100000)
+		w.process_mode = Node.PROCESS_MODE_ALWAYS     # kept in the physics space (a knockback moves it) but never stepped
+		w.set_physics_process(false)
+		var from: Vector2 = w.hurt_point() - Vector2(60, 0)
+		for s in sparks.call(): s.free()
+		var gems: Array = []
+		for k in c[0]: gems.append(_g(k))
+		var b := SkillBuild.of("piercing", 10, gems, STATS)
+		b["cast"] = ComboCast.from_build(b, 0.5)
+		b["crit"] = c[1]
+		var a: Arrow = load("res://scenes/arrow.tscn").instantiate()   # as Hero._fire, aimed at this monster only
+		a.position = from
+		a.launch(Vector2.RIGHT, h.stats().atk, [w], float(b.arrow_mult), false, 70.0)
+		a.crit_chance = c[1]
+		a.crit_mult = h.stats().crit_mult
+		a.primary = true
+		a.configure(b, h)
+		h.get_parent().add_child(a)
+		for i in 40:
+			await tree.physics_frame
+			if w.health.hp < 100000: break
+		var got: Array = sparks.call()
+		var tag := "%s crit %.0f saver %s" % [c[0], c[1], c[2]]
+		if w.health.hp >= 100000: r = "%s: setup: the arrow did not hit the monster" % tag
+		elif got.size() != 1: r = "%s: %d sparks, want 1 (never hidden)" % [tag, got.size()]
+		elif got[0].animation != c[3]: r = "%s: %s played, want %s" % [tag, got[0].animation, c[3]]
+		elif c[4] == Color.WHITE and got[0].material != null: r = "%s: the spark was recoloured" % tag
+		elif c[4] != Color.WHITE and not (got[0].material is ShaderMaterial and got[0].material.get_shader_parameter("tint") == c[4]): r = "%s: spark material %s, want the recolour to %s" % [tag, got[0].material, c[4].to_html(false)]
+		elif got[0].modulate != Color.WHITE: r = "%s: spark modulate %s (the recolour is the shader's)" % [tag, got[0].modulate]
+		elif w.spark_tint != Color.WHITE: r = "%s: the monster kept the tint after the hit" % tag
+	g.saver.on = false
+	g.apply_saver()
+	Sfx.stop_all()                                   # the hits' sounds: none left playing at exit
+	g.queue_free()
+	for i in 10: await tree.process_frame             # the audio server lets go of the stopped playbacks
+	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
 	return r

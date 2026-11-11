@@ -6,6 +6,7 @@ extends Node2D
 ## M5b Task 8 (sustain combos, the one kill hook): `die_on_hit` dies at its first hit (a kill by any hit), `deal` = the
 ## damage receive_hit reports (a burn from it is deal × burn_frac), `last_hit_crit` = the last hit was a crit (a sure
 ## crit: crit chance ≥ 1.0; no roll), and a DoT kill in tick_status goes through Hero.combo_hit like Wolf.tick_burn.
+## Task 8 review: `spark_tints` = the spark tint each hit carried (Arrow._receive sets spark_tint for one hit).
 
 var alive := true
 var hp := 40
@@ -18,6 +19,8 @@ var statuses: Array = []   # [kind, value, cast] from apply_status
 var die_on_hit := false
 var deal := 1
 var last_hit_crit := false
+var spark_tint := Color.WHITE   # set by the arrow for one hit (Arrow._receive, owner 2026-11-11)
+var spark_tints: Array = []     # spark_tint during each hit, in step with hits
 
 func is_alive() -> bool:
 	return alive
@@ -28,6 +31,7 @@ func hurt_point() -> Vector2:
 func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, _crit_mult := -1.0) -> int:
 	hits.append([atk, mult, from])
 	crit_chances.append(crit_chance)
+	spark_tints.append(spark_tint)
 	last_hit_crit = crit_chance >= 1.0
 	if die_on_hit: alive = false
 	return deal

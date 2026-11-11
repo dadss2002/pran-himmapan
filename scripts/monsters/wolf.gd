@@ -280,6 +280,9 @@ func telegraph_visible() -> bool:
 # ---------- events ----------
 
 var last_hit_crit := false
+## Owner 2026-11-11 (Task 8 review): the hit-spark tint of the hit being received, set by the hitter only for the length
+## of one receive_hit (Arrow._receive: a sustain recipe's press) and WHITE otherwise; TestGround recolours the spark.
+var spark_tint := Color.WHITE
 
 ## Hit by the hero. Returns damage dealt (0 when dead). Knockback, except during the bite windup, on elites and
 ## while frozen (owner 2026-11-09: a frozen monster is not knocked back, "ไม่กระเด็น ติดอยู่กับที่").

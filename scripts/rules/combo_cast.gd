@@ -3,7 +3,8 @@ extends RefCounted
 ## The per-press ledger of a gem combo (M5b, docs/superpowers/specs/2026-11-08-gem-combos.md). Pure rules, no scene
 ## access (risks.md §3). The hero makes ONE per skill press; every hit of that press (primary arrows, blasts, bolts,
 ## trail and burn ticks it applied, area ticks) reports through the same instance, so the caps hold per press:
-## - MP on kill: bloodthirst +2 / kill, at most 6 per press; rahu +3 / kill, at most 9 (owner 2026-11-08).
+## - MP on kill: bloodthirst +2 / kill, at most 6 per press; rahu +3 / kill, at most 9 (owner 2026-11-08). The cap
+##   counts only MP actually gained (owner 2026-11-11, "นับเฉพาะ MP ที่ได้จริง"; refund_kill_into).
 ##   Burn / fire-trail kills count too (owner 2026-11-09 "นับทุกแบบ"), through the press that applied them: every
 ##   monster status keeps the ComboCast of the press that applied it (StatusEffects.*_cast, M5b Task 4).
 ##   Every damage source reports through ONE hook (Hero.combo_hit, Task 8): a kill (alive before, dead after) is
@@ -21,7 +22,7 @@ var kill_mp_cap := 0
 var kill_heal_frac := 0.0
 var crit_heal_frac := 0.0
 var _hp_bonus := 0.0
-var _mp_given := 0
+var _mp_given := 0.0     # MP really given by this press (float: the hero's MP is a float)
 var _hits := {}       # target_key → hits this press
 var _once := {}       # tag → {target_key: true}   (no string built per call, Task 3 review M3)
 
@@ -49,22 +50,33 @@ static func from_build(b: Dictionary, hp_frac := 1.0) -> ComboCast:
 func dmg_bonus() -> float:
 	return _hp_bonus
 
-## MP granted for one kill at this press's own kill_mp, after the cap (0 when the combo has no MP on kill).
-## The caller still clamps to max MP.
+## The hero's refund for one kill (Hero.on_combo_kill). Owner 2026-11-11 (Task 8 review, "นับเฉพาะ MP ที่ได้จริง"):
+## this press's kill_mp, but never more than `room` (the MP the hero can still take: max MP − MP) nor what is left of
+## the cap, and only that real gain uses up the cap: a kill at full MP gives 0 and spends nothing; a kill 1 MP below max
+## gives and spends 1. Returns the MP to add (0 when the combo has no MP on kill).
+func refund_kill_into(room: float) -> float:
+	if kill_mp <= 0 or kill_mp_cap <= 0: return 0.0
+	var grant := minf(float(kill_mp), minf(kill_mp_cap - _mp_given, room))
+	if grant <= 0.0: return 0.0
+	_mp_given += grant
+	return grant
+
+## MP granted for one kill at this press's own kill_mp, after the cap, with no MP room limit (0 when the combo has no
+## MP on kill). The hero uses refund_kill_into; the caller still clamps to max MP.
 func refund_kill() -> int:
 	return refund_mp(kill_mp)
 
-## MP granted for one kill of `per_kill` MP after this press's cap (kept for callers that pass the amount;
-## shares the cap with refund_kill). The caller still clamps to max MP.
+## MP granted for one kill of `per_kill` MP after this press's cap, in whole MP (kept for callers that pass the
+## amount; shares the cap with refund_kill / refund_kill_into). The caller still clamps to max MP.
 func refund_mp(per_kill: int) -> int:
 	if per_kill <= 0 or kill_mp_cap <= 0: return 0
-	var grant := mini(per_kill, kill_mp_cap - _mp_given)
+	var grant := mini(per_kill, int(floor(kill_mp_cap - _mp_given + 1e-6)))
 	if grant <= 0: return 0
 	_mp_given += grant
 	return grant
 
-## MP this press has refunded so far.
-func mp_refunded() -> int:
+## MP this press has really refunded so far (a float: a partial gain below max MP can be a fraction).
+func mp_refunded() -> float:
 	return _mp_given
 
 ## Counts one hit of this press on a target; returns the new count (1 on the first hit).
@@ -75,9 +87,11 @@ func count_hit(target_key: int) -> int:
 
 ## M5b Task 8: true the first time this press credits the kill of `target_key` (once("kill", …)), false after. The kill
 ## hook (Hero.combo_hit) already credits only a hit that kills (alive before, dead after); this is the second guard, so
-## two sources of one press landing on the same death can never pay twice. A press's ledger lives ≤ ~3.9 s (its last
-## trail / burn), far less than any respawn (wolf.respawn 9 s; a re-roll clears statuses), so a revived monster is
-## never refused by a key left from its earlier death.
+## two sources of one press landing on the same death can never pay twice. The ledger object can live on as long as a
+## status holds it (risks B26: re-hits renew it), but it can only DEAL damage until its last arrow's flight + the longest
+## DoT window (burn 3 s; fire trail trail_secs + hold; both × the extend gem's top value if it ever lengthens them),
+## shorter than every respawn (wolf.respawn 9 s; guarded by test_respawn_outlasts_every_dot_window; a re-roll clears
+## statuses and a warp halts arrows and trails), so a revived monster is never refused by a key from its earlier death.
 func claim_kill(target_key: int) -> bool:
 	return once("kill", target_key)
 

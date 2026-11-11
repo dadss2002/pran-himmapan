@@ -308,7 +308,8 @@ func test_open_gems_padded_to_open_slots():
 # ---------- M5b Task 8: the hero's side of the sustain combos (on_combo_kill / on_combo_crit) ----------
 
 ## Each kill credited to a bloodthirst ledger refunds +2 under the press's cap of 6 and never lifts MP above max; the
-## 3 % heal never lifts HP above max.
+## 3 % heal never lifts HP above max. Owner 2026-11-11 ("นับเฉพาะ MP ที่ได้จริง"): from max − 3 the kills give 2, then the
+## 1 MP left below max, then 0 at full MP: the ledger counts 3, not 6.
 func test_combo_kill_pays_under_cap_and_max():
 	var h := _hero(10)
 	var c := ComboCast.new("bloodthirst")
@@ -317,9 +318,68 @@ func test_combo_kill_pays_under_cap_and_max():
 	var got: Array = []
 	for i in 4: got.append(h.on_combo_kill(c))
 	var r := ""
-	if got != [2, 2, 2, 0]: r = "refunds %s, want [2, 2, 2, 0] (cap 6)" % [got]
+	if got != [2.0, 1.0, 0.0, 0.0]: r = "refunds %s, want [2, 1, 0, 0] (only MP below max)" % [got]
 	elif h.mp != float(h.max_mp()): r = "MP %.2f, want max %d" % [h.mp, h.max_mp()]
 	elif h.health.hp != h.health.max_hp: r = "HP %d, want max %d" % [h.health.hp, h.health.max_hp]
+	elif c.mp_refunded() != 3.0: r = "ledger %.2f, want 3 (MP really gained)" % c.mp_refunded()
+	_done(h)
+	return r
+
+## Owner 2026-11-11 (Task 8 review, "นับเฉพาะ MP ที่ได้จริง"), normal: well below max MP every kill gains its full
+## kill_mp until the cap: bloodthirst 2, 2, 2, 0 (6); ราหู 3, 3, 3, 0 (9).
+func test_combo_kill_cap_normal_counts_full_gain():
+	var r := ""
+	for row in [["bloodthirst", [2.0, 2.0, 2.0, 0.0], 6.0], ["rahu", [3.0, 3.0, 3.0, 0.0], 9.0]]:
+		var h := _hero(10)
+		var c := ComboCast.new(row[0])
+		h.mp = 1.0
+		var got: Array = []
+		for i in 4: got.append(h.on_combo_kill(c))
+		if got != row[1]: r = "%s: refunds %s, want %s" % [row[0], got, row[1]]
+		elif c.mp_refunded() != row[2] or h.mp != 1.0 + row[2]: r = "%s: ledger %.2f / MP %.2f, want %s / %s" % [row[0], c.mp_refunded(), h.mp, row[2], 1.0 + row[2]]
+		_done(h)
+		if r != "": break
+	return r
+
+## Full MP: a kill gains 0 and does NOT use up the cap; after MP is spent the same press still pays its whole 6 / 9.
+func test_combo_kill_at_full_mp_keeps_the_cap():
+	var r := ""
+	for row in [["bloodthirst", 3, 2.0, 6.0], ["rahu", 3, 3.0, 9.0]]:
+		var h := _hero(10)
+		var c := ComboCast.new(row[0])
+		h.mp = float(h.max_mp())
+		var full: Array = []
+		for i in 5: full.append(h.on_combo_kill(c))
+		if full != [0.0, 0.0, 0.0, 0.0, 0.0]: r = "%s at full MP: refunds %s, want all 0" % [row[0], full]
+		elif c.mp_refunded() != 0.0: r = "%s: kills at full MP used up %.2f of the cap" % [row[0], c.mp_refunded()]
+		if r == "":
+			h.mp = 0.0
+			var later := 0.0
+			for i in row[1] + 1: later += h.on_combo_kill(c)
+			if later != row[3] or h.mp != row[3]: r = "%s: after spending MP the press paid %.2f, want its whole cap %s" % [row[0], later, row[3]]
+		_done(h)
+		if r != "": break
+	return r
+
+## Partial: 1 MP below max a kill gains 1 and uses up only that 1 (bloodthirst then has 5 left: 2, 2, 1); a fraction
+## below max (0.25) gains and spends exactly that fraction.
+func test_combo_kill_partial_gain_uses_only_the_gain():
+	var h := _hero(10)
+	var c := ComboCast.new("bloodthirst")
+	h.mp = h.max_mp() - 1.0
+	var r := ""
+	var first := h.on_combo_kill(c)
+	if first != 1.0 or c.mp_refunded() != 1.0: r = "1 below max: gained %.2f, ledger %.2f, want 1 / 1" % [first, c.mp_refunded()]
+	if r == "":
+		h.mp = 0.0
+		var rest: Array = []
+		for i in 4: rest.append(h.on_combo_kill(c))
+		if rest != [2.0, 2.0, 1.0, 0.0] or c.mp_refunded() != 6.0: r = "after the partial kill: refunds %s (ledger %.2f), want [2, 2, 1, 0] (6)" % [rest, c.mp_refunded()]
+	if r == "":
+		var d := ComboCast.new("rahu")
+		h.mp = h.max_mp() - 0.25
+		var g := h.on_combo_kill(d)
+		if not is_equal_approx(g, 0.25) or not is_equal_approx(d.mp_refunded(), 0.25) or h.mp != float(h.max_mp()): r = "0.25 below max: gained %.3f, ledger %.3f, MP %.3f" % [g, d.mp_refunded(), h.mp]
 	_done(h)
 	return r
 
@@ -331,8 +391,8 @@ func test_combo_kill_while_dead_pays_nothing_and_keeps_cap():
 	h.health.hp = 50
 	h.state = "dead"
 	var r := ""
-	if h.on_combo_kill(c) != 0 or h.mp != 10.0 or h.health.hp != 50: r = "a dead hero was paid"
-	elif c.mp_refunded() != 0: r = "the cap was spent while dead (%d)" % c.mp_refunded()
+	if h.on_combo_kill(c) != 0.0 or h.mp != 10.0 or h.health.hp != 50: r = "a dead hero was paid"
+	elif c.mp_refunded() != 0.0: r = "the cap was spent while dead (%.2f)" % c.mp_refunded()
 	h.on_combo_crit(ComboCast.new("rahu"))
 	if r == "" and h.health.hp != 50: r = "a dead hero was healed by a crit"
 	_done(h)
@@ -348,7 +408,7 @@ func test_combo_kill_during_warp_pays_like_on_kill():
 	h.on_kill(10, 5)
 	var r := ""
 	if h.exp == exp0: r = "setup: on_kill gives no EXP while warping"
-	elif h.on_combo_kill(ComboCast.new("bloodthirst")) != 2 or h.mp != 12.0: r = "a kill during a warp did not pay like on_kill (MP %.2f)" % h.mp
+	elif h.on_combo_kill(ComboCast.new("bloodthirst")) != 2.0 or h.mp != 12.0: r = "a kill during a warp did not pay like on_kill (MP %.2f)" % h.mp
 	h.end_warp()
 	_done(h)
 	return r
