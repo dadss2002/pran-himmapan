@@ -221,6 +221,37 @@
       "arrows": 5,
       "fan_deg": 45
     },
+    "arrow_rain": {
+      "unlock": 7,
+      "kind": "rain",
+      "mult": 0.4,
+      "cooldown": 10,
+      "mp": 18,
+      "radius": 64,
+      "duration": 3,
+      "tick": 0.5,
+      "range": 220
+    },
+    "thorn_trap": {
+      "unlock": 10,
+      "kind": "trap",
+      "mult": 1.5,
+      "cooldown": 8,
+      "mp": 12,
+      "range": 160,
+      "root": 2,
+      "max_traps": 2,
+      "trigger_radius": 16
+    },
+    "fire_arrow": {
+      "unlock": 10,
+      "mult": 2.0,
+      "cooldown": 6,
+      "mp": 14,
+      "range": 220,
+      "blast_radius": 32,
+      "blast_frac": 1.0
+    },
     "per_level_damage": 0.05,
     "per_level_cooldown": 0.01,
     "max_cooldown_cut": 0.3
@@ -473,6 +504,15 @@
     "arrow_rain": [
       "area",
       "dot"
+    ],
+    "thorn_trap": [
+      "trap",
+      "area"
+    ],
+    "fire_arrow": [
+      "arrow",
+      "element",
+      "area"
     ]
   },
   "gem_slots": [

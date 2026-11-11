@@ -233,8 +233,9 @@ func test_slot_three_at_skill_level_ten():
 		if r != "": return r
 	return ""
 
-## Review Focus 1: sockets on a skill with no numbers (arrow_rain), on a locked skill, and in a closed slot (only a
-## hand-made save or a later rule change can hold these). Loading must not crash; those gems go back to the bag.
+## Review Focus 1: sockets on a locked skill (arrow_rain at Lv1; it had no numbers at all before Task 8a), on a skill
+## the game does not know (poison_shot), and in a closed slot (only a hand-made save or a later rule change can hold
+## these). Loading must not crash; those gems go back to the bag.
 func test_after_load_returns_gems_from_unknown_and_closed_slots():
 	var h := _hero(1)
 	var split := _g("split")
@@ -242,27 +243,29 @@ func test_after_load_returns_gems_from_unknown_and_closed_slots():
 	var execute := _g("execute", {"level": 4, "exp": 33})
 	var expand := _g("expand", {"opts": [{"k": "dmg_pct", "v": 0.041}]})
 	var leech := _g("leech")
-	h.set_skill_gems({"piercing": [split, mult, execute], "arrow_rain": [expand], "spread": [leech]})
+	var homing := _g("homing", {"level": 3, "exp": 7})
+	h.set_skill_gems({"piercing": [split, mult, execute], "arrow_rain": [expand], "spread": [leech], "poison_shot": [homing]})
 	var changed := [0]
 	h.gems_changed.connect(func(): changed[0] += 1)
 	var r := ""
-	if h.gem_slots("arrow_rain") != 0: r = "arrow_rain has no numbers: 0 slots, got %d" % h.gem_slots("arrow_rain")
+	if h.gem_slots("arrow_rain") != 0: r = "arrow_rain is locked at Lv1: 0 slots, got %d" % h.gem_slots("arrow_rain")
+	elif h.gem_slots("poison_shot") != 0 or h.open_gems("poison_shot") != []: r = "an unknown skill has no slots"
 	elif not is_equal_approx(h.build("piercing").mp, 8 * 1.4 * 1.5): r = "build reads a closed slot before the return: MP %.3f" % h.build("piercing").mp
 	if r == "":
 		var moved := h.return_closed_gems()
-		if moved != 3: r = "moved %d gems, want 3 (execute, expand, leech)" % moved
+		if moved != 4: r = "moved %d gems, want 4 (execute, expand, leech, homing)" % moved
 		elif changed[0] != 1: r = "gems_changed emitted %d times, want 1" % changed[0]
 		elif h.skill_gems.piercing.size() < 2 or h.skill_gems.piercing[0] != split or h.skill_gems.piercing[1] != mult:
 			r = "open-slot gems must stay where they are: %s" % [h.skill_gems.piercing]
 		elif h.skill_gems.piercing.size() > 2 and h.skill_gems.piercing[2] != null: r = "slot 3 still holds %s" % [h.skill_gems.piercing[2]]
 		else:
-			for id in ["arrow_rain", "spread"]:
+			for id in ["arrow_rain", "spread", "poison_shot"]:
 				for g in h.skill_gems.get(id, []):
 					if g != null: r = "%s still holds %s" % [id, g]
 			if r == "":
 				var bag := {}
 				for s in h.inventory.slots: if s.has("gem"): bag[String(s.gem.type)] = s.gem
-				for g in [execute, expand, leech]:
+				for g in [execute, expand, leech, homing]:
 					if bag.get(String(g.type)) != g: r = "%s back in the bag changed or missing: %s" % [g.type, bag.get(String(g.type))]
 	if r == "" and h.return_closed_gems() != 0: r = "a second return moved gems again"
 	if r == "" and changed[0] != 1: r = "nothing moved, but gems_changed fired again"
@@ -301,7 +304,12 @@ func test_open_gems_padded_to_open_slots():
 	var r := ""
 	if h.open_gems("piercing") != [split, null, null]: r = "piercing %s, want [split, null, null]" % [h.open_gems("piercing")]
 	elif h.open_gems("spread") != [null, null]: r = "spread %s, want [null, null]" % [h.open_gems("spread")]
-	elif h.open_gems("arrow_rain") != []: r = "arrow_rain %s, want []" % [h.open_gems("arrow_rain")]
+	elif h.open_gems("arrow_rain") != [null, null]: r = "arrow_rain %s, want [null, null] (unlocked at Lv7 since M5b Task 8a)" % [h.open_gems("arrow_rain")]
+	elif h.open_gems("thorn_trap") != [null, null] or h.open_gems("fire_arrow") != [null, null]: r = "the Lv10 skills open 2 slots at Lv10"
+	elif h.open_gems("poison_shot") != []: r = "an unknown skill %s, want []" % [h.open_gems("poison_shot")]
+	if r == "":
+		h.set_progress(6, 0)
+		if h.open_gems("arrow_rain") != []: r = "Lv6: arrow_rain %s, want [] (locked)" % [h.open_gems("arrow_rain")]
 	_done(h)
 	return r
 

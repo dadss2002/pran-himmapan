@@ -91,6 +91,7 @@ func _rich() -> Dictionary:
 	st.equipped = eq
 	# M5b Task 1: every slot filled with a different fitting type (the game never puts two of one type in a skill)
 	# on every skill that exists (gems on a skill with no numbers / not unlocked are refused, owner 2026-11-09).
+	# M5b Task 8a: that is 5 skills now: gems on ห่าศร are legal from Lv7, on กับดักหนาม / ศรเพลิง from Lv10.
 	var sk := {}
 	for id in Balance.data()["skill_labels"]:
 		if not Skills.exists(String(id)): continue
@@ -617,8 +618,15 @@ func test_duplicate_gem_type_in_skill_refuses_save():
 ## game refuses to socket anything else (socket: "ยังไม่ปลด"), and the character level never goes down. Empty or
 ## null sockets are fine anywhere a skill has labels (a Lv1 save holds "spread": []).
 func test_gems_on_missing_or_locked_skill_refuse_save():
+	# a skill with gem labels but no numbers yet (ห่าศร was one until M5b Task 8a): empty sockets load, a gem does not
+	Balance.data()["skill_labels"]["poison_shot"] = ["arrow"]
+	var labels_only_gem := _signed_loads(_sock_state(Progression.cap(), {"poison_shot": [_sg("split")]}))
+	var labels_only_empty := _signed_loads(_sock_state(Progression.cap(), {"poison_shot": [null]}))
+	Balance.data()["skill_labels"].erase("poison_shot")
+	if labels_only_gem: return "should be refused: a gem on a skill that has labels but no numbers"
+	if not labels_only_empty: return "should load: an empty socket on a skill that has labels but no numbers"
 	var refused := {
-		"arrow_rain has no numbers yet": _sock_state(Progression.cap(), {"arrow_rain": [_sg("expand")]}),
+		"arrow_rain locked at Lv6": _sock_state(6, {"arrow_rain": [_sg("expand")]}),
 		"spread locked at Lv2": _sock_state(2, {"spread": [_sg("split")]}),
 		"spread locked at Lv1, gem in slot 2": _sock_state(1, {"spread": [null, _sg("multiply")]}),
 		"unknown skill id": _sock_state(3, {"sword": []}),

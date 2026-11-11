@@ -32,7 +32,7 @@ var external_input := Vector2.ZERO   # touch joystick, added to keyboard input
 var test_enemies: Array = []  # used instead of the "enemies" group when not in a tree
 var inventory := Inventory.new()
 var equipped := SaveGame.start_equipped()
-var skill_gems := {"piercing": [], "spread": []}   # sockets: skill → [gem|null, …]   # bow, armor, ring, necklace → item or null
+var skill_gems := _empty_sockets()   # sockets: skill → [gem|null, …], one entry per active skill (Skills.active_ids)
 var _skill_cd := {}
 var _pending_skill := ""
 var _exp_carry := 0.0          # fractional EXP from bonus %, kept so +2.4% is never rounded away
@@ -254,10 +254,28 @@ func unsocket(skill_id: String, slot: int) -> String:
 	gems_changed.emit()
 	return ""
 
+## Empty sockets for every active skill in the data (M5b Task 8a: no skill list in code).
+static func _empty_sockets() -> Dictionary:
+	var out := {}
+	for id in Skills.active_ids(): out[id] = []
+	return out
+
 func set_skill_gems(sk: Dictionary) -> void:
-	skill_gems = {"piercing": [], "spread": []}
+	skill_gems = _empty_sockets()
 	for id in sk: skill_gems[id] = sk[id].duplicate(true)
 	gems_changed.emit()
+
+## The sockets as the save holds them: only skills with at least one gem (set_skill_gems gives every other skill its
+## empty sockets back on load). M5b Task 8a: a save with nothing on the new skills then has no key an older build
+## does not know, so a stale cached build (docs/risks.md B15) can still read it.
+func sockets_to_save() -> Dictionary:
+	var out := {}
+	for id in skill_gems:
+		for g in skill_gems[id]:
+			if g != null:
+				out[id] = skill_gems[id]
+				break
+	return out
 
 # ---------- equipment ----------
 
@@ -352,6 +370,7 @@ func potion_cooldown_left() -> float:
 ## MP and cooldown are taken when the skill's arrow leaves, so a cancelled skill costs nothing.
 func try_skill(id: String) -> bool:
 	if state in ["roll", "hurt", "dead"]: return false
+	if not _castable(id): return false
 	if level < Skills.unlock_level(id): return false
 	if _skill_cd.get(id, 0.0) > 0.0: return false
 	if mp < skill_mp(id): return false
@@ -361,6 +380,12 @@ func try_skill(id: String) -> bool:
 		return true
 	_start_skill(id)
 	return true
+
+## M5b Task 8a: only arrow skills can be cast so far. ห่าศร (kind "rain") and กับดักหนาม ("trap") have numbers, sockets
+## and a row on the skill screen, but their casts are Tasks 8b / 8c: until then a press does nothing (no arrow, no
+## MP, no cooldown) instead of falling into the arrow path. An id with no numbers is refused too.
+func _castable(id: String) -> bool:
+	return Skills.exists(id) and Skills.kind(id) == "arrows"
 
 func _start_skill(id: String) -> void:
 	_queued_skill = ""
@@ -615,6 +640,9 @@ func _release() -> void:
 	var v := _aim_vec
 	if is_instance_valid(_aim_target) and _aim_target.is_alive():
 		v = (_aim_target.hurt_point() - start).normalized()
+	if _pending_skill != "" and not _castable(_pending_skill):      # try_skill refuses these; never fire arrows for them
+		_pending_skill = ""
+		return
 	if _pending_skill != "":
 		var id := _pending_skill
 		var b := build(id)

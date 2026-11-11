@@ -6,8 +6,10 @@ static func _base(skill_id: String) -> Dictionary:
 	match skill_id:
 		"spread":
 			return {"arrows": int(Balance.num("skills.spread.arrows")), "fan_deg": Balance.num("skills.spread.fan_deg"), "pierce_all": false}
-		_:
+		"piercing":
 			return {"arrows": 1, "fan_deg": 0.0, "pierce_all": true}
+		_:      # ศรเพลิง (one arrow that stops on its first target), and the rain / trap kinds, which fire no arrow
+			return {"arrows": 1, "fan_deg": 0.0, "pierce_all": false}
 
 ## gems: the skill's OPEN sockets (Hero.open_gems; nulls and gems whose labels do not fit are ignored).
 ## hero_stats needs crit, skill_cd_cut and element_dmg (Hero.stats()).
@@ -16,6 +18,17 @@ static func _base(skill_id: String) -> Dictionary:
 ## Stat-level parts folded in here: crit_bonus → crit, leech_add → leech (owner 2026-11-09: the leech gem's own
 ## leech + a flat 3 %), homing_full → homing keeps full damage. Combos add no MP multiplier. Combo numbers are
 ## flat at any gem level (owner 2026-11-09); the gems' own effects keep scaling.
+## M5b Task 8a (area skills, combos spec D1–D8): every build has "kind" (Skills.kind), "area_mult" (1 + the expand
+## gem's effect) and "dur_mult" (1 + the extend gem's); both are 1.0 without the gem (neither fits an arrow-only skill).
+## Per kind, numbers from balance.json skills.<id>:
+## - rain (ห่าศร): radius × area_mult, duration × dur_mult, tick_every, ticks = whole ticks in the duration (D6: 3.9 s
+##   = 7), cast_range; arrow_mult = one tick's damage.
+## - trap (กับดักหนาม): trigger_radius × area_mult, root_secs × dur_mult, max_traps, cast_range; arrow_mult = the hit.
+## - arrows with a blast (ศรเพลิง): blast_radius × area_mult, blast_frac.
+## D7: a skill with its own element (Skills.own_element: ศรเพลิง = fire) and no element gem gets element = that element
+## at ×(1 + gear element_dmg), with no gem bonus; an element gem takes the normal gem path instead (fire: ×1.1 and
+## one burn; ice / lightning: that element, no burn). Recipe keys come from the gems only (GemCombo.resolve), so
+## the arrow's own fire never forms a recipe.
 static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dictionary) -> Dictionary:
 	var combo := GemCombo.resolve(skill_id, gems)
 	var cp := GemCombo.numbers(String(combo.get("id", "")))
@@ -30,6 +43,9 @@ static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dicti
 		"combo": combo, "combo_p": cp, "extra_bounces": int(cp.get("extra_bounces", 0.0))}
 	var per_arrow := 1.0
 	var lines := 1
+	var area_mult := 1.0
+	var dur_mult := 1.0
+	var element_gem := false
 	for g in gems:
 		if typeof(g) != TYPE_DICTIONARY or not Gem.fits(String(g.type), skill_id): continue
 		var t := String(g.type)
@@ -62,10 +78,19 @@ static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dicti
 				crit += e
 			"leech":
 				out.leech += e
+			"expand":
+				area_mult += e
+			"extend":
+				dur_mult += e
 			"element":
+				element_gem = true
 				out.element = String(g.get("element", ""))
 				out.element_mult = e + float(hero_stats.get("element_dmg", 0.0))
 				dmg *= out.element_mult
+	if not element_gem and Skills.own_element(skill_id) != "":      # D7
+		out.element = Skills.own_element(skill_id)
+		out.element_mult = 1.0 + float(hero_stats.get("element_dmg", 0.0))
+		dmg *= out.element_mult
 	var total_mult := dmg * (1.0 + dmg_pct)
 	out.merge({
 		"mp": mp * (1.0 - mp_cut),
@@ -77,7 +102,27 @@ static func of(skill_id: String, char_level: int, gems: Array, hero_stats: Dicti
 		"lines": lines,
 		"fan_deg": b.fan_deg,
 		"pierce_all": b.pierce_all,
+		"kind": Skills.kind(skill_id),
+		"area_mult": area_mult,
+		"dur_mult": dur_mult,
 	})
+	var key := "skills.%s." % skill_id
+	match String(out.kind):
+		"rain":
+			out["radius"] = Balance.num(key + "radius") * area_mult
+			out["duration"] = Balance.num(key + "duration") * dur_mult
+			out["tick_every"] = Balance.num(key + "tick")
+			out["ticks"] = int(floor(float(out.duration) / float(out.tick_every) + 1e-6))
+			out["cast_range"] = Balance.num(key + "range")
+		"trap":
+			out["trigger_radius"] = Balance.num(key + "trigger_radius") * area_mult
+			out["root_secs"] = Balance.num(key + "root") * dur_mult
+			out["max_traps"] = int(Balance.num(key + "max_traps"))
+			out["cast_range"] = Balance.num(key + "range")
+		_:
+			if Balance.has(key + "blast_radius"):
+				out["blast_radius"] = Balance.num(key + "blast_radius") * area_mult
+				out["blast_frac"] = Balance.num(key + "blast_frac")
 	return out
 
 ## The line (0 .. b.lines − 1) of arrow i of a press of build `b` (Hero._release's fan order). Lines = the approved sim's

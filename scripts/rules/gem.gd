@@ -118,10 +118,12 @@ static func describe_effect(gem: Dictionary) -> String:
 			return "ธาตุ%s: ดาเมจ ×%s · %s" % [String(ed.get("name", "")), "%.2f" % e, extra]
 	return ""
 
+## Thai words for gem / skill labels (Skills.label_text uses them too).
+const LABEL_NAMES := {"arrow": "ลูกศร", "any": "ทุกสกิล", "area": "พื้นที่", "dot": "ต่อเนื่อง", "trap": "กับดัก", "element": "ธาตุ"}
+
 static func label_text(type: String) -> String:
-	var names := {"arrow": "ลูกศร", "any": "ทุกสกิล", "area": "พื้นที่", "dot": "ต่อเนื่อง", "trap": "กับดัก"}
 	var out: Array = []
-	for l in data(type).get("labels", []): out.append(names.get(l, l))
+	for l in data(type).get("labels", []): out.append(LABEL_NAMES.get(l, l))
 	return "·".join(out)
 
 ## "คูลดาวน์สกิลนี้ −6%"

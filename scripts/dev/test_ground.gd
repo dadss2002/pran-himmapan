@@ -613,7 +613,7 @@ func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 	if f and hero: f.face(hero.global_position.x > w.global_position.x)
 
 func save_now() -> bool:
-	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.skill_gems, "room": room_id, "seed": session_seed,
+	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.sockets_to_save(), "room": room_id, "seed": session_seed,
 		"waypoints": waypoints.to_save() if waypoints else []}, save_path)
 
 func tick_autosave(delta: float) -> void:

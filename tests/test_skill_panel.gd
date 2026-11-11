@@ -55,6 +55,8 @@ func test_preview_lines():
 	p.free(); h.free()
 	return r
 
+## M5b Task 8a: the area skills exist now, so an expand gem at Lv1 fits skills that are still locked: dimmed, and
+## each of them is named with its unlock level (was: "ยังไม่มีสกิลที่ใส่ได้ (ใช้กับห่าศรในรอบถัดไป)").
 func test_unusable_gem_dimmed_and_explained():
 	var h := _hero()
 	h.inventory.add_gem(_g("expand"))
@@ -62,7 +64,9 @@ func test_unusable_gem_dimmed_and_explained():
 	p.select_gem(0)
 	var r := ""
 	if p.cell_usable(0): r = "expand should be dimmed"
-	elif _find(p.gem_detail().lines, "ยังไม่มีสกิลที่ใส่ได้").is_empty(): r = "no explanation %s" % [p.gem_detail().lines]
+	elif _find(p.gem_detail().lines, "ห่าศร: ปลดที่ Lv7").is_empty(): r = "no explanation %s" % [p.gem_detail().lines]
+	elif _find(p.gem_detail().lines, "กับดักหนาม: ปลดที่ Lv10").is_empty() or _find(p.gem_detail().lines, "ศรเพลิง: ปลดที่ Lv10").is_empty(): r = "Lv10 skills not named %s" % [p.gem_detail().lines]
+	elif not _find(p.gem_detail().lines, "ศรทะลวง").is_empty(): r = "expand does not fit ศรทะลวง: %s" % [p.gem_detail().lines]
 	p.free(); h.free()
 	return r
 

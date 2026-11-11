@@ -15,11 +15,14 @@ const UP := Color("#6ccf62")
 const DOWN := Color("#ff9d8a")
 const PANEL_BG := Color(0.05, 0.137, 0.102, 0.96)
 const CELL := 34
-const SKILLS := ["piercing", "spread"]
 ## Owner 2026-11-08 (combos spec): 2 slots from unlock, slot 3 / 4 at skill level gem_slots[2] / [3].
 const SLOT_HELP := "ช่องเจม: 2 ช่องตั้งแต่ปลดสกิล · ช่องที่ 3 ที่เลเวลสกิล %d · ช่องที่ 4 ที่เลเวลสกิล %d · ถอดเจมฟรี เจมเก็บ EXP ไว้"
-const SKILL_NAMES := {"piercing": "ศรทะลวง", "spread": "ศรกระจาย"}
-const SKILL_ICONS := {"piercing": "res://assets/skills/piercing.png", "spread": "res://assets/skills/spread.png"}
+## M5b Task 8a: the rows are Skills.active_ids() (5 with the area skills), names and icons from Skills. The rows sit
+## in a ScrollContainer: all 5 show at 640×360 (ROW_PAD / ROW_GAP keep them inside the 344 px panel); in portrait the
+## list takes its full height when the screen has room and scrolls when it does not (_layout).
+const ROW_PAD := 4
+const ROW_GAP := 4
+const MIN_LIST_ROWS := 2.5     # portrait, short screen: never fewer rows on show than this (the cut row hints at more)
 
 var hero: Hero
 var _sel := {}            # {"bag": index} or {"socket": [skill_id, slot]}
@@ -28,7 +31,9 @@ var _root: Control
 var _panel: PanelContainer
 var _body: BoxContainer        # the columns; stacked top-to-bottom in portrait
 var _mp: Label
-var _rows := {}           # skill_id -> {sub: Label, slots: HBoxContainer}
+var _rows := {}           # skill_id -> {sub: Label, slots: HBoxContainer, row: PanelContainer}, in Skills.active_ids() order
+var _scroll: ScrollContainer   # the skill rows
+var _row_box: VBoxContainer
 var _gem_grid: GridContainer
 var _gem_cells: Array = []
 var _d_icon: TextureRect
@@ -101,7 +106,7 @@ func cell_usable(cell: int) -> bool:
 	var v := gem_cells()
 	if cell >= v.size(): return false
 	var type := String(hero.inventory.slots[v[cell]].id).trim_prefix("gem_")
-	for id in SKILLS:
+	for id in Skills.active_ids():
 		if hero.level >= Skills.unlock_level(id) and Gem.fits(type, id): return true
 	return false
 
@@ -172,7 +177,7 @@ func gem_detail() -> Dictionary:
 	d.effect = Gem.describe_effect(g)
 	for o in g.get("opts", []): d.lines.append({"text": Gem.describe_option(o), "color": UP})
 	if _sel.has("socket"):
-		d.lines.append({"text": "ใส่อยู่ที่%s ช่อง %d" % [SKILL_NAMES[_sel.socket[0]], int(_sel.socket[1]) + 1], "color": GOLD})
+		d.lines.append({"text": "ใส่อยู่ที่%s ช่อง %d" % [Skills.display_name(String(_sel.socket[0])), int(_sel.socket[1]) + 1], "color": GOLD})
 		d.action = "ถอดเจม"
 		d.action_ok = true
 	else:
@@ -185,11 +190,11 @@ func gem_detail() -> Dictionary:
 func _previews(d: Dictionary, g: Dictionary) -> void:
 	var t := String(g.type)
 	var any := false
-	for id in SKILLS:
+	for id in Skills.active_ids():
 		if not Gem.fits(t, id): continue
 		any = true
 		if hero.level < Skills.unlock_level(id):
-			d.lines.append({"text": "%s: ปลดที่ Lv%d" % [SKILL_NAMES[id], Skills.unlock_level(id)], "color": DIM_TEXT})
+			d.lines.append({"text": "%s: ปลดที่ Lv%d" % [Skills.display_name(id), Skills.unlock_level(id)], "color": DIM_TEXT})
 			continue
 		var now: Array = hero.open_gems(id)      # a closed slot's gem has no effect (M5b Task 1)
 		var after := now.duplicate()
@@ -199,11 +204,11 @@ func _previews(d: Dictionary, g: Dictionary) -> void:
 		else: after[0] = g
 		var b0 := SkillBuild.of(id, hero.level, now, hero.stats())
 		var b1 := SkillBuild.of(id, hero.level, after, hero.stats())
-		var text := "%s: MP %s → %s" % [SKILL_NAMES[id], Gear._trim(snappedf(b0.mp, 0.1)), Gear._trim(snappedf(b1.mp, 0.1))]
+		var text := "%s: MP %s → %s" % [Skills.display_name(id), Gear._trim(snappedf(b0.mp, 0.1)), Gear._trim(snappedf(b1.mp, 0.1))]
 		if b1.arrows != b0.arrows: text += " · ลูกศร %d → %d" % [b0.arrows, b1.arrows]
 		if t == "pierce" and b0.pierce_all: text += " · ทะลุทุกตัวอยู่แล้ว ไม่มีผลเพิ่ม"
 		d.lines.append({"text": text, "color": UP if not (t == "pierce" and b0.pierce_all) else DIM_TEXT})
-	if not any: d.lines.append({"text": "ยังไม่มีสกิลที่ใส่ได้ (ใช้กับห่าศรในรอบถัดไป)", "color": DOWN})
+	if not any: d.lines.append({"text": "ยังไม่มีสกิลที่ใส่ได้", "color": DOWN})
 
 # ---------- view ----------
 
@@ -254,30 +259,34 @@ func build() -> void:
 	left.custom_minimum_size = Vector2(232, 0)
 	left.add_theme_constant_override("separation", 6)
 	body.add_child(left)
-	for id in SKILLS:
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left.add_child(_scroll)
+	_row_box = VBoxContainer.new()
+	_row_box.add_theme_constant_override("separation", ROW_GAP)
+	_row_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_row_box)
+	for id in Skills.active_ids():
 		var row := PanelContainer.new()
-		row.add_theme_stylebox_override("panel", UiKit.box(Color(0, 0, 0, 0.25), Color(1, 1, 1, 0.12), 10, 6))
-		left.add_child(row)
+		row.add_theme_stylebox_override("panel", UiKit.box(Color(0, 0, 0, 0.25), Color(1, 1, 1, 0.12), 10, ROW_PAD))
+		row.mouse_filter = Control.MOUSE_FILTER_PASS      # a drag that starts on a row scrolls the list
+		_row_box.add_child(row)
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", 6)
 		row.add_child(h)
-		h.add_child(UiKit.icon(SKILL_ICONS[id], 30))
+		h.add_child(UiKit.icon(Skills.icon(id), 30))
 		var names := VBoxContainer.new()
 		names.add_theme_constant_override("separation", 0)
 		names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(names)
-		names.add_child(UiKit.label(SKILL_NAMES[id], 11, TEXT))
+		names.add_child(UiKit.label(Skills.display_name(id), 11, TEXT))
 		var sub := UiKit.label("", 8, Color("#cfc6b0"))
 		names.add_child(sub)
 		var slots := HBoxContainer.new()
 		slots.add_theme_constant_override("separation", 4)
 		h.add_child(slots)
-		_rows[id] = {"sub": sub, "slots": slots}
-	var rain := HBoxContainer.new()
-	rain.modulate.a = 0.55
-	rain.add_child(UiKit.icon("res://assets/skills/arrow_rain.png", 30))
-	rain.add_child(UiKit.label("ห่าศร · มาในรอบถัดไป (ป้ายพื้นที่·ต่อเนื่อง)", 9, DIM_TEXT))
-	left.add_child(rain)
+		_rows[id] = {"sub": sub, "slots": slots, "row": row}
 	var slot_lv: Array = Balance.data()["gem_slots"]
 	var slot_help := UiKit.label(SLOT_HELP % [int(slot_lv[2]), int(slot_lv[3])], 8, DIM_TEXT)
 	slot_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART    # longer than the 232 px column
@@ -360,7 +369,7 @@ func _on_gem_cell(cell: int) -> void:
 func refresh() -> void:
 	if hero == null or _root == null: return
 	_mp.text = "MP %d/%d · ฟื้น %s/วิ" % [int(hero.mp), hero.max_mp(), Gear._trim(hero.stats().mp_regen)]
-	for id in SKILLS:
+	for id in _rows:
 		var row: Dictionary = _rows[id]
 		var slots: HBoxContainer = row.slots
 		for c in slots.get_children():      # a slot button may be mid-press: free it next frame
@@ -369,7 +378,7 @@ func refresh() -> void:
 		var unlocked := hero.level >= Skills.unlock_level(id)
 		if unlocked:
 			var b := hero.build(id)
-			row.sub.text = "Lv%d · ป้ายลูกศร · MP %s · CD %s วิ" % [Skills.skill_level(id, hero.level), Gear._trim(snappedf(b.mp, 0.1)), Gear._trim(snappedf(b.cooldown, 0.1))]
+			row.sub.text = "Lv%d · ป้าย%s · MP %s · CD %s วิ" % [Skills.skill_level(id, hero.level), Skills.label_text(id), Gear._trim(snappedf(b.mp, 0.1)), Gear._trim(snappedf(b.cooldown, 0.1))]
 		else:
 			row.sub.text = "ปลดที่ Lv%d" % Skills.unlock_level(id)
 		var n := maxi(1, hero.gem_slots(id))
@@ -435,12 +444,21 @@ func _layout() -> void:
 	if _body.vertical != portrait:
 		_body.vertical = portrait
 		_panel.size = Vector2.ZERO
+	var bottom := ScreenFit.bottom_inset(portrait)
 	if portrait:
+		# the whole skill list when the screen has room; else as much of it as fits (it scrolls), never under
+		# MIN_LIST_ROWS rows
+		var rows_h := _row_box.get_combined_minimum_size().y
+		_scroll.custom_minimum_size.y = rows_h
+		var over := _panel.get_combined_minimum_size().y - (size.y - 8 - bottom)
+		if over > 0.0:
+			var row_h := rows_h / maxf(1.0, float(_rows.size()))
+			_scroll.custom_minimum_size.y = minf(rows_h, maxf(rows_h - over, row_h * MIN_LIST_ROWS))
 		_panel.size = Vector2(size.x - 12, 0)
 		_panel.size = Vector2(size.x - 12, _panel.get_combined_minimum_size().y)
 	else:
+		_scroll.custom_minimum_size.y = 0.0
 		_panel.size = Vector2(624, maxf(344.0, _panel.get_combined_minimum_size().y))
-	var bottom := ScreenFit.bottom_inset(portrait)
 	var room := Vector2(size.x - 8, size.y - 8 - bottom)
 	var fit := minf(1.0, minf(room.x / _panel.size.x, room.y / _panel.size.y))
 	_panel.scale = Vector2(fit, fit)
