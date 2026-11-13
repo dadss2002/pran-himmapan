@@ -1,7 +1,8 @@
 extends RefCounted
 ## M5b Task 8a: the three area skills' data (ห่าศร / กับดักหนาม / ศรเพลิง, docs/skills.md approved 2026-11-06, combos
 ## spec D1–D8), the data-driven skill list, the area build keys, the icons, and the save rules at the edge of each
-## unlock (Review Focus 8). The skills themselves are built in Tasks 8b–8d: until then a rain / trap press is refused.
+## unlock (Review Focus 8). Task 8b: ห่าศร itself (ArrowRain, SkillHit, Hero.area_point / hit_source; the tests after
+## "# ---------- ห่าศร (Task 8b) ----------"). กับดักหนาม's cast is Task 8c: until then its press is refused.
 
 const DT := 1.0 / 60.0
 const TMP := "user://test_area_skills.json"
@@ -25,6 +26,7 @@ func _hero(level := 1) -> Hero:
 
 func _done(h: Hero) -> void:
 	for a in _shots: if is_instance_valid(a): a.free()
+	h.halt_areas()               # frees the rains not in a tree
 	h.free()
 
 func _g(type: String, element := "", level := 1) -> Dictionary:
@@ -275,7 +277,7 @@ func test_socket_rules_on_new_skills():
 
 ## Until Tasks 8b / 8c build them, a rain / trap press must do nothing at all: no arrow, no MP, no cooldown.
 func test_non_arrow_skill_press_is_refused():
-	for id in ["arrow_rain", "thorn_trap"]:
+	for id in ["thorn_trap"]:      # ห่าศร casts since Task 8b (test_rain_costs_and_cooldown)
 		var h := _hero(10)
 		h.facing = 2
 		var mp0: float = h.mp
@@ -577,3 +579,538 @@ func test_full_sockets_on_five_skills_fit_the_size_limit():
 			if fit[i] == "element": g["element"] = "lightning"
 			sk[id].append(g)
 	return _both("every slot of all 5 skills at the level cap", _state(Progression.cap(), sk), true)
+
+# ---------- ห่าศร (Task 8b) ----------
+
+const RAIN := "arrow_rain"
+var _made: Array = []
+
+func _dummy(feet: Vector2) -> Node2D:
+	var d: Node2D = load("res://tests/dummy_enemy.gd").new()
+	d.position = feet
+	_made.append(d)
+	return d
+
+func _free_made() -> void:
+	for d in _made: if is_instance_valid(d): d.free()
+	_made = []
+
+## A rain of hero h's build (its gems, its ledger) at `center`, not in a tree: stepped by the test.
+func _rain(h: Hero, center: Vector2, targets: Array) -> ArrowRain:
+	h.test_enemies = targets
+	var b := h.build(RAIN)
+	b["cast"] = ComboCast.from_build(b, 1.0)
+	var rain := ArrowRain.new()
+	rain.setup(center, b, h.hit_source(b), targets)
+	_made.append(rain)
+	return rain
+
+## Presses ห่าศร for real (try_skill, the bow animation, the release) and returns the rain it laid (null: none).
+func _press(h: Hero, targets: Array) -> ArrowRain:
+	h.test_enemies = targets
+	if not h.try_skill(RAIN): return null
+	for i in 40:
+		h.step(DT, Vector2.ZERO)
+		if not h.rains.is_empty(): return h.rains[0]
+	return null
+
+## Steps the rain to `secs` after its cast; returns the time of every hit on d, to 1/60 s.
+func _run(rain: ArrowRain, secs: float, d: Node2D = null) -> Array:
+	var times: Array = []
+	var n: int = d.hits.size() if d != null else 0
+	if not is_instance_valid(rain): return times
+	for i in int(ceil((secs - rain.time()) / DT - 1e-6)):       # a rain that is over no longer counts time
+		if not is_instance_valid(rain) or rain.done: break
+		rain.step(DT)
+		if d != null and d.hits.size() > n:
+			n = d.hits.size()
+			times.append(snappedf(rain.time(), 0.01))
+	return times
+
+func _sockets(h: Hero, gems: Array) -> void:
+	h.set_skill_gems({RAIN: gems})
+
+## docs/skills.md: r64, 3 s, a tick of 40 % every 0.5 s. Feet within 64 px are hit, at 0.5, 1.0 ... 3.0 s and never
+## before 0.5 s; feet at 65 px never; after the last tick the rain is over and hits nothing more.
+func test_rain_six_ticks_r64():
+	var h := _hero(7)
+	var d_in := _dummy(Vector2(63, 0))
+	var d_out := _dummy(Vector2(65, 0))
+	var d_diag := _dummy(Vector2(-45, 45))       # 63.6 px
+	var d_far := _dummy(Vector2(-46, 46))        # 65.05 px
+	var d_up := _dummy(Vector2(0, -63.9))        # a true circle: as far up as sideways
+	var all := [d_in, d_out, d_diag, d_far, d_up]
+	var rain := _rain(h, Vector2.ZERO, all)
+	var r := ""
+	for i in 29: rain.step(DT)
+	if not d_in.hits.is_empty(): r = "a hit before 0.5 s (t = %.3f)" % rain.time()
+	var times := _run(rain, 3.2, d_in) if r == "" else []
+	if r == "":
+		if times != [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]: r = "hit times %s, want 0.5 .. 3.0" % [times]
+		elif d_diag.hits.size() != 6 or d_up.hits.size() != 6: r = "inside the circle: %d / %d hits, want 6 each" % [d_diag.hits.size(), d_up.hits.size()]
+		elif not d_out.hits.is_empty() or not d_far.hits.is_empty(): r = "a monster outside r64 was hit (%d / %d)" % [d_out.hits.size(), d_far.hits.size()]
+		elif rain.ticks_done != 6 or not rain.done: r = "ticks_done %d done %s, want 6 / true" % [rain.ticks_done, rain.done]
+		else:
+			for hit in d_in.hits:
+				if not _near(hit[1], 0.4) or hit[2] != Vector2.ZERO or not _near(hit[0], float(h.stats().atk)): r = "hit %s, want ATK %.1f × 0.4 from the centre" % [hit, h.stats().atk]
+	if r == "":
+		for i in 120: rain.step(DT)
+		if d_in.hits.size() != 6: r = "the rain hit after its last tick (%d hits)" % d_in.hits.size()
+	_free_made()
+	_done(h)
+	return r
+
+## D6: the extend gem makes it 3.9 s: 7 whole ticks, the last at 3.5 s, then it is over. In a tree it then frees itself.
+func test_rain_extend_seven_ticks():
+	var h := _hero(7)
+	_sockets(h, [_g("extend")])
+	var d := _dummy(Vector2(10, 0))
+	var rain := _rain(h, Vector2.ZERO, [d])
+	var times := _run(rain, 3.45, d)
+	var r := ""
+	if times.size() != 6 or rain.done: r = "at 3.45 s: %d hits, done %s; want 6, still falling" % [times.size(), rain.done]
+	times += _run(rain, 4.2, d)
+	if r == "" and (times.size() != 7 or times[6] != 3.5): r = "hit times %s, want 7 with the last at 3.5" % [times]
+	if r == "" and not rain.done: r = "not over after its 7th tick"
+	_free_made()
+	_done(h)
+	if r != "": return r
+	# in a tree: over after the last tick, gone after its short fade
+	var world := Node2D.new()
+	tree.root.add_child(world)
+	var h2 := _hero(7)
+	var d2 := _dummy(Vector2(10, 0))
+	world.add_child(d2)
+	var rain2 := _rain(h2, Vector2.ZERO, [d2])
+	world.add_child(rain2)
+	rain2.set_physics_process(false)
+	_run(rain2, 3.05, d2)
+	if not rain2.done or d2.hits.size() != 6: r = "in a tree: done %s after %d hits" % [rain2.done, d2.hits.size()]
+	for i in 30:
+		if is_instance_valid(rain2) and not rain2.is_queued_for_deletion(): rain2.step(DT)
+	if r == "" and not rain2.is_queued_for_deletion(): r = "in a tree the rain did not free itself after its last tick"
+	_made.erase(d2)
+	_made.erase(rain2)
+	world.free()
+	_free_made()
+	_done(h2)
+	return r
+
+func test_rain_expand_radius():
+	var h := _hero(7)
+	_sockets(h, [_g("expand")])
+	var d_in := _dummy(Vector2(83, 0))
+	var d_out := _dummy(Vector2(84, 0))
+	var rain := _rain(h, Vector2.ZERO, [d_in, d_out])
+	_run(rain, 0.6)
+	var r := ""
+	if not _near(rain.radius, 83.2): r = "radius %.2f, want 83.2" % rain.radius
+	elif d_in.hits.size() != 1: r = "83 px with the expand gem: %d hits, want 1" % d_in.hits.size()
+	elif not d_out.hits.is_empty(): r = "84 px was hit (radius 83.2)"
+	_free_made()
+	_done(h)
+	return r
+
+## D2: the rain lands on the feet of the nearest live monster within 220 px, else on the hero's own feet.
+func test_rain_target_point():
+	var cases := [
+		["one at 200 px", [Vector2(200, 0)], [], Vector2(200, 0)],
+		["one at 230 px", [Vector2(230, 0)], [], Vector2(30, 40)],
+		["nearest of two", [Vector2(180, 40), Vector2(-90, 40)], [], Vector2(-90, 40)],
+		["a dead one is skipped", [Vector2(60, 40), Vector2(150, 40)], [0], Vector2(150, 40)],
+		["no monster", [], [], Vector2(30, 40)],
+	]
+	for c in cases:
+		var h := _hero(7)
+		h.position = Vector2(30, 40) if c[0] != "one at 200 px" and c[0] != "one at 230 px" else Vector2.ZERO
+		var want: Vector2 = c[3] if h.position != Vector2.ZERO or c[0] == "one at 200 px" else Vector2.ZERO
+		var ds: Array = []
+		for p in c[1]: ds.append(_dummy(p))
+		for i in c[2]: ds[i].alive = false
+		var rain := _press(h, ds)
+		var r := ""
+		if rain == null: r = "%s: no rain was laid" % c[0]
+		elif rain.center != want: r = "%s: centre %s, want %s" % [c[0], rain.center, want]
+		elif h.area_point(220.0) != want and c[2].is_empty(): r = "%s: area_point %s" % [c[0], h.area_point(220.0)]
+		elif not _shots.is_empty(): r = "%s: the press fired %d arrow(s)" % [c[0], _shots.size()]
+		_done(h)
+		_free_made()
+		if r != "": return r
+	return ""
+
+## MP 18, cooldown 10 × (1 − 3 %) at Lv10 (skill Lv4); refused on cooldown, without the MP, and before Lv7.
+func test_rain_costs_and_cooldown():
+	var h := _hero(10)
+	var mp0: float = h.mp
+	var r := ""
+	if not h.try_skill(RAIN): r = "Lv10 press refused"
+	for i in 36: h.step(DT, Vector2.ZERO)
+	var after := 0.6 - 5.0 / 14.0
+	if r == "":
+		if h.rains.size() != 1: r = "%d rains, want 1" % h.rains.size()
+		elif absf(h.mp - (mp0 - 18.0 + float(h.stats().mp_regen) * after)) > 0.3: r = "MP %.2f → %.2f, want 18 spent" % [mp0, h.mp]
+		elif absf(h.skill_cooldown_left(RAIN) - (9.7 - after)) > 0.05: r = "cooldown %.2f, want 9.7" % h.skill_cooldown_left(RAIN)
+		elif h.try_skill(RAIN): r = "a second press during the cooldown was accepted"
+		elif not _shots.is_empty(): r = "the rain press fired an arrow"
+	_done(h)
+	if r != "": return r
+	var poor := _hero(10)
+	poor.mp = 17.0
+	if poor.try_skill(RAIN): r = "pressed with 17 MP (needs 18)"
+	_done(poor)
+	var low := _hero(6)
+	if r == "" and low.try_skill(RAIN): r = "ห่าศร usable at Lv6"
+	_done(low)
+	return r
+
+## Area ticks are primary hits: each rolls the build's crit chance and leeches (3 % of the tick's damage).
+func test_rain_ticks_crit_and_leech():
+	var h := _hero(7)
+	_sockets(h, [_g("leech"), _g("execute")])
+	var b := h.build(RAIN)
+	var d := _dummy(Vector2(5, 0))
+	d.deal = 100
+	h.health.hp = 10
+	var rain := _rain(h, Vector2.ZERO, [d])
+	_run(rain, 3.1)
+	var r := ""
+	if d.hits.size() != 6: r = "%d hits" % d.hits.size()
+	elif h.health.hp != 10 + 18: r = "HP 10 → %d, want +18 (3 %% of 6 × 100)" % h.health.hp
+	elif not _near(b.crit, 0.05 + 0.15): r = "build crit %.3f, want 0.20 with the execute gem" % b.crit
+	else:
+		for c in d.crit_chances:
+			if not _near(c, float(b.crit)): r = "a tick rolled crit chance %.3f, want the build's %.3f" % [c, b.crit]
+	_free_made()
+	_done(h)
+	return r
+
+## Review Focus 6: a rain's kills go through the one kill hook with the press's ONE ledger: ศรกระหายเลือด (leech +
+## multiply) refunds 2 MP a kill, at most 6 a press: 4 kills = +6, not +8; each kill heals 3 % of max HP.
+func test_rain_kill_counts_for_sustain():
+	var h := _hero(7)
+	_sockets(h, [_g("leech"), _g("multiply")])
+	var ds: Array = []
+	for i in 4:
+		var d := _dummy(Vector2(-30 + 20 * i, 10))
+		d.die_on_hit = true
+		ds.append(d)
+	var late := _dummy(Vector2(0, -30))          # dies on the last tick: the same ledger, the cap is already spent
+	ds.append(late)
+	var rain := _press(h, ds)
+	var r := ""
+	if rain == null:
+		_free_made()
+		_done(h)
+		return "no rain"
+	var cast: ComboCast = rain.src.cast
+	if cast == null or cast.id != "bloodthirst": r = "the rain's ledger is %s, want the press's bloodthirst" % [cast.id if cast else "null"]
+	h.mp = 0.0
+	h.health.hp = 1
+	_run(rain, 0.6)
+	var heal := 4 * int(floor(0.03 * h.health.max_hp + 1e-6))
+	if r == "":
+		if not _near(h.mp, 6.0): r = "4 kills in one tick: MP +%.2f, want +6 (the cap), not +8" % h.mp
+		elif absf(h.health.hp - 1 - heal) > 4 + 1: r = "HP 1 → %d, want about +%d (3 %% a kill; + leech)" % [h.health.hp, heal]
+	if r == "":
+		late.die_on_hit = true
+		_run(rain, 3.1)
+		if late.alive: r = "the late monster did not die"
+		elif not _near(h.mp, 6.0): r = "a kill on a later tick paid again: MP %.2f (one cap per press)" % h.mp
+		elif not _near(cast.mp_refunded(), 6.0): r = "ledger refunded %.2f" % cast.mp_refunded()
+	_free_made()
+	_done(h)
+	return r
+
+## The element gem's status lands on every monster a tick hits: fire burns (20 % of that tick, the press's ledger),
+## ice slows; lightning chains once per monster hit to the nearest other one within 120 px at × 0.8 (also outside
+## the circle), and the chained hit chains no further.
+func test_rain_fire_gem_burns_all():
+	var h := _hero(7)
+	_sockets(h, [_g("element", "fire")])
+	var ds := [_dummy(Vector2(-40, 0)), _dummy(Vector2(0, 30)), _dummy(Vector2(50, -10))]
+	for d in ds: d.deal = 50
+	var out := _dummy(Vector2(120, 0))
+	var rain := _rain(h, Vector2.ZERO, ds + [out])
+	_run(rain, 0.6)
+	var r := ""
+	for d in ds:
+		if not d.status.is_burning(): r = "a monster hit by the first tick is not burning"
+		elif not _near(d.status.burn_per_tick, 10.0): r = "burn %.2f a tick, want 20 %% of the 50 dealt" % d.status.burn_per_tick
+		elif d.status.burn_cast != rain.src.cast or rain.src.cast == null: r = "the burn does not carry the press's ledger"
+		elif not _near(d.hits[0][1], 0.4 * 1.1): r = "tick mult %.3f, want 0.44 with the fire gem" % d.hits[0][1]
+	if r == "" and (out.status.is_burning() or not out.hits.is_empty()): r = "a monster outside the circle was hit / burnt"
+	_free_made()
+	_done(h)
+	if r != "": return r
+	var hi := _hero(7)
+	_sockets(hi, [_g("element", "ice")])
+	var di := _dummy(Vector2(10, 0))
+	var ri := _rain(hi, Vector2.ZERO, [di])
+	_run(ri, 0.6)
+	if not di.status.is_slowed() or di.status.is_burning(): r = "ice gem: slowed %s burning %s" % [di.status.is_slowed(), di.status.is_burning()]
+	_free_made()
+	_done(hi)
+	if r != "": return r
+	var hl := _hero(7)
+	_sockets(hl, [_g("element", "lightning")])
+	var a := _dummy(Vector2(60, 0))
+	var far := _dummy(Vector2(150, 0))            # outside the circle, 90 px from a
+	var rl := _rain(hl, Vector2.ZERO, [a, far])
+	_run(rl, 0.6)
+	if a.hits.size() != 1: r = "lightning: the monster in the circle took %d hits, want 1 (nothing chains back)" % a.hits.size()
+	elif far.hits.size() != 1 or not _near(far.hits[0][1], 0.4 * 1.1 * 0.8): r = "lightning chain: %s, want one hit of 0.352" % [far.hits]
+	_free_made()
+	_done(hl)
+	return r
+
+## Review Focus 7 (B20): a rain never outlives a warp, the hero's death or the room: no further hit, the node goes.
+func test_rain_freed_on_warp():
+	for how in ["warp", "death"]:
+		var h := _hero(7)
+		var d := _dummy(Vector2(40, 0))
+		var rain := _press(h, [d])
+		if rain == null:
+			_done(h)
+			_free_made()
+			return "no rain"
+		_run(rain, 0.6)
+		var r := ""
+		if d.hits.size() != 1: r = "%d hits after the first tick" % d.hits.size()
+		if how == "warp": h.begin_warp()
+		else: h.health.take_hit(999999, false)
+		if r == "":
+			if is_instance_valid(rain): r = "%s: the rain is still there" % how
+			elif not h.rains.is_empty(): r = "%s: the hero still lists a rain" % how
+		_done(h)
+		_free_made()
+		if r != "": return r
+	# in a tree (the world): halted at once, freed by the tree, and it hits nothing in between
+	var world := Node2D.new()
+	tree.root.add_child(world)
+	var h2 := _hero(7)
+	world.add_child(h2)
+	h2.set_physics_process(false)
+	var d2 := _dummy(Vector2(40, 0))
+	d2.add_to_group("enemies")                   # in a tree the hero reads the group
+	world.add_child(d2)
+	var rain2 := _press(h2, [d2])
+	var r2 := ""
+	if rain2 == null or rain2.get_parent() != world: r2 = "in a tree the rain is not the hero's sibling"
+	else:
+		rain2.set_physics_process(false)
+		_run(rain2, 0.6)
+		h2.begin_warp()
+		var n: int = d2.hits.size()
+		for i in 120: rain2.step(DT)
+		if not rain2.done or not rain2.is_queued_for_deletion(): r2 = "in a tree: done %s, queued %s after the warp" % [rain2.done, rain2.is_queued_for_deletion()]
+		elif d2.hits.size() != n or n != 1: r2 = "hits after the warp: %d → %d" % [n, d2.hits.size()]
+	_made.erase(d2)
+	_shots = []
+	world.free()
+	_free_made()
+	return r2
+
+## Two rains of one hero never overlap: even with the extend gem at the gem level cap the rain is over before the
+## shortest cooldown the skill can have (10 s × (1 − the 30 % cut cap)).
+func test_rain_not_overlapping():
+	var top := _b(RAIN, 99, [_g("extend", "", 20)])
+	var capped := _b(RAIN, 99, [_g("extend", "", Gem.cap())])
+	var shortest := _num("skills.arrow_rain.cooldown") * (1.0 - _num("skills.max_cooldown_cut"))
+	if not _near(top.duration, 4.47): return "extend Lv20: duration %.3f, want 4.47" % top.duration
+	if float(capped.duration) + ArrowRain.FADE >= shortest: return "extend at the gem cap: %.2f s ≥ the shortest cooldown %.2f s" % [capped.duration, shortest]
+	if float(capped.ticks) * float(capped.tick_every) > float(capped.duration) + 1e-6: return "the last tick is after the duration"
+	return ""
+
+## Area ticks never produce the arrow-only combo effects, whatever numbers the build carries: no mark, no freeze (and
+## no freeze count), no fire trail. (No recipe with them fits ห่าศร's labels today; this guards the shared SkillHit.)
+func test_rain_no_arrow_only_effects():
+	var h := _hero(7)
+	var d := _dummy(Vector2(5, 0))
+	var rain := _rain(h, Vector2.ZERO, [d])
+	rain.src.build["combo_p"] = {"mark_secs": 4.0, "mark_taken": 0.3, "freeze_hits": 1.0, "freeze_secs": 1.0, "freeze_lock_secs": 5.0,
+		"trail_secs": 2.0, "trail_frac": 0.2, "blast_on_chilled": 1.0, "blast_radius": 32.0, "blast_frac": 0.5, "bolts": 2.0, "bolt_frac": 0.5}
+	var trails := FireTrail.made
+	var other := _dummy(Vector2(20, 0))
+	other.position = Vector2(100, 0)              # outside: a bolt / shatter would reach it
+	rain.targets = [d, other]
+	_run(rain, 3.1)
+	var r := ""
+	if d.hits.size() != 6: r = "%d hits" % d.hits.size()
+	elif d.is_marked() or d.freezes != 0 or d.is_frozen(): r = "a rain tick marked / froze (marked %s, freezes %d)" % [d.is_marked(), d.freezes]
+	elif FireTrail.made != trails: r = "a rain laid a fire trail"
+	elif not other.hits.is_empty(): r = "a rain tick reached a monster outside the circle (%d hits)" % other.hits.size()
+	_free_made()
+	_done(h)
+	return r
+
+class LoudDummy extends "res://tests/dummy_enemy.gd":
+	func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, crit_mult := -1.0) -> int:
+		Sfx.play("arrow_hit", position)           # as Wolf.receive_hit
+		return super.receive_hit(atk, mult, from, crit_chance, crit_mult)
+
+## Plan decision: one hit sound per rain tick, however many monsters it hits (5 here: 6 sounds in 3 s, not 30), and
+## the hit sounds are back on after every tick.
+func test_rain_one_hit_sound_per_tick():
+	Sfx.reset()
+	var h := _hero(7)
+	var ds: Array = []
+	for i in 5:
+		var d := LoudDummy.new()
+		d.position = Vector2(-40 + 20 * i, 0)
+		_made.append(d)
+		ds.append(d)
+	var rain := _rain(h, Vector2.ZERO, ds)
+	var asked := 0
+	var played := 0
+	var r := ""
+	for i in 190:
+		Sfx.fake_now = i * DT
+		Sfx.requested.clear()
+		Sfx.started.clear()
+		rain.step(DT)
+		asked += Sfx.requested.filter(func(e): return e.id == "arrow_hit").size()
+		played += Sfx.started.filter(func(e): return e.id == "arrow_hit").size()
+		if Sfx.hit_quiet: r = "hit sounds left switched off after a step"
+	if r == "":
+		if asked != 30: r = "%d hits asked for a sound, want 30 (5 monsters × 6 ticks)" % asked
+		elif played != 6: r = "%d hit sounds started, want 6 (one a tick)" % played
+		elif not Sfx.play("arrow_hit"): r = "a hit sound after the rain did not play"
+	Sfx.reset()
+	_free_made()
+	_done(h)
+	return r
+
+## The area marker (the real hit circle and the yantra) is never shed by the PerfSaver; only the falling arrows are.
+func test_rain_marker_stays_with_perf_saver():
+	var world := Node2D.new()
+	tree.root.add_child(world)
+	var h := _hero(7)
+	var rain := _rain(h, Vector2(50, 50), [])
+	world.add_child(rain)
+	rain.set_physics_process(false)
+	_made.erase(rain)
+	var r := ""
+	var was := PerfSaver.active
+	for on in [false, true]:
+		PerfSaver.active = on
+		for i in 20: rain.step(DT)               # 0.33 s / 0.67 s: arrows of the next tick are in the air
+		if rain._ring == null or not rain._ring.visible or not rain._ring.is_playing(): r = "saver %s: the yantra is not shown" % on
+		elif not rain.visible or rain.modulate.a < 1.0: r = "saver %s: the marker is hidden / faded" % on
+		elif on and rain.arrows_now() != 0: r = "saver on: %d falling arrows drawn (decoration)" % rain.arrows_now()
+		elif not on and rain.arrows_now() == 0: r = "saver off: no falling arrow at %.2f s" % rain.time()
+	PerfSaver.active = was
+	if r == "" and PerfSaver.decorative(ArrowRain.RING_FX): r = "the marker's effect is listed as decoration"
+	var wide: float = rain._ring.scale.x * rain._ring._cell.x
+	if r == "" and (wide > 128.0 or wide < 0.85 * 128.0 or fmod(rain._ring.scale.x * 2.0, 1.0) != 0.0): r = "the yantra is %.1f px wide (× %.2f), want an even scale just inside the circle's 128" % [wide, rain._ring.scale.x]
+	if r == "" and not _near(ArrowRain.ring_scale(83.2, 58.0), 2.5): r = "the yantra's scale at r83.2 is %.2f, want 2.5" % ArrowRain.ring_scale(83.2, 58.0)
+	if r == "" and FxSprite.make_frames(ArrowRain.RING_FX) != rain._ring.sprite_frames: r = "the yantra does not use the shared FxSprite frames"
+	world.free()
+	_done(h)
+	return r
+
+## Game vs tools/gem_combo_sim.py (cast('rain', ...): one hit of 2.4 × skill level, × gems; pack: 5 monsters, 6 with
+## the expand gem; lightning + 0.8 a hit), per press in ATK units with crit off (the sim multiplies both sides by the
+## same crit factor). Equal for: no gem, multiply, expand, lightning. Different by rule, measured here so a change shows:
+## - extend: the sim says × 1.3; the game deals whole ticks (owner D6: 3.9 s = 7 ticks) = × 7/6 (−10 %).
+## - fire gem: the sim burns 60 % of the whole 240 %; the game burns 20 % of a TICK per second, not stacking, from the
+##   first tick to 3 s after the last = 5 burn ticks = +16.7 % (plan Task 8b: burn = 0.2 × the tick's amount).
+func test_rain_press_matches_sim():
+	var lv := 10
+	var lvl := 1.0 + 0.05 * (lv - 7)
+	var cases := [      # name, gems, monsters in the circle, sim total, game / sim
+		["no gem, single", [], 1, 2.4 * lvl, 1.0],
+		["no gem, pack", [], 5, 2.4 * lvl * 5, 1.0],
+		["multiply, pack", [_g("multiply")], 5, 2.4 * lvl * 1.35 * 5, 1.0],
+		["expand, pack of 6", [_g("expand")], 6, 2.4 * lvl * 6, 1.0],
+		["lightning, pack", [_g("element", "lightning")], 5, 2.4 * lvl * 1.1 * 5 * 1.8, 1.0],
+		["extend, single", [_g("extend")], 1, 2.4 * lvl * 1.3, (7.0 / 6.0) / 1.3],
+	]
+	for c in cases:
+		var h := _hero(lv)
+		_sockets(h, c[1])
+		var ds: Array = []
+		for i in int(c[2]): ds.append(_dummy(Vector2(-50 + 20 * i, 0)))
+		var rain := _rain(h, Vector2.ZERO, ds)
+		_run(rain, 4.0)
+		var total := 0.0
+		for d in ds:
+			for hit in d.hits: total += float(hit[1])
+		_free_made()
+		_done(h)
+		if absf(total / float(c[3]) - float(c[4])) > 0.005: return "%s: game %.3f vs sim %.3f = × %.3f, want × %.3f" % [c[0], total, c[3], total / float(c[3]), c[4]]
+	# the fire gem's burn on one monster: 5 burn ticks of 20 % of a tick
+	var hf := _hero(lv)
+	_sockets(hf, [_g("element", "fire")])
+	var d := _dummy(Vector2(5, 0))
+	d.deal = 1000
+	d.hp = 100000000
+	var rain := _rain(hf, Vector2.ZERO, [d])
+	var burnt := 0
+	for i in int(8.0 / DT):
+		if is_instance_valid(rain) and not rain.done: rain.step(DT)
+		burnt += d.tick_status(DT)
+	var r := ""
+	if d.hits.size() != 6: r = "fire: %d hits" % d.hits.size()
+	elif burnt != 1000: r = "fire gem burn: %d for 6 ticks of 1000, want 1000 (5 burn ticks of 200; the sim's 60 %% would be 3600)" % burnt
+	_free_made()
+	_done(hf)
+	return r
+
+## In the game (TestGround, real monsters): a real press lays the rain in the world on the locked monster's feet and
+## its ticks hurt real monsters; the warp's dark ends it at once, and the room change (go_to, also without a warp)
+## leaves no rain behind and none in the hero's list (Review Focus 7, B20).
+func test_rain_in_game_hits_and_goes_with_the_room():
+	if FileAccess.file_exists(TMP): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP))
+	var g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = TMP
+	g.layout_seed = 1
+	tree.root.add_child(g)
+	await tree.process_frame
+	await tree.process_frame
+	g.go_to("c1r0", "", false)
+	var h: Hero = g.hero
+	h.set_physics_process(false)
+	h.set_progress(7, 0)
+	var wolves: Array = []
+	for p in g.packs:
+		p.process_mode = Node.PROCESS_MODE_DISABLED
+		for w in p.wolves: wolves.append(w)
+	var r := "" if not g.warps.is_empty() and not wolves.is_empty() else "setup: no warp / monster in c1r0"
+	var rains := func() -> Array: return g.world.get_children().filter(func(c): return c is ArrowRain and not c.is_queued_for_deletion())
+	if r == "":
+		for x in wolves: x.health.setup(100000)
+		h.global_position = wolves[0].global_position + Vector2(-100, 0)
+		var w: Wolf = h.target_within(220.0)         # the monster the press locks on to (D2)
+		var hp0: int = w.hp if w != null else 0
+		if w == null: r = "setup: no monster within 220 px"
+		if not h.try_skill(RAIN): r = "press refused"
+		for i in 30: h.step(DT, Vector2.ZERO)
+		var laid: Array = rains.call()
+		if r == "" and (laid.size() != 1 or h.rains.size() != 1): r = "%d rains in the world, %d in the hero's list; want 1 / 1" % [laid.size(), h.rains.size()]
+		if r == "":
+			var rain: ArrowRain = laid[0]
+			if rain.center.distance_to(w.global_position) > 0.5: r = "the rain is at %s, want the locked monster's feet %s" % [rain.center, w.global_position]
+			for i in 40: await tree.physics_frame                 # past the first tick (0.5 s)
+			if r == "" and (rain.ticks_done < 1 or w.hp >= hp0): r = "after %d tick(s) the monster under the rain has %d / %d HP" % [rain.ticks_done, w.hp, hp0]
+			g.warp_through(g.warps[0])
+			g._fade_tween.pause()
+			if r == "" and not rain.done: r = "the rain still falls during the warp's dark"
+			if r == "" and not h.rains.is_empty(): r = "the hero still lists the rain during the warp"
+			g._fade_tween.custom_step(g.FADE_OUT + 0.01)
+			await tree.process_frame
+			if r == "" and not rains.call().is_empty(): r = "an old-room rain is left in %s" % g.room_id
+	if r == "":
+		# a room change with no warp before it (go_to): the same
+		h.end_warp()
+		h.mp = h.max_mp()
+		h._skill_cd.clear()
+		h.state = "idle"
+		if not h.try_skill(RAIN): r = "second press refused"
+		for i in 30: h.step(DT, Vector2.ZERO)
+		if r == "" and rains.call().size() != 1: r = "no rain after the second press"
+		g.go_to("c1r0", "", false)
+		if r == "" and (not rains.call().is_empty() or not h.rains.is_empty()): r = "go_to left a rain (%d in the world, %d listed)" % [rains.call().size(), h.rains.size()]
+	g.queue_free()
+	await tree.process_frame
+	if FileAccess.file_exists(TMP): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP))
+	return r

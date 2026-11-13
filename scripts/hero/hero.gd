@@ -13,6 +13,7 @@ signal skill_released(id: String, at: Vector2)
 signal gear_changed()
 signal gems_changed()
 signal gem_leveled(gem: Dictionary)
+signal rain_cast(rain: ArrowRain)     # M5b Task 8b: a ห่าศร was laid (TestGround adds nothing: the hero parents it)
 
 const MANIFEST := "res://assets/hero/manifest.json"
 const ARROW_SCENE := preload("res://scenes/arrow.tscn")
@@ -43,6 +44,9 @@ var _potion_cd := 0.0
 ## M4c: true from touching an exit ring until the new room appears (test_ground.warp_through). The hero
 ## stands still in the dark and nothing can hurt, poison or push him (begin_warp / end_warp).
 var warping := false
+## M5b Task 8b: the ห่าศร rains of this hero that are still falling. Never saved; halt_areas() ends them on a warp
+## (begin_warp), on his death and on a room change (TestGround.go_to), like arrows' halt() (risks.md B20).
+var rains: Array = []
 
 func _init() -> void:
 	inventory.from_dict(SaveGame.new_state().inventory)   # start kit (save loading replaces it)
@@ -365,7 +369,7 @@ func skill_cooldown_left(id: String) -> float:
 func potion_cooldown_left() -> float:
 	return _potion_cd
 
-## ศรทะลวง / ศรกระจาย: needs the unlock level, no cooldown, enough MP, and a free hero.
+## ศรทะลวง / ศรกระจาย / ศรเพลิง / ห่าศร: needs the unlock level, no cooldown, enough MP, and a free hero.
 ## Pressed during a basic shot, the skill waits and starts as soon as that arrow is out.
 ## MP and cooldown are taken when the skill's arrow leaves, so a cancelled skill costs nothing.
 func try_skill(id: String) -> bool:
@@ -381,11 +385,13 @@ func try_skill(id: String) -> bool:
 	_start_skill(id)
 	return true
 
-## M5b Task 8a: only arrow skills can be cast so far. ห่าศร (kind "rain") and กับดักหนาม ("trap") have numbers, sockets
-## and a row on the skill screen, but their casts are Tasks 8b / 8c: until then a press does nothing (no arrow, no
-## MP, no cooldown) instead of falling into the arrow path. An id with no numbers is refused too.
+## The kinds of skill that have a cast: arrows (M3) and ห่าศร ("rain", M5b Task 8b). กับดักหนาม ("trap") has numbers,
+## sockets and a row on the skill screen, but its cast is Task 8c: until then a press does nothing (no arrow, no MP,
+## no cooldown) instead of falling into the arrow path. An id with no numbers is refused too.
+const CASTABLE_KINDS := ["arrows", "rain"]
+
 func _castable(id: String) -> bool:
-	return Skills.exists(id) and Skills.kind(id) == "arrows"
+	return Skills.exists(id) and Skills.kind(id) in CASTABLE_KINDS
 
 func _start_skill(id: String) -> void:
 	_queued_skill = ""
@@ -476,6 +482,7 @@ func _tick_poison(delta: float) -> void:
 ## Stepping on an exit ring: stand still (idle, not walking or rolling on the spot) until end_warp().
 func begin_warp() -> void:
 	warping = true
+	halt_areas()                 # M5b Task 8b: a rain never outlives the room it was cast in (B20)
 	velocity = Vector2.ZERO
 	external_input = Vector2.ZERO
 	if state in ["walk", "roll", "hurt"]:
@@ -505,6 +512,7 @@ func step(delta: float, input: Vector2) -> void:
 	if state != "dead":
 		mp = minf(max_mp(), mp + stats().mp_regen * delta)
 	_flash = maxf(0.0, _flash - delta)
+	if not rains.is_empty(): _prune_rains()
 	_t += delta
 	match state:
 		"dead":
@@ -578,6 +586,7 @@ func _on_died() -> void:
 	_t = 0.0
 	_released = true
 	velocity = Vector2.ZERO
+	halt_areas()                 # M5b Task 8b: his rains end with him (no kill, EXP or MP after death)
 	died.emit()
 	_refresh(true)
 
@@ -605,6 +614,11 @@ func _arrow_origin() -> Vector2:
 
 ## The enemy a shot would lock on to right now (nearest live one within shot.range), or null.
 func current_target() -> Node2D:
+	return target_within(Balance.num("shot.range"))
+
+## The nearest live, not-hidden enemy whose hurt point is within range_px of the hero (ties: Combat.pick_target), or
+## null: the one list every lock-on reads (the targeting ring, ห่าศร's D2 auto-target).
+func target_within(range_px: float) -> Node2D:
 	var live: Array = []
 	var pts: Array = []
 	var hps: Array = []
@@ -613,8 +627,50 @@ func current_target() -> Node2D:
 			live.append(e)
 			pts.append(e.hurt_point())
 			hps.append(e.hp if "hp" in e else 0)
-	var i := Combat.pick_target(_pos(), pts, hps, Balance.num("shot.range"))
+	var i := Combat.pick_target(_pos(), pts, hps, range_px)
 	return live[i] if i >= 0 else null
+
+## M5b Task 8b (owner D2, "ล็อกมอนใกล้สุดอัตโนมัติ"): where an area skill lands: the FEET of the nearest live,
+## not-hidden monster within range_px (target_within: with ห่าศร's 220 px = shot.range, the monster under the targeting
+## ring), else the hero's own feet.
+func area_point(range_px: float) -> Vector2:
+	var t := target_within(range_px)
+	return SkillHit.feet(t) if t != null else _pos()
+
+## M5b Task 8b: what every hit of one area press (rain ticks; Task 8c: the trap) is dealt with, built ONCE at the
+## press (SkillHit.hit reads it): the hero's ATK and crit damage then, the build's crit chance, the build with its
+## ledger (b.cast, the press's ComboCast: Hero._release) and the hit multiplier with ราหู's +30 % folded in, as for
+## arrows. `targets` = the monsters the press can hit (the lightning gem's chain looks there too).
+func hit_source(b: Dictionary) -> Dictionary:
+	var st := stats()
+	var cast = b.get("cast")
+	var bonus: float = cast.dmg_bonus() if cast is ComboCast else 0.0
+	return {"atk": st.atk, "crit": float(b.get("crit", st.crit)), "crit_mult": st.crit_mult, "build": b, "shooter": self,
+		"cast": cast, "mult": float(b.arrow_mult) * (1.0 + bonus), "targets": _enemies()}
+
+## Ends every rain now: no further tick (warp, death, room change). One not in a tree (tests) is freed here.
+func halt_areas() -> void:
+	for r in rains:
+		if not is_instance_valid(r): continue
+		r.halt()
+		if not r.is_inside_tree(): r.free()
+	rains.clear()
+
+## Drops the rains that are over (one outside a tree, in tests, is freed here; in a tree it frees itself).
+func _prune_rains() -> void:
+	for i in range(rains.size() - 1, -1, -1):
+		var r = rains[i]
+		if is_instance_valid(r) and not r.done: continue
+		if is_instance_valid(r) and not r.is_inside_tree(): r.free()
+		rains.remove_at(i)
+
+## ห่าศร (M5b Task 8b): one ArrowRain at area_point(cast_range) (D2), a sibling of the hero (the world).
+func _cast_rain(b: Dictionary) -> void:
+	var rain := ArrowRain.new()
+	rain.setup(area_point(float(b.cast_range)), b, hit_source(b), _enemies())
+	rains.append(rain)
+	if is_inside_tree(): get_parent().add_child(rain)
+	rain_cast.emit(rain)
 
 ## Lock on to the nearest live enemy within shot.range and turn to face it.
 func _aim() -> void:
@@ -656,6 +712,11 @@ func _release() -> void:
 		# blasts, trails and burns; risks.md B25); rahu's +30 % (HP ≥ 70 % at the press) multiplies the arrow mult.
 		var cast := ComboCast.from_build(b, float(health.hp) / maxf(1.0, float(health.max_hp)))
 		b["cast"] = cast
+		if String(b.get("kind", "arrows")) == "rain":     # M5b Task 8b: no arrow leaves; the rain falls at the target (D2)
+			_cast_rain(b)
+			Sfx.play("bow_shot", start)
+			_pending_skill = ""
+			return
 		var mult := float(b.arrow_mult) * (1.0 + cast.dmg_bonus())
 		var range_px := Balance.num("skills.%s.range" % id) if Balance.has("skills.%s.range" % id) else -1.0
 		var n := int(b.arrows)

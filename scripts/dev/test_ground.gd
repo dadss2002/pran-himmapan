@@ -207,9 +207,10 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	free_one_shots()                     # Task 3f review: sparks, crits, pickups, the warp sparkle belong to the room left
 	_warp_fx = null
 	for c in (world.get_children() if world else []):   # review Important #1: the hero's arrows belong to the room left too
-		if c is Arrow or c is FireTrail:     # M5b: so do fire trails (they outlive their arrow by 2-3 s)
+		if c is Arrow or c is FireTrail or c is ArrowRain:     # M5b: so do fire trails (they outlive their arrow by 2-3 s) and ห่าศร (Task 8b)
 			c.halt()
 			c.queue_free()                   # queued: go_to may run inside an arrow's own hit (a kill that moves us)
+	if hero: hero.halt_areas()           # Task 8b: the hero's list of rains is emptied with them
 	Sfx.stop_world()                     # sound spec: the old room's hits and cries stop (the warp gong goes on)
 	if hud: hud.close_map()              # Task 8: a room change never leaves the full map open (or the game paused)
 	_keep_room()                         # Task 4: the room being left stays as it is (unless re-rolled since)
@@ -407,7 +408,7 @@ func _trip(to_room: String, to_warp: String) -> void:
 	# Review Important #1: so do the hero's arrows (ricochets too): each stops where it is and hits nothing more, so
 	# no old-room monster dies mid-fade (no EXP, no loot dropped into a room about to be freed); go_to frees them.
 	for c in world.get_children():
-		if c is Arrow or c is FireTrail: c.halt()   # M5b: a fire trail stops burning in the dark too
+		if c is Arrow or c is FireTrail or c is ArrowRain: c.halt()   # M5b: a fire trail and a ห่าศร stop in the dark too
 	_new_fade().tween_property(fade, "color:a", 1.0, FADE_OUT).set_trans(FADE_OUT_TRANS).set_ease(FADE_OUT_EASE)
 	_fade_tween.tween_callback(func(): go_to(to_room, to_warp))
 
@@ -637,8 +638,12 @@ func _on_arrow(a: Arrow) -> void:
 		a.add_child(trail)
 		trail.play("piercing_trail")
 
+## Task 8b: ห่าศร's cast shows the bow's burst (spread_burst) in the rain's gold at the bow (AI decision, 0 gen).
 func _on_skill_released(id: String, at: Vector2) -> void:
 	if id == "spread": _fx("spread_burst", at)
+	elif Skills.kind(id) == "rain":
+		var f := _fx("spread_burst", at)
+		if f: f.modulate = ArrowRain.GOLD
 
 func _on_wolf_died(w: Wolf) -> void:
 	hero.on_kill(w.stats().exp, w.level)

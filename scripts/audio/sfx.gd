@@ -48,6 +48,11 @@ const UI_VOL := 0.6
 const MAX_PLAYERS := 24
 const LOG_MAX := 64
 
+## M5b Task 8b (plan: "at most one hit sound per tick"): while true, the hit sounds (HIT_IDS) are not started. SkillHit
+## sets it for every hit of an area tick after the first that landed, so a ห่าศร tick on 6 monsters sounds once, not as
+## 4 voices at a time twice a second. Monster cries keep their own limit (MONSTER_BURST).
+const HIT_IDS := ["arrow_hit", "crit_hit"]
+static var hit_quiet := false
 static var enabled := true
 static var volume := 1.0                     # 0..1, from the settings' 0-100
 static var rng := RandomNumberGenerator.new()   # variants and pitch; tests seed it
@@ -97,6 +102,7 @@ static func monster_paths(kind: String, event: String) -> Array:
 ## sounds are plain, non-positional players today). False when not started (audio off, voice limit, ...).
 static func play(id: String, at := Vector2.INF) -> bool:
 	_log(requested, {"id": id})
+	if hit_quiet and id in HIT_IDS: return false       # the rest of an area tick's hits (SkillHit): asked, not played
 	if not EVENTS.has(id):
 		push_warning("Sfx: unknown sound id '%s'" % id)
 		return false
@@ -142,6 +148,7 @@ static func reset() -> void:
 	enabled = true
 	volume = 1.0
 	host = null
+	hit_quiet = false
 	requested.clear()
 	started.clear()
 	fake_now = -1.0

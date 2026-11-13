@@ -556,7 +556,7 @@ func test_save_gems_on_new_skills():   # signed save at level 9 with "fire_arrow
 
 FX (0 gen): `warp_ring` tinted `#edbb55`, scaled to `radius`, for the whole duration (the "ยันต์วงกลมบนพื้น"). Each tick drops 3 arrow sprites from the existing arrow texture, falling 48 px; they are decoration and are not drawn while PerfSaver is on. One `hit_spark` per target hit. Sound: one `bow_shot` at cast. Hit sounds come from `receive_hit`: if `Sfx` has no throttle, play at most one hit sound per tick. The cast reuses the bow-shot animation.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```gdscript
 func test_rain_six_ticks_r64():          # hero Lv7, rain at the origin: dummy at 63 px gets 6 hits over 3.0 s, each mult ≈ 0.4; dummy at 65 px gets 0; no hit before t = 0.5
@@ -571,8 +571,10 @@ func test_rain_freed_on_warp():          # hero.begin_warp() during the rain →
 func test_rain_not_overlapping():        # extend at gem Lv20 (0.49) → duration 4.47 s < shortest cooldown 10 × 0.7: two rains never overlap
 ```
 
-- [ ] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes**, then run `test_hero`, `test_hero_gems` and `test_arrow_gems`.
-- [ ] **Step 5: Commit** `git commit -m "M5b Task 8b: ห่าศร (r64, 6 ticks of 40%) + shared SkillHit"`
+- [x] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes**, then run `test_hero`, `test_hero_gems` and `test_arrow_gems`.
+- [x] **Step 5: Commit** `git commit -m "M5b Task 8b: ห่าศร (r64, 6 ticks of 40%) + shared SkillHit"`
+
+**Done (2026-11-12):** `scripts/combat/skill_hit.gd` (`SkillHit.hit` / `feet`: receive_hit → `Hero.combo_hit` with the press's ledger → leech → the element gem's status; lightning = one chain per monster hit at ×0.8; spark tint of a sustain recipe as `Arrow._receive`; never mark / freeze count / trail / bounce), `scripts/skills/arrow_rain.gd` (`ArrowRain`: `setup`, `step`, `ticks_done`, `done`, `halt`; hits feet within the radius at 0.5, 1.0 … for `ticks` ticks, nothing before 0.5 s; over after the last tick, 0.3 s fade, frees itself). `Hero`: `CASTABLE_KINDS` = arrows + rain (**`_castable` still refuses กับดักหนาม until 8c**), `_release` rain branch (MP, cooldown, ledger as arrows; one `bow_shot`; no arrow), `target_within(range)` (the one lock-on list; `current_target` uses it), `area_point`, `hit_source` (+ `mult` with ราหู's bonus, `targets`), `rains`, `halt_areas()` on `begin_warp` / `_on_died`, `rain_cast` signal. `TestGround`: `go_to` / `_trip` halt and free rains, gold `spread_burst` at the bow on the cast. `Sfx.hit_quiet` (one hit sound per tick). Look: the real hit circle drawn (gold on a dark line) + the yantra (`warp_ring`, recolour shader, even scale inside the circle), 6 falling arrows a tick (plan: 3) with a streak; PerfSaver sheds the arrows only. Tests (`tests/test_area_skills.gd`, 15 new; written with the code, each rule then checked by a mutation that a test caught: no halt on warp, trap castable, no sound limit, no kill hook, radius, tick at cast): the plan's 10 + `test_rain_no_arrow_only_effects`, `test_rain_one_hit_sound_per_tick`, `test_rain_marker_stays_with_perf_saver`, `test_rain_press_matches_sim`, `test_rain_in_game_hits_and_goes_with_the_room` (TestGround, real monsters, warp and go_to). Changed assertion: `test_non_arrow_skill_press_is_refused` now covers กับดักหนาม only (ห่าศร casts). Game vs sim: equal for no gem / multiply / expand / lightning; extend 280 % vs 312 %, fire-gem burn ≈ +17 % vs +60 % (AI decisions 10–11). Screenshots: `tests/screenshots_m5b_rain.gd` → `docs/preview/m5b/t8b_rain_{light,dark,light_saver}_{warn,tick,fall}[_x3].png`. AI decisions 10–18; risks B34. No button casts ห่าศร in game until Task 8e.
 
 ---
 
