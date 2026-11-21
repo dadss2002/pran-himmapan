@@ -150,15 +150,16 @@ walkable = sum(1 for y in range(N) for x in range(N) if walk(x, y))
 unreached = walkable - len(reach)
 
 # ---- monster packs: along the routes, level by zone ------------------------
-ZONES = [  # (test(x,y), kinds, level range)
-    (lambda x, y: x < 60 and y > 76, ["deer", "boar", "wolf"], (1, 2)),
-    (lambda x, y: x < 56 and y <= 76, ["wolf", "shroom", "macaque"], (3, 4)),
-    (lambda x, y: 56 <= x < 92 and 50 <= y < 76, ["macaque", "boar", "wolf"], (5, 6)),
-    (lambda x, y: y >= 76 and x < 82, ["macaque", "shroom", "boar"], (5, 6)),
-    (lambda x, y: y >= 76, ["viper", "shroom", "macaque"], (6, 7)),
-    (lambda x, y: x < 82 and y < 50, ["macaque", "viper", "boar"], (6, 6)),
-    (lambda x, y: True, ["kongkoi", "viper", "wolf"], (8, 9)),
+ZONES = [  # (cell rect x, y, w, h; first match wins), kinds, level range
+    ((0, 77, 60, 51), ["deer", "boar", "wolf"], (1, 2)),         # x < 60, y > 76
+    ((0, 0, 56, 77), ["wolf", "shroom", "macaque"], (3, 4)),     # x < 56, y <= 76
+    ((56, 50, 36, 26), ["macaque", "boar", "wolf"], (5, 6)),     # 56 <= x < 92, 50 <= y < 76
+    ((0, 76, 82, 52), ["macaque", "shroom", "boar"], (5, 6)),    # y >= 76, x < 82
+    ((0, 76, 128, 52), ["viper", "shroom", "macaque"], (6, 7)),  # y >= 76
+    ((0, 0, 82, 50), ["macaque", "viper", "boar"], (6, 6)),      # x < 82, y < 50
+    ((0, 0, 128, 128), ["kongkoi", "viper", "wolf"], (8, 9)),    # everything else
 ]
+def in_zone(r, x, y): return r[0] <= x < r[0] + r[2] and r[1] <= y < r[1] + r[3]
 packs = []
 safe = [(14, 110), (83, 66), (100, 38)]
 pts = spline(MAIN) + spline(SIDE_NW) + spline(LOOP) + spline(SIDE_N) + spline(SIDE_E)
@@ -174,8 +175,8 @@ for i, (x, y) in enumerate(cand):
     if any(math.hypot(cx - sx, cy - sy) < 9 for sx, sy in safe): continue
     if math.hypot(cx - 111, cy - 13) < 12: continue
     if any(math.hypot(cx - p["at"][0] / CELL, cy - p["at"][1] / CELL) < 7.2 for p in packs): continue
-    for test, kinds, (lo, hi) in ZONES:
-        if test(cx, cy):
+    for rect, kinds, (lo, hi) in ZONES:
+        if in_zone(rect, cx, cy):
             packs.append({"kind": rng.choice(kinds), "level": rng.randint(lo, hi), "count": rng.randint(4, 6),
                           "at": [cx * CELL + 16, cy * CELL + 16]})
             break
@@ -191,8 +192,9 @@ data = {
     "waypoints": [[x * CELL + 16, y * CELL + 16] for x, y in WAYPOINTS],
     "landmarks": [{"id": k, "at": [x * CELL + 16, y * CELL + 16], "name": n, "levels": lv} for k, (x, y, n, lv) in LM.items()],
     "packs": packs,
+    "zones": [{"rect": [v * CELL for v in r], "kinds": k, "levels": list(lv)} for r, k, lv in ZONES],
 }
-json.dump(data, open(f"{OUT}/layout.json", "w"), ensure_ascii=False, indent=1)
+json.dump(data, open(f"{OUT}/layout.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 # ---- review image ---------------------------------------------------------
 S = 8  # preview px per cell -> 1024x1024 map

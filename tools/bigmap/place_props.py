@@ -2,15 +2,17 @@
 
 python3 -I place_props.py LAYOUT.json PROPS_DIR GROUND.png OUT_DIR
 Writes OUT_DIR/bigmap_props.png (ground + Y-sorted props) and OUT_DIR/props_placement.json
-(name, foot x/y in px, sprite size, blocks, foot box [x,y,w,h] or null) for the Godot build. Deterministic (fixed seeds).
+(name, foot x/y in px = sprite foot (bottom of the opaque bbox), sprite size, blocks, foot box [x,y,w,h] or null,
+floor = drawn flat under the y-sorted world, deck = walkable bridge deck rect [x,y,w,h] in px) for the Godot build.
+Deterministic (fixed seeds). Boxes, floor and deck are data only: the preview image does not use them.
 """
 import json, sys, random, math
 from PIL import Image
 
 LAYOUT, PROPS, GROUND, OUT = sys.argv[1:5]
-L = json.load(open(LAYOUT))
+L = json.load(open(LAYOUT, encoding="utf-8"))
 g = L["grid"]; N = len(g); T = 32
-man = json.load(open(f"{PROPS}/props_manifest.json"))
+man = json.load(open(f"{PROPS}/props_manifest.json", encoding="utf-8"))
 img = {k: Image.open(f"{PROPS}/{k}.png").convert("RGBA") for k in man}
 
 def at(x, y): return g[y][x] if 0 <= x < N and 0 <= y < N else "F"
@@ -111,18 +113,42 @@ for n, fx, fy, _, _ in sorted(placed, key=lambda p: p[2]):
 out.save(f"{OUT}/bigmap_props.png")
 def im_size(n): return list(img[n].size)
 TREES = ("tree_", "banyan_", "raintree_", "deadtree_")
+# buildings and big ruins (walls, rubble, fallen stupa, well, shrine, arch, stairs, root-head): their box covers
+# ~70% of the sprite's opaque base, so the hero cannot walk over the base (AI decision, task-1 review item 5)
+STRUCTURES = ("chedi_", "prang_") + tuple(f"ruin_{i:02d}" for i in (2, 3, 4, 7, 8, 9, 10, 13, 14, 16))
+BASE_BAND, BASE_ALPHA, STRUCT_SHARE = 12, 128, 0.7
+FLOOR = ("bridge_",) + tuple(f"pond_{i:02d}" for i in (4, 5, 12, 15, 19))  # flat: bridges, floating pads/rosettes
+# walkable deck inside each bridge sprite (sprite px, x0, y0, x1, y1): the opaque bbox minus the rails along the
+# top and the front (bottom) edge and the abutment feet under the deck; read from the sprites by eye
+DECK = {"bridge_wood_01": (9, 54, 199, 104), "bridge_stone_01": (10, 52, 198, 116)}
+def base_span(n):
+    """x0, x1 (sprite px, end exclusive) of the solid pixels in the bottom BASE_BAND rows of the opaque bbox"""
+    bb = man[n]["bbox"]; a = img[n].getchannel("A")
+    xs = [x for y in range(bb[3] - BASE_BAND, bb[3]) for x in range(bb[0], bb[2]) if a.getpixel((x, y)) >= BASE_ALPHA]
+    return min(xs), max(xs) + 1
 def foot_box(n, fx, fy, blocks):
-    """Collision box [x, y, w, h] at the foot (bottom of the opaque bbox), centred under the opaque bbox:
-    trees = trunk (1/4 bbox width, 8-12 px high), others 1/3 width, 8-16 px high; min 12 px wide."""
+    """Collision box [x, y, w, h] on the foot line (bottom of the opaque bbox). Trees: trunk, 1/4 bbox width,
+    8-12 px high, centred under the bbox. Structures: 70% of the solid base width, centred on the base, 16 px
+    high at most. Others: 1/3 bbox width, 8-16 px high, centred under the bbox. Min 12 px wide."""
     if not blocks: return None
     bb = man[n]["bbox"]; bw, bh = bb[2] - bb[0], bb[3] - bb[1]
-    tree = n.startswith(TREES)
-    bw_ = max(12, round(bw / 4 if tree else bw / 3))
-    bh_ = min(12 if tree else 16, max(8, round(bh * (0.1 if tree else 0.25))))
-    cx = fx - img[n].width // 2 + (bb[0] + bb[2]) // 2  # world x of the opaque bbox centre
-    return [cx - bw_ // 2, fy - bh_, bw_, bh_]
-json.dump([{"name": n, "x": fx, "y": fy, "size": im_size(n), "blocks": b, "box": foot_box(n, fx, fy, b)}
+    left = fx - img[n].width // 2
+    if n.startswith(STRUCTURES):
+        b0, b1 = base_span(n)
+        w = max(12, round((b1 - b0) * STRUCT_SHARE)); cx = left + (b0 + b1) // 2
+        h = min(16, max(8, round(bh * 0.25)))
+    else:
+        tree = n.startswith(TREES)
+        w = max(12, round(bw / 4 if tree else bw / 3)); cx = left + (bb[0] + bb[2]) // 2
+        h = min(12 if tree else 16, max(8, round(bh * (0.1 if tree else 0.25))))
+    return [cx - w // 2, fy - h, w, h]
+def deck(n, fx, fy):
+    if n not in DECK: return None
+    x0, y0, x1, y1 = DECK[n]; left, top = fx - img[n].width // 2, fy - man[n]["bbox"][3]
+    return [left + x0, top + y0, x1 - x0, y1 - y0]
+json.dump([{"name": n, "x": fx, "y": fy, "size": im_size(n), "blocks": b, "box": foot_box(n, fx, fy, b),
+            "floor": n.startswith(FLOOR), "deck": deck(n, fx, fy)}
            for n, fx, fy, b, _ in placed],
-          open(f"{OUT}/props_placement.json", "w"), indent=0)
+          open(f"{OUT}/props_placement.json", "w", encoding="utf-8"), indent=0)
 from collections import Counter
 print(len(placed), Counter(n.rsplit("_", 1)[0] for n, *_ in placed).most_common())

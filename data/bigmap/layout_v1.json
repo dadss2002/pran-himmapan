@@ -810,5 +810,126 @@
    "arena": true,
    "elite": 1
   }
+ ],
+ "zones": [
+  {
+   "rect": [
+    0,
+    2464,
+    1920,
+    1632
+   ],
+   "kinds": [
+    "deer",
+    "boar",
+    "wolf"
+   ],
+   "levels": [
+    1,
+    2
+   ]
+  },
+  {
+   "rect": [
+    0,
+    0,
+    1792,
+    2464
+   ],
+   "kinds": [
+    "wolf",
+    "shroom",
+    "macaque"
+   ],
+   "levels": [
+    3,
+    4
+   ]
+  },
+  {
+   "rect": [
+    1792,
+    1600,
+    1152,
+    832
+   ],
+   "kinds": [
+    "macaque",
+    "boar",
+    "wolf"
+   ],
+   "levels": [
+    5,
+    6
+   ]
+  },
+  {
+   "rect": [
+    0,
+    2432,
+    2624,
+    1664
+   ],
+   "kinds": [
+    "macaque",
+    "shroom",
+    "boar"
+   ],
+   "levels": [
+    5,
+    6
+   ]
+  },
+  {
+   "rect": [
+    0,
+    2432,
+    4096,
+    1664
+   ],
+   "kinds": [
+    "viper",
+    "shroom",
+    "macaque"
+   ],
+   "levels": [
+    6,
+    7
+   ]
+  },
+  {
+   "rect": [
+    0,
+    0,
+    2624,
+    1600
+   ],
+   "kinds": [
+    "macaque",
+    "viper",
+    "boar"
+   ],
+   "levels": [
+    6,
+    6
+   ]
+  },
+  {
+   "rect": [
+    0,
+    0,
+    4096,
+    4096
+   ],
+   "kinds": [
+    "kongkoi",
+    "viper",
+    "wolf"
+   ],
+   "levels": [
+    8,
+    9
+   ]
+  }
  ]
 }
