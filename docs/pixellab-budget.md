@@ -193,3 +193,19 @@ create_topdown_tileset mode=pro tile 32 view low top-down + palette data/style/f
 | 2026-11-21 | พื้นหิน ↔ ลานบอส | create_topdown_tileset pro 32 | 15 | 6b54c073-856a-4e17-90f8-9cd1c074c9bd |
 | 2026-11-21 | สระบัว ↔ หญ้า (ตลิ่ง 0.25) | create_topdown_tileset pro 32 | 15 | 1ca7d188-a10b-4112-b33a-b42c04adea6f |
 | | **รวมจริงรอบ 1** | | **120** | ตรงกับที่ประเมิน · ภาพตรวจ docs/preview/bigmap/round1_review.png |
+
+## แผนที่ใหญ่ รอบ 1b: เจนพื้นใหม่ตามภาพตัวอย่าง (เจ้าของ 2026-11-21: "ตัวอย่างพื้น" → "เจนพื้นใหม่ตามสีและแสงตัวอย่าง"; ข้อ 3/6 → "เจนพื้นแบบสุ่มหลายแบบ"; ข้อ 5 → "ป่าทึบบนหน้าผา 0 gen")
+ชุดสี data/style/bigmap_warm_palette.json (สุ่มจาก docs/reference/bigmap_ground_example.png) · create_topdown_tileset pro 32 × 8 = 120 + create_tiles_pro แบบสุ่ม 4 ชุด × 10 = 40 · **ประเมินก่อนเจน 160 gen** · ใช้แล้วทั้งงาน 120 → หลังรอบนี้ ≤ 280 จากเพดาน 1,000 · เจนชุดแรก (ทาง↔หญ้า) ให้ดูก่อน แล้วค่อยต่อชุดอื่น
+| วันที่ | งาน | เครื่องมือ | gen | job |
+|---|---|---|---|---|
+| 2026-11-21 | ทดลอง ทางทราย ↔ หญ้าอุ่น (เจ้าของ: "ผ่าน เจนอีก 7 ชุดต่อเลย") | create_topdown_tileset pro 32 | 15 | 69be8185-af7c-4fae-a1d6-54a8fe2a9604 |
+| 2026-11-21 | หญ้า ↔ ดงไม้ทึบ | create_topdown_tileset pro 32 | 15 | fe08c377-77eb-4182-bb83-fb82d2f59054 |
+| 2026-11-21 | ลำธาร ↔ หญ้า | create_topdown_tileset pro 32 | 15 | 8bed3572-7336-4a83-8e49-ae22855de1a7 |
+| 2026-11-21 | หญ้า ↔ พื้นหินเนิน | create_topdown_tileset pro 32 | 15 | 50fe396f-37f5-46ee-8daa-8e969f1fdc5e |
+| 2026-11-21 | หญ้า ↔ ลานหินวัด | create_topdown_tileset pro 32 | 15 | 21df29c5-d1e4-4607-8884-0a08bc524254 |
+| 2026-11-21 | สระบัว ↔ หญ้า | create_topdown_tileset pro 32 | 15 | 8cd37576-109f-4990-8f2d-f9b89f589a4f |
+| 2026-11-21 | พื้นหิน ↔ หน้าผา บนเป็นป่าทึบ (ข้อ 5 "ป่าทึบบนหน้าผา" ทำในชุดนี้เลย) | create_topdown_tileset pro 32 | 15 | e221b65c-10be-44c2-aa51-31ebfd685c40 |
+| 2026-11-21 | พื้นหิน ↔ ลานบอส | create_topdown_tileset pro 32 | 15 | ec614dc9-79ac-4338-bd99-12893659f33c |
+| 2026-11-21 | พื้นสุ่ม ลานหินวัด 16 แบบ (ใช้ 12) | create_tiles_pro style 32 | 10 | 62263e19-87b4-45d1-9438-43fbd24e60e8 |
+| 2026-11-21 | พื้นสุ่ม ลานบอส 16 แบบ (ใช้ 13) | create_tiles_pro style 32 | 10 | 3ef05e9a-a0ea-46ab-b59f-4fc70e463d62 |
+| | **รวมจริงรอบ 1b** | | **140** | ต่ำกว่าประเมิน 160 (พื้นสุ่มทำ 2 ชุดที่เจ้าของชี้ ไม่ทำหญ้า/หิน) · **รวมทั้งงานแผนที่ 260 / 1,000** · ภาพตรวจ docs/preview/bigmap/round1b_review.png |

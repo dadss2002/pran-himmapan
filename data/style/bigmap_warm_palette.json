@@ -1,0 +1,74 @@
+{
+ "_doc": "Warm ground palette for the big map, curated from docs/reference/bigmap_ground_example.png (owner 2026-11-21 'ตัวอย่างพื้น', 'เจนพื้นใหม่ตามสีและแสงตัวอย่าง'). Sampled colours, hand-arranged into ramps.",
+ "grass": [
+  "#2f3d1f",
+  "#46552a",
+  "#5e6e2f",
+  "#7a8a34",
+  "#98a83c",
+  "#b4bd4a",
+  "#cfc95c",
+  "#e6d97a"
+ ],
+ "shadow": [
+  "#1e1a14",
+  "#34301f"
+ ],
+ "flowers": [
+  "#e07ab0",
+  "#f4f0e6",
+  "#a77fd6",
+  "#f3d046"
+ ],
+ "sand_path": [
+  "#6e5233",
+  "#96764a",
+  "#c19a62",
+  "#e2b97c",
+  "#f6d29c",
+  "#fbe3b8"
+ ],
+ "thicket": [
+  "#1f3318",
+  "#2e4a22",
+  "#45662b",
+  "#628533"
+ ],
+ "rock": [
+  "#4f493f",
+  "#6f675a",
+  "#958b78",
+  "#bdb29b",
+  "#ddd3bb"
+ ],
+ "water": [
+  "#2e5866",
+  "#3c6f80",
+  "#5b98a6",
+  "#8cc3c4",
+  "#cfe6df"
+ ],
+ "lotus": [
+  "#e58fb0",
+  "#f6c4d6",
+  "#3f7a3a"
+ ],
+ "temple": [
+  "#7d6a52",
+  "#a48c6c",
+  "#c9b18a",
+  "#e5d3ad",
+  "#b06a4a"
+ ],
+ "arena": [
+  "#6e3b28",
+  "#9a5a3c",
+  "#b9714a",
+  "#d49264",
+  "#c8a744"
+ ],
+ "wood": [
+  "#5a3d27",
+  "#80593a"
+ ]
+}

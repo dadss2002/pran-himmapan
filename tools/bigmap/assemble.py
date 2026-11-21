@@ -51,6 +51,17 @@ FULL = {}  # terrain -> (sheet key, pos)
 for (lo, up) in SETS:
     FULL.setdefault(lo, ((lo, up), STD[(False,) * 4])); FULL.setdefault(up, ((lo, up), STD[(True,) * 4]))
 FULL[GRASS] = ((PATH, GRASS), STD[(True,) * 4])
+# optional full-tile variants (create_tiles_pro): file var_<terrain>.png (8 per row) + keep list
+import os
+VAR = {}
+for terr, keep in ((STONE, [0, 1, 2, 3, 4, 6, 8, 10, 11, 12, 14, 15]), (ARENA, None)):
+    f = f"{TILES}/var_{terr if terr != STONE else 'temple'}.png"
+    if os.path.exists(f):
+        vs = Image.open(f).convert("RGBA")
+        n = (vs.width // T) * (vs.height // T)
+        keep = keep if keep is not None else json.load(open(f[:-4] + "_keep.json")) if os.path.exists(f[:-4] + "_keep.json") else list(range(n))
+        VAR[terr] = [vs.crop(((i % (vs.width // T)) * T, (i // (vs.width // T)) * T, (i % (vs.width // T)) * T + T, (i // (vs.width // T)) * T + T)) for i in keep]
+VAR_RATE = 0.35
 cliff_sheet = Image.open(f"{TILES}/t5_rock_cliff.png").convert("RGBA")
 CLIFF_TILES = []
 for line in open(f"{TILES}/t5_meta.txt"):
@@ -108,6 +119,10 @@ for y in range(N):
             # free variety: mirror full tiles (stone bricks only left-right) so big areas don't repeat
             h = (x * 73856093 ^ y * 19349663) & 3
             img = sheets[key].crop((pos[0], pos[1], pos[0] + T, pos[1] + T))
+            r = random.Random(x * 1009 + y * 7919)
+            if c[0] in VAR and r.random() < VAR_RATE:
+                k = r.randrange(len(VAR[c[0]]))
+                out.paste(VAR[c[0]][k], (x * T, y * T)); row.append(f"var_{c[0]}:{k}"); continue
             if c[0] not in (GRASS, ROCK, THICKET): h = 0
             if h & 1: img = img.transpose(Image.FLIP_LEFT_RIGHT)
             if h & 2 and c[0] != STONE: img = img.transpose(Image.FLIP_TOP_BOTTOM)
