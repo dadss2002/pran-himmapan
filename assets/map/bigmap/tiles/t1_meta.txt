@@ -1,0 +1,16 @@
+0,0: upper upper lower upper
+32,0: upper lower upper lower
+64,0: lower upper lower lower
+96,0: upper upper lower lower
+0,32: lower upper upper lower
+32,32: upper lower lower lower
+64,32: lower lower lower lower
+96,32: lower lower lower upper
+0,64: upper lower upper upper
+32,64: lower lower upper upper
+64,64: lower lower upper lower
+96,64: lower upper lower upper
+0,96: upper upper upper upper
+32,96: upper upper upper lower
+64,96: upper lower lower upper
+96,96: lower upper upper upper

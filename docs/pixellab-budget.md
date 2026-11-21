@@ -184,3 +184,12 @@
 create_topdown_tileset mode=pro tile 32 view low top-down + palette data/style/forest_palette.json · ต่อกันผ่าน base tile ของหญ้า/พื้นหิน · **ประเมินก่อนเจน 8 × 15 = 120 gen** · เพดานรอบ 1: 120 (+สำรองรวมทั้งงาน 150)
 | วันที่ | งาน | เครื่องมือ | gen | job |
 |---|---|---|---|---|
+| 2026-11-21 | ทางดิน ↔ หญ้า (หญ้าเป็นฐานของทุกชุด) | create_topdown_tileset pro 32 | 15 | 045299cf-9e83-4725-9a09-5eeb8cca4099 |
+| 2026-11-21 | หญ้า ↔ ดงไม้ทึบ (ยก 0.25) | create_topdown_tileset pro 32 | 15 | 310e3f26-aab6-4971-ac3c-243afca95a08 |
+| 2026-11-21 | ลำธาร ↔ หญ้า (ตลิ่ง 0.25) | create_topdown_tileset pro 32 | 15 | 03c64093-72da-49a9-bdf7-4fe7744d8df7 |
+| 2026-11-21 | หญ้า ↔ พื้นหินเนิน | create_topdown_tileset pro 32 | 15 | 15b58e1e-4cce-4482-b177-ac84a1ac2e39 |
+| 2026-11-21 | พื้นหิน ↔ หน้าผา (ชุดสูง 25 tile) | create_topdown_tileset pro 32 | 15 | 25c4c2b9-5439-410f-ac18-5e7e440e2f26 |
+| 2026-11-21 | หญ้า ↔ ลานหินวัด | create_topdown_tileset pro 32 | 15 | 7728760f-e15a-4920-9823-9de9b8f5f0ea |
+| 2026-11-21 | พื้นหิน ↔ ลานบอส | create_topdown_tileset pro 32 | 15 | 6b54c073-856a-4e17-90f8-9cd1c074c9bd |
+| 2026-11-21 | สระบัว ↔ หญ้า (ตลิ่ง 0.25) | create_topdown_tileset pro 32 | 15 | 1ca7d188-a10b-4112-b33a-b42c04adea6f |
+| | **รวมจริงรอบ 1** | | **120** | ตรงกับที่ประเมิน · ภาพตรวจ docs/preview/bigmap/round1_review.png |
