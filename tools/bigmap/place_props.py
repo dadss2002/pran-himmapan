@@ -2,7 +2,7 @@
 
 python3 -I place_props.py LAYOUT.json PROPS_DIR GROUND.png OUT_DIR
 Writes OUT_DIR/bigmap_props.png (ground + Y-sorted props) and OUT_DIR/props_placement.json
-(name, foot x/y in px, sprite size, blocks) for the Godot build. Deterministic (fixed seeds).
+(name, foot x/y in px, sprite size, blocks, foot box [x,y,w,h] or null) for the Godot build. Deterministic (fixed seeds).
 """
 import json, sys, random, math
 from PIL import Image
@@ -110,7 +110,19 @@ for n, fx, fy, _, _ in sorted(placed, key=lambda p: p[2]):
     out.alpha_composite(im, (max(0, fx - im.width // 2), max(0, fy - bb[3])))
 out.save(f"{OUT}/bigmap_props.png")
 def im_size(n): return list(img[n].size)
-json.dump([{"name": n, "x": fx, "y": fy, "size": im_size(n), "blocks": b} for n, fx, fy, b, _ in placed],
+TREES = ("tree_", "banyan_", "raintree_", "deadtree_")
+def foot_box(n, fx, fy, blocks):
+    """Collision box [x, y, w, h] at the foot (bottom of the opaque bbox), centred under the opaque bbox:
+    trees = trunk (1/4 bbox width, 8-12 px high), others 1/3 width, 8-16 px high; min 12 px wide."""
+    if not blocks: return None
+    bb = man[n]["bbox"]; bw, bh = bb[2] - bb[0], bb[3] - bb[1]
+    tree = n.startswith(TREES)
+    bw_ = max(12, round(bw / 4 if tree else bw / 3))
+    bh_ = min(12 if tree else 16, max(8, round(bh * (0.1 if tree else 0.25))))
+    cx = fx - img[n].width // 2 + (bb[0] + bb[2]) // 2  # world x of the opaque bbox centre
+    return [cx - bw_ // 2, fy - bh_, bw_, bh_]
+json.dump([{"name": n, "x": fx, "y": fy, "size": im_size(n), "blocks": b, "box": foot_box(n, fx, fy, b)}
+           for n, fx, fy, b, _ in placed],
           open(f"{OUT}/props_placement.json", "w"), indent=0)
 from collections import Counter
 print(len(placed), Counter(n.rsplit("_", 1)[0] for n, *_ in placed).most_common())
