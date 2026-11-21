@@ -16,7 +16,8 @@
 - New game / load = hero at the start (`layout.start`), fog all dark, waypoint 1 unlocked; level, bag, gems, gear, skills kept.
 - No new game numbers beyond the spec. Every ⚙ constant cites the spec line.
 - Save v5; v4 loads (old room waypoints dropped). Never load a newer version than the game knows (B15).
-- Cheat checks in the save: waypoint ids ⊂ {w1,w2,w3}; chest ids ⊂ {c4,c11,c12}, no duplicates; signature as v4.
+- Cheat checks in the save: waypoint ids ⊂ {w1,w2,w3}; chest ids ⊂ {c4,c11,c12}, no duplicates; signature as v4. These id sets are **constants in code**, never read from world.json (a modded build could widen them); a test checks world.json ids equal the constants.
+- Bridges and other `floor: true` props are drawn on a layer under the y-sorted world; pack members are placed on open, hero-roomy cells near the pack point, never on raw ring points.
 - Mobile: one `TileMapLayer`, props culled by `VisibleOnScreenNotifier2D`/`PerfSaver`; no 4096² texture.
 - Tests headless; don't claim pass without running `godot --headless -s tests/run_tests.gd`.
 
@@ -56,7 +57,7 @@
 - `func in_arena(p: Vector2) -> bool`
 - Also act as the `layout` the hero/monsters already take (`blocked_at`, `size_px()`).
 
-- [ ] Tests: `blocked_at` matches Task 1 cases; nav path start→boss gate exists; `packs_near(start, 600)` has the Lv1 packs only; `zone_level` near the arena gate = the level of the nearest layout pack (read it from world.json, not a literal); `in_arena(gate - (0,64))` false.
+- [ ] Tests: `blocked_at` matches Task 1 cases; nav path start→boss gate exists; `packs_near(start, 500)` returns only packs of level ≤ 2; `zone_level` near the arena gate = the level of the nearest layout pack (read it from world.json, not a literal); `in_arena` follows `arena.centre`/`radius` (true at the centre, false at the gate and one cell outside the disc).
 - [ ] Implement; run tests; commit.
 
 ### Task 3: Big map scene (ground, props, hero, camera)
