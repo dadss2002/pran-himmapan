@@ -20,6 +20,9 @@ cell = [[CH[c] for c in row] for row in L["grid"]]
 orig = [row[:] for row in cell]
 def near(x, y, kinds, r=2):
     return any(orig[yy][xx] in kinds for yy in range(max(0, y-r), min(N, y+r+1)) for xx in range(max(0, x-r), min(N, x+r+1)))
+BANK = set()  # grass cells between a path and a bridge: their corners stay grass, never path
+def bridge_zone(x, y):
+    return any(L["grid"][yy][xx] == "#" for yy in range(max(0, y-3), min(N, y+4)) for xx in range(max(0, x-3), min(N, x+4)))
 for y in range(N):
     for x in range(N):
         t = orig[y][x]
@@ -27,7 +30,9 @@ for y in range(N):
             for f in (ROCK, STONE, ARENA):
                 if near(x, y, {f}, 1): cell[y][x] = f; break
             else:
-                if near(x, y, {THICKET, WATER, POND}, 2) or near(x, y, {ROCK, STONE, ARENA}, 3): cell[y][x] = GRASS
+                if bridge_zone(x, y):  # path runs on to the bridge footing; one grass cell at the bank
+                    if near(x, y, {WATER}, 1): cell[y][x] = GRASS; BANK.add((x, y))
+                elif near(x, y, {THICKET, WATER, POND}, 2) or near(x, y, {ROCK, STONE, ARENA}, 3): cell[y][x] = GRASS
         elif t == THICKET and near(x, y, {WATER, POND}): cell[y][x] = GRASS
         elif t == THICKET and near(x, y, {CLIFF, ROCK, ARENA}, 2): cell[y][x] = ROCK
         elif t == THICKET and near(x, y, {CLIFF, ROCK, ARENA}, 4): cell[y][x] = GRASS
@@ -70,8 +75,11 @@ for line in open(f"{TILES}/t5_meta.txt"):
 
 PRIO = [WATER, POND, CLIFF, THICKET, STONE, ARENA, ROCK, PATH, GRASS]
 def vert(vx, vy):
-    seen = [cell[y][x] for y in (vy - 1, vy) for x in (vx - 1, vx) if 0 <= x < N and 0 <= y < N]
-    return min(seen, key=PRIO.index)
+    around = [(x, y) for y in (vy - 1, vy) for x in (vx - 1, vx) if 0 <= x < N and 0 <= y < N]
+    seen = [cell[y][x] for x, y in around]
+    best = min(seen, key=PRIO.index)
+    if best == PATH and any(c in BANK for c in around): return GRASS
+    return best
 V = [[vert(x, y) for x in range(N + 1)] for y in range(N + 1)]
 
 # cliff vertices: 1 cliff, 0 other, 2 = transition (lower vertex directly south of a cliff vertex)

@@ -55,8 +55,9 @@ for cx, cy in [(106, 8), (116, 8), (106, 19), (116, 19)]: put("arena_03", cx, cy
 # bridges: centre on the bridge cells of each crossing
 for (lx, ly), n in [((57, 57), "bridge_wood_01"), ((66, 89), "bridge_stone_01")]:
     cells = [(x, y) for y in range(ly - 6, ly + 7) for x in range(lx - 8, lx + 9) if at(x, y) == "#"]
-    mx = sum(c[0] for c in cells) / len(cells); my = max(c[1] for c in cells)
-    placed.append((n, int(mx * T + T / 2), int((my + 1) * T), False, 0))
+    mx = sum(c[0] for c in cells) / len(cells) * T + T / 2; my = sum(c[1] for c in cells) / len(cells) * T + T / 2
+    bb = man[n]["bbox"]  # centre the deck on the crossing; foot = bottom of the sprite's opaque box
+    placed.append((n, int(mx), int(my + (bb[3] - bb[1]) / 2), False, 0))
 
 # arena rim: pillars/statues/bones around the edge, centre left open for the fight
 rim = [(x, y) for y in range(N) for x in range(N) if g[y][x] == "A" and near(x, y, "r", 1)]
@@ -108,7 +109,8 @@ for n, fx, fy, _, _ in sorted(placed, key=lambda p: p[2]):
     im = img[n]; bb = man[n]["bbox"]
     out.alpha_composite(im, (max(0, fx - im.width // 2), max(0, fy - bb[3])))
 out.save(f"{OUT}/bigmap_props.png")
-json.dump([{"name": n, "x": fx, "y": fy, "size": man[n]["size"], "blocks": b} for n, fx, fy, b, _ in placed],
+def im_size(n): return list(img[n].size)
+json.dump([{"name": n, "x": fx, "y": fy, "size": im_size(n), "blocks": b} for n, fx, fy, b, _ in placed],
           open(f"{OUT}/props_placement.json", "w"), indent=0)
 from collections import Counter
 print(len(placed), Counter(n.rsplit("_", 1)[0] for n, *_ in placed).most_common())
