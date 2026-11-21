@@ -1,0 +1,814 @@
+{
+ "_doc": "Claude-designed big-map layout draft 2026-11-21 (owner: แผนที่ใหญ่ระดับ PoE 4096x4096, ผังโดย Claude, ภาพองค์ประกอบจาก PixelLab). 0 gen.",
+ "size": [
+  4096,
+  4096
+ ],
+ "cell": 32,
+ "legend": {
+  "F": "forest",
+  ".": "grass",
+  "=": "path",
+  "~": "water",
+  "#": "bridge",
+  "^": "cliff",
+  "r": "rock",
+  "s": "stone",
+  "o": "pond",
+  "A": "arena",
+  "C": "chedi"
+ },
+ "grid": [
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^^^^rrrrrrr^^^^^rrrrrrr^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^^^^rrrrrrrrrArrrrrrrrrrr^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~FFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^^^^rrrrrAAAAAAAAArrrrrrrr^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~FFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^^^^rrrrAAAAAAAAAAArrrrrrr^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^^^rrrrAAAAAAAAAAAAArrrrrr^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^^rrrrAAAAAAAAAAAAAAArrrrr^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^^rrrrAAAAAAAAAAAAAAAAArrrr^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^rrrrrAAAAAAAAAAAAAAAAArrrr^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^rrrrrAAAAAAAAAAAAAAAAArrr^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFFF^^^^^^^^^^^^^^^^^^^rrrrrAAAAAAAAAAAAAAAAArr^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFF....FFFF^^^^^^^^^^^^^^^^^^^rrrrAAAAAAAAAAAAAAAAAAAr^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFFFF.......FFF^^^^^^^^^^^^^^^^^^^rrrrrAAAAAAAAAAAAAAAAAr^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFF...........FFF^^^^^^^^^^^^^^^^^^^^rrrrAAAAAAAAAAAAAAAAArr^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFF......FFFFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFF............FFF^^^^^^^^^rrrrrrr^^^^^^rrAAAAAAAAAAAAAAAAArr^^^^^^",
+  "FFFFFFFFFFFFFFFFFF.........FFFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFF.............FFF^^^^^^^rrrrrrrrrr^^^^^^^AAAAAAAAAAAAAAAAArr^^^^^^",
+  "FFFFFFFFFFFF................FFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFF.............FFF^^^^^^rrrrrrrrrrrr^^^^^rrAAAAAAAAAAAAAAArrr^^^^^^",
+  "FFFFFFFFFF...................FFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFF.............FFF^^^^^^rrrrrrrrrrrrrrr^^rrrAAAAAAAAAAAAArrrr^^^^^^",
+  "FFFFFFFFF....................FFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFF..............FF^^^^^^rrrrrrrrrrrrrrrr^rrrrAAAAAAAAAAArrrr^^^^^^^",
+  "FFFFFFFFFF....................FFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFF................^^^^^^^rrrrrrrrrrrrrrrrrrr==AAAAAAAAArr^^^^^^^^^^",
+  "FFFFFFFFFF.....................FFFFFFFFFFFFFFFFFFFF~~~~~FFFFFF.................r^^^^^^^rrrrrrrrrrrrrrrrrr==rrrrArrrrr^^^^^^^^^^^",
+  "FFFFFFFFFFF........==.........FFFFFFFFFFFFFFFFFFFFF~~~~~FFFFFF.......==........rr^^^^^^^rrrrrrrrrrrrrrrr===rrrrrrrrr^^^^^^^^^^^^",
+  "FFFFFFFFFFFF.......==.........FFFFFFFFFFFFFFFFFFFFFF~~~~FFFFF........==........rr^^^^^^rrrrrrrrrrrrrrrr===rrrrrrrrrr^^^^^^^^^^^^",
+  "FFFFFFFFFFFFF.......==......FFFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFF........==........rrr^^^^^rrrrrrrrrrrrrrrr===rrrrrrrrr^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFF.......==....FFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~FFFF........==........rrr^^^^^rrrrrrrrrrrrrrr===rrrrrrrrrr^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFF.......==....FFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~FFF..........=........rrr^^^^^rrrrrrrrrrrrrr====rrr^rrrrr^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFF........==....FFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~FF..........=........rr^^^^^^rrrrrrrrrrrrrr===rrrrr^^r^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFF.......==....FFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~FF..........==.......rr^^^^^^rrrrrrrrrrrrr===rrrrrr^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFF.......==...FFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FF..........==.......r^^^^^^rrrrrrrrrrrrr===rrrrrrr^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFF.....==...FFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~F..........==......F^^^^^^^rrrrrrrrrrrr====rrrrrrr^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFF....==...FFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~F......FF..==...FFFF^^^^^^^rrrrrrrrrrr====rrrrrrrr^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFF....==.FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFF..==..FFFFF^^^^^^^rrrrrrrrrrr===rrrrrrrrr^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFF..==..FFF.FFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFF..=..FFFFF^^^^^^^rrrrrrrrrr===rrrrrrrrr^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFF..=.......FFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFF..==.FFFFFF^^^^^^^rrrrrrrrr===rrrrrrrrr^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFF..==.......FFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFF.==..FFFFFF^^^^^^rrrrrrrr===rrrrrrrrrr^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFF.==...........FFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFF..==.FFFFFFF^^^^^^rrrrrrr===rrrrrrrrr^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFF..=............FFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFF.==..FFFFFFF^^^^^^rrrrr===rrrrrrrrrr^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFF..==..........FFFFFFFFFFFFFFFFFFFFFF~~FFFFFFFFFF..==..FFFFFFF^^^^rrrrrr===rrrrrrrrr^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFF.==..........FFFFFFFFFFFFFFFFFFFFFF~~FFFFFFFFFFF.==..FFFFFFFF^^^rrrrr===rrrrrrrrrr^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFF.==.........FFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFF..==..FFFFFFFF^rrrrrr===rrrrrrrrrr^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFF..==.......FFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFF..==...FFF..FFFrrrrr===rrrrrrrrrrr^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFF..==......FFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFF..==.........F.rrrr===rrrrrrrrrrr^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFF..==......FFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFF...==...........rr===rrrrrrrrrrrr^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFF...==.....FFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFF...==............r===rrrrrrrrrrrr^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFF...==.....FFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFFF...=............===rrrrrr^rrrrrr^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFF...==......FFFFFFFFFFFFFFFFFFFF~~~~~FFFFFFFFFFFFF...==..........===rrrrrr^^^rrrr^^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFF...==.......FFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFFFF...==..........===.rrrr^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFF...==........FFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFFFF...==.........===...rr^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFF....==........F......FFFFFFFFF~~~~~FFFFFFFFFFFFFF....=........====....^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFFF....==...................FFFFF~~~~FFFFFFFFF..........==.......===....FF^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "FFFFFFFFFFFFFFFFFFFFFFFF......==.....................FF~~~~FFFFFFFF...........==......===....FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFF.......==......................~~~~~FFFFFFFF...........==.....====...FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFF........==.....................~~~~....................==.....===...FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFF........==.......==============####..............ssssssssssss=sss...FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFF.......==...==================####===.............ssssssssssssss...FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFF........============........==####======........ssCss.sss.s=ssCs...FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFF.......======................####=========.....ssssssssCCCsssss....FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFF.......===...................###....=========.ssssssssCCCsssss....FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFF....FFFFFFFFFFFFF......===...............FFFFF~~~.......=======sss..sssCCCsssss.....FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFF......FFFFFFFFFF.......===...............FFFFF~~~FF.........===ssssssssssssssss......FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFF.......FFFFFFFFFF.......===..............FFFFFFF~~~FF...........ss=sssssssssss.s.......FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFF...........FFFFFF........===.............FFFFFFFF~~~FFF..........ssssssssssssssss........FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFF.............FFF.........===............FFFFFFFFFF~~~FF..........sss.sCsssssssss.........FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFF.............FFF.........===..........FFFFFFFFFFFF~~~FF..........ss.sssssssssssss.........FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFF............FFF..........==........FFFFFFFFFFFFFFF~~~...........ssssssss.ss.ssss.........FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFF...........FFFF..........==........FFFFFFFFFFFFFFF~~~...........s.CsssssssssssCs.........FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFF..........FFFFF..........===.......FFFFFFFFFFFFFFFF~~~..........sssssssss.=sss.s........FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFF...........FFFFF..........===......FFFFFFFFFFFFFFFFF~~~~.........s.s.sss.ssssssss.......FFFFFFFFFFFFFFFFF....FFFFFFFFFFFF",
+  "FFFFFFF............FFFFF.........===.....FFFFFFFFFFFFFFFFFFF~~~.....................==........FFFFFFFFFFFFFFFFF.....FFFFFFFFFFFF",
+  "FFFFFFF.............FFFFF.........==...FFFFFFFFFFFFFFFFFFFFF~~~~....................===......FFFFFFFFFFFFFFFFF.......FFFFFFFFFFF",
+  "FFFFFFFF...FF.......FFFFFF.....F..===..FFFFFFFFFFFFFFFFFFFFFF~~~.....................===....FFFFFFFFFFFFFFFFF........FFFFFFFFFFF",
+  "FFFFFFFFFFFFFF.......FFFF....FFF..===...FFFFFFFFFFFFFFFFFFFFF~~~~.....................===...FFFFFFFFFFFFFFFFF........FFFFFFFFFFF",
+  "FFFFFFFFFFFFFFF.......FF......FF..===...FFFFFFFFFFFFFFFFFFFFFF~~~FF.......FFFF.........===...FFFFFFFFFFFFFFFF.............FFFFFF",
+  "FFFFFFFFFFFFFFFF...................==....FFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFFF.........===....FFFFFFFFFFFFFF..............FFFFF",
+  "FFFFFFFFFFFFFFFF...................==........FFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFFFF.........===....FFFFFFFFFFFF...............FFFFF",
+  "FFFFFFFFFFFFFFFF...................===.........FFFFFFFFFFFFFFF~~~~~FFFFFFFFFFFFFF.........==.....FFFFFFFFFF......==.......FFFFFF",
+  "FFFFFFFFFFFFFFFF...................===...........FFFFFFFFFFFFFF~~~~FFFFFFFFFFFFFFF........===.....FFFFFFFF.......==.......FFFFFF",
+  "FFFFFFFFFFFFFFFF....................===............FFFFFFFFFFFF~~~~FFFFFFFFFFFFFFFFF.......===....FFFFFFFFF.....==.........FFFFF",
+  "FFFFFFFFFFFFFFFFF...................===..............FFFFFFFFFF~~~~FFFFFFFFFFFFFFFFFFFFF....===....FFFFFFFF....===.........FFFFF",
+  "FFFFFFFFFFFFFFFFF....................===.............FFFFFFFFFF~~~~FFFFFFFFFFFFFFFFFFFFFF....==.....FFFFFFFF...==..........FFFFF",
+  "FFFFFFFFFFFFFFFFFF...................===..............FFFFFFFFF~~~~~FFFFFFFFFFFFFFFFFFFFF....==.....FFFFFFF...==...........FFFFF",
+  "FFFFFFFFFFFFFFFFFF....................===.............FFFFFFFFFF~~~~FFFFFFFFFFFFFFFFFFFFF....===......FFFFF...==..........FFFFFF",
+  "FFFFFFFFFFFFFFFFFF....................===.............FFFFFFFFFF~~~~FFFFFFFFFFFFFFF...........==.............==.........FFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFF....................==.............FFFFFFFFFF~~~~...FFFFFFFFFF.............==............===..FFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFF....................===............FFFFFFFF..~~~~.......FFFFFF.............===...........==...FFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFF.................===............FFFFFF....####..........FF...............==..........==...FFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFF................===.............FF.....==####=..........................==.........==....FFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFF...............====................=====####====.......................===.......===.....FFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFF.............===========.......=======.####======......................==......===......FFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFF...........===.==================.....###...=====....................==.....===........FFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFF..........===.......==========.....FFF~~......======.................==...===..........FFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFF.........====...................FFFFF~~~........========.............==.====............FFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFF.......====..................FFFFFFF~~~F..........========..........=====..............FFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFF......====.................FFFFFFFFF~~~FFF...........===========..=oooo..ooo...........FFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFF....====............FFFFFFFFFFFFFFF~~FFFFFF.............==========ooooooooooo.........FFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFF....====.............FFFFFFFFFFFFFF~~~FFFFFFFF................=====oooooooooooo.......FFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFF......====..............FFFFFFFF.FFFFF~~FFFFFFFFFFFF..................oooooooooooo.......FFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFF....FFF.......====.................FFFF....FFF~~~FFFFFFFFFFFFFFFFFFFF..........oooooooooooo.....FFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFF................=====...................F.......FF~~~FFFFFFFFFFFFFFFFFFFF..........oooooooooooo...FFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFF................====.............................F~~~FFFFFFFFFFFFFFFFFFFFF..........ooooooooooooFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFF................====....F.........................F~~~FFFFFFFFFFFFFFFFFFFFFF..........ooooooooooFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFF...............=====....FFFFF......................F~~~FFFFFFFFFFFFFFFFFFFFFF..........oooooooo...FFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFF...............====.....FFFFFFFF....................~~~~FFFFFFFFFFFFFFFFFFFFFF..........ooooooo.....FFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFF..............=====.....FFFFFFFFFFF..................~~~~FFFFFFFFFFFFFFFFFFFFFFF..........oooooo.......FFFFFFFFFFFFFFFFFF",
+  "FFFFFF.............======......FFFFFFFFFFFF.................~~~~FFFFFFFFFFFFFFFFFFFFFFF............oooo................FFFFFFFFF",
+  "FFFFFF...........======.......FFFFFFFFFFFFFF...............F~~~~FFFFFFFFFFFFFFFFFFFFFFFF............oo..................FFFFFFFF",
+  "FFFFFF........=======........FFFFFFFFFFFFFFFF..............F~~~~FFFFFFFFFFFFFFFFFFFFFFFF................................FFFFFFFF",
+  "FFFFFF.......======.........FFFFFFFFFFFFFFFFFF.............F~~~~FFFFFFFFFFFFFFFFFFFFFFFFF..............................FFFFFFFFF",
+  "FFFFF........===...........FFFFFFFFFFFFFFFFFFFF............F~~~~~FFFFFFFFFFFFFFFFFFFFFFFFF.............................FFFFFFFFF",
+  "FFFFF.....................FFFFFFFFFFFFFFFFFFFFFFF..........FF~~~~FFFFFFFFFFFFFFFFFFFFFFFFFF...........................FFFFFFFFFF",
+  "FFFF.....................FFFFFFFFFFFFFFFFFFFFFFFF.........FFF~~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF...................FFFFFFFFFFF",
+  "FFF......................FFFFFFFFFFFFFFFFFFFFFFFF.......FFFFF~~~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF...............FFFFFFFFFFF",
+  "FFF.....................FFFFFFFFFFFFFFFFFFFFFFFFFF.....FFFFFF~~~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF.............FFFFFFFFFFF",
+  "FFF.....................FFFFFFFFFFFFFFFFFFFFFFFFFF....FFFFFFFF~~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF...........FFFFFFFFFFF",
+  "FFF....................FFFFFFFFFFFFFFFFFFFFFFFFFFFF..FFFFFFFFF~~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF...........FFFFFFFFFFF",
+  "FFFF......F............FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF..........FFFFFFFFFFFF",
+  "FFFFFFFFFFFF..........FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF.........FFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFF.......FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF........FFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF.......FFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF...FFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF~~~FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+ ],
+ "start": [
+  464,
+  3536
+ ],
+ "waypoints": [
+  [
+   528,
+   3440
+  ],
+  [
+   2672,
+   2128
+  ],
+  [
+   3216,
+   1232
+  ]
+ ],
+ "landmarks": [
+  {
+   "id": 1,
+   "at": [
+    464,
+    3536
+   ],
+   "name": "ศาลพรานต้นทาง (จุดเกิด + หินวาร์ป 1)",
+   "levels": "Lv1"
+  },
+  {
+   "id": 2,
+   "at": [
+    1296,
+    2896
+   ],
+   "name": "ทุ่งหญ้าชายป่า",
+   "levels": "Lv1–2"
+  },
+  {
+   "id": 3,
+   "at": [
+    1104,
+    1936
+   ],
+   "name": "วงเห็ดริมลำธาร",
+   "levels": "Lv3–4"
+  },
+  {
+   "id": 4,
+   "at": [
+    656,
+    784
+   ],
+   "name": "บ่อน้ำเก่าในดงลึก (ทางตัน มีหีบ)",
+   "levels": "Lv4"
+  },
+  {
+   "id": 5,
+   "at": [
+    1840,
+    1840
+   ],
+   "name": "สะพานไม้ข้ามลำธาร 1",
+   "levels": ""
+  },
+  {
+   "id": 6,
+   "at": [
+    2544,
+    2000
+   ],
+   "name": "ซากวัดร้าง + เจดีย์ (หินวาร์ป 2)",
+   "levels": "Lv5–6"
+  },
+  {
+   "id": 7,
+   "at": [
+    2128,
+    2864
+   ],
+   "name": "สะพานหิน 2 (ทางวน)",
+   "levels": ""
+  },
+  {
+   "id": 8,
+   "at": [
+    2896,
+    2960
+   ],
+   "name": "บึงสระบัว",
+   "levels": "Lv6–7"
+  },
+  {
+   "id": 11,
+   "at": [
+    2256,
+    784
+   ],
+   "name": "ดงไผ่เหนือวัด (ทางตัน มีหีบ)",
+   "levels": "Lv6"
+  },
+  {
+   "id": 12,
+   "at": [
+    3664,
+    2512
+   ],
+   "name": "ซอกผาตะวันออก (ทางตัน มีหีบ)",
+   "levels": "Lv7"
+  },
+  {
+   "id": 9,
+   "at": [
+    3152,
+    1104
+   ],
+   "name": "เนินหินผาชัน (หินวาร์ป 3)",
+   "levels": "Lv8–9"
+  },
+  {
+   "id": 10,
+   "at": [
+    3568,
+    432
+   ],
+   "name": "ลานบอส (ล็อกลาน)",
+   "levels": "Lv10"
+  }
+ ],
+ "packs": [
+  {
+   "kind": "deer",
+   "level": 1,
+   "count": 6,
+   "at": [
+    816,
+    3472
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 2,
+   "count": 6,
+   "at": [
+    880,
+    3152
+   ]
+  },
+  {
+   "kind": "boar",
+   "level": 2,
+   "count": 5,
+   "at": [
+    1136,
+    3184
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 1,
+   "count": 4,
+   "at": [
+    1136,
+    2960
+   ]
+  },
+  {
+   "kind": "boar",
+   "level": 1,
+   "count": 4,
+   "at": [
+    1200,
+    2672
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 4,
+   "count": 6,
+   "at": [
+    1136,
+    2416
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 3,
+   "count": 6,
+   "at": [
+    1104,
+    2160
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 4,
+   "count": 4,
+   "at": [
+    1008,
+    1968
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 3,
+   "count": 5,
+   "at": [
+    1200,
+    1744
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 4,
+   "count": 5,
+   "at": [
+    1488,
+    1712
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 3,
+   "count": 4,
+   "at": [
+    1744,
+    1872
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 5,
+   "at": [
+    2000,
+    1872
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 6,
+   "count": 4,
+   "at": [
+    2352,
+    1904
+   ]
+  },
+  {
+   "kind": "boar",
+   "level": 5,
+   "count": 6,
+   "at": [
+    2608,
+    1840
+   ]
+  },
+  {
+   "kind": "kongkoi",
+   "level": 8,
+   "count": 6,
+   "at": [
+    2928,
+    1584
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 9,
+   "count": 5,
+   "at": [
+    3120,
+    944
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 9,
+   "count": 5,
+   "at": [
+    3376,
+    816
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 3,
+   "count": 6,
+   "at": [
+    976,
+    1680
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 4,
+   "count": 4,
+   "at": [
+    976,
+    1424
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 3,
+   "count": 4,
+   "at": [
+    816,
+    1168
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 4,
+   "count": 5,
+   "at": [
+    688,
+    976
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 3,
+   "count": 6,
+   "at": [
+    560,
+    752
+   ]
+  },
+  {
+   "kind": "boar",
+   "level": 2,
+   "count": 5,
+   "at": [
+    1424,
+    2832
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 2,
+   "count": 6,
+   "at": [
+    1616,
+    3024
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 2,
+   "count": 4,
+   "at": [
+    1904,
+    2832
+   ]
+  },
+  {
+   "kind": "boar",
+   "level": 5,
+   "count": 6,
+   "at": [
+    2160,
+    2960
+   ]
+  },
+  {
+   "kind": "boar",
+   "level": 5,
+   "count": 4,
+   "at": [
+    2416,
+    2896
+   ]
+  },
+  {
+   "kind": "viper",
+   "level": 6,
+   "count": 5,
+   "at": [
+    2672,
+    3088
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 4,
+   "at": [
+    3024,
+    3120
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 7,
+   "count": 4,
+   "at": [
+    2992,
+    2832
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 7,
+   "count": 5,
+   "at": [
+    2960,
+    2608
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 7,
+   "count": 5,
+   "at": [
+    2768,
+    2448
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 4,
+   "at": [
+    2480,
+    1648
+   ]
+  },
+  {
+   "kind": "viper",
+   "level": 6,
+   "count": 6,
+   "at": [
+    2416,
+    1424
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 4,
+   "at": [
+    2320,
+    1200
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 4,
+   "at": [
+    2320,
+    944
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 6,
+   "at": [
+    2192,
+    752
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 6,
+   "count": 5,
+   "at": [
+    3344,
+    3024
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 6,
+   "count": 4,
+   "at": [
+    3408,
+    2800
+   ]
+  },
+  {
+   "kind": "viper",
+   "level": 7,
+   "count": 5,
+   "at": [
+    3632,
+    2704
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 5,
+   "at": [
+    3664,
+    2480
+   ]
+  },
+  {
+   "kind": "boar",
+   "level": 1,
+   "count": 4,
+   "at": [
+    1360,
+    3088
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 4,
+   "count": 5,
+   "at": [
+    1360,
+    2000
+   ]
+  },
+  {
+   "kind": "shroom",
+   "level": 3,
+   "count": 6,
+   "at": [
+    784,
+    2032
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 5,
+   "at": [
+    2288,
+    2224
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 4,
+   "at": [
+    2864,
+    3504
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 4,
+   "count": 4,
+   "at": [
+    784,
+    624
+   ]
+  },
+  {
+   "kind": "viper",
+   "level": 6,
+   "count": 6,
+   "at": [
+    2416,
+    560
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 6,
+   "count": 5,
+   "at": [
+    3920,
+    2544
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 1,
+   "count": 6,
+   "at": [
+    720,
+    2480
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 2,
+   "count": 5,
+   "at": [
+    688,
+    2768
+   ]
+  },
+  {
+   "kind": "boar",
+   "level": 1,
+   "count": 6,
+   "at": [
+    1584,
+    3440
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 1,
+   "count": 4,
+   "at": [
+    1808,
+    3312
+   ]
+  },
+  {
+   "kind": "boar",
+   "level": 2,
+   "count": 5,
+   "at": [
+    1840,
+    3568
+   ]
+  },
+  {
+   "kind": "viper",
+   "level": 7,
+   "count": 6,
+   "at": [
+    3472,
+    3600
+   ]
+  },
+  {
+   "kind": "macaque",
+   "level": 3,
+   "count": 5,
+   "at": [
+    304,
+    2096
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 4,
+   "count": 6,
+   "at": [
+    560,
+    2224
+   ]
+  },
+  {
+   "kind": "wolf",
+   "level": 8,
+   "count": 4,
+   "at": [
+    2992,
+    624
+   ]
+  },
+  {
+   "kind": "kongkoi",
+   "level": 10,
+   "count": 6,
+   "at": [
+    3552,
+    416
+   ],
+   "arena": true,
+   "elite": 1
+  }
+ ]
+}
