@@ -67,7 +67,7 @@
 **Interfaces — Consumes:** `BigWorld`. **Produces:** `BigMap.build(w: BigWorld) -> void`, `BigMap.ground: TileMapLayer`, props under the y-sorted `world` node.
 
 - [ ] Test (headless): after `build()`, hero at `world.start`, `ground.get_used_cells().size() == 16384`, blocker count == props with a box; hero cannot walk into water at (56,40).
-- [ ] Implement: TileSet from atlas (32 px, flips via alternative tiles), one TileMapLayer z below world; props as Sprite2D offset so the foot sits on `(x,y)`; StaticBody2D boxes from `box`; camera limits 0..4096.
+- [ ] Implement: TileSet from atlas (32 px, flips via alternative tiles), one TileMapLayer z below world; `floor: true` props (bridges, pads) on a layer under the y-sorted world; terrain colliders (water/forest/cliff/rock cells) from the walk grid by reusing PaintedMap's rect merge (pull `_build_blockers` into a static helper taking a WalkGrid; ~494 rects); build `make_nav()` exactly once; commit the `.import` files for the atlas and bigmap props; props as Sprite2D offset so the foot sits on `(x,y)`; StaticBody2D boxes from `box`; camera limits 0..4096.
 - [ ] Screenshot `docs/preview/bigmap/game_start.png` (xvfb, opengl3) + `game_bridge.png`. Commit.
 
 ### Task 4: Pack streaming with kept state
@@ -77,7 +77,7 @@
 **Interfaces — Produces:** `PackStream.new(world: BigWorld, seed: int)`, `func step(hero: Vector2, view: Rect2) -> Dictionary` returns `{"spawn":[ids], "despawn":[ids]}`, `func keep(id, snapshot: Array)`, `func kept(id) -> Array`, `func reroll(seed)` (forgets all kept, revives all), `const SPAWN_R`, `const DESPAWN_R` (⚙ choose ≥ 1.25× / 1.75× the view diagonal; AI decision, log in ai-decisions).
 
 - [ ] Tests: spawn only for packs outside `view` and inside SPAWN_R; a pack despawned with 2 of 6 dead comes back with 4 alive at the kept positions; after `reroll` all 6 alive at new random spots round the pack point (seeded, deterministic); dead pack never respawns without reroll.
-- [ ] Implement using `WolfPack.snapshot` / `MonsterPiles.ring_points` for placement round `at`; elite packs keep `elite`.
+- [ ] Implement using `WolfPack.snapshot`; members on open roomy cells in a local window round the pack's `home` (never `at`, never raw ring points; do NOT run `MonsterPiles.prepare` over the whole map — its flood covers 92k cells); `home` is spawn centre, leash and respawn point; elite packs keep `elite`. Playtest: the pack at the wood bridge head (p10) must not jam the crossing.
 - [ ] Commit.
 
 ### Task 5: Waypoint stones w1–w3 + travel re-roll
@@ -109,6 +109,7 @@
 
 **Files:** Modify `scripts/rules/fog_grid.gd` (one room "world", 32 px cells → 128×128), `scripts/ui/mini_map.gd`, `scripts/ui/world_map.gd`, `test_ground.gd`; Create `assets/map/bigmap/overview_512.png` (from the baked map); Test: run_tests + screenshot
 
+- [ ] Decide (ai-decisions) what the HUD/minimap shows as an area level: the zone band (`zones[].levels`) or `zone_level` (nearest pack); they disagree at ~6 % of points.
 - [ ] Tests: fog reveals cells within RADIUS of the hero in the world grid; minimap shows the area round the hero (not the whole 4096) with stones/chests/arena marks; full map shows the overview under the fog.
 - [ ] Implement; screenshots `game_minimap.png`, `game_worldmap.png`; commit.
 
