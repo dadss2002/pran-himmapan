@@ -3,7 +3,8 @@
 python3 -I place_props.py LAYOUT.json PROPS_DIR GROUND.png OUT_DIR
 Writes OUT_DIR/bigmap_props.png (ground + Y-sorted props) and OUT_DIR/props_placement.json
 (name, foot x/y in px = sprite foot (bottom of the opaque bbox), sprite size, blocks, foot box [x,y,w,h] or null,
-floor = drawn flat under the y-sorted world, deck = walkable bridge deck rect [x,y,w,h] in px) for the Godot build.
+floor = drawn flat under the y-sorted world, deck = walkable bridge deck rect [x,y,w,h] in px, rule = which box rule
+applies: tree / structure / other / floor) for the Godot build.
 Deterministic (fixed seeds). Boxes, floor and deck are data only: the preview image does not use them.
 """
 import json, sys, random, math
@@ -142,12 +143,14 @@ def foot_box(n, fx, fy, blocks):
         w = max(12, round(bw / 4 if tree else bw / 3)); cx = left + (bb[0] + bb[2]) // 2
         h = min(12 if tree else 16, max(8, round(bh * (0.1 if tree else 0.25))))
     return [cx - w // 2, fy - h, w, h]
+def rule(n):
+    return "floor" if n.startswith(FLOOR) else "tree" if n.startswith(TREES) else "structure" if n.startswith(STRUCTURES) else "other"
 def deck(n, fx, fy):
     if n not in DECK: return None
     x0, y0, x1, y1 = DECK[n]; left, top = fx - img[n].width // 2, fy - man[n]["bbox"][3]
     return [left + x0, top + y0, x1 - x0, y1 - y0]
 json.dump([{"name": n, "x": fx, "y": fy, "size": im_size(n), "blocks": b, "box": foot_box(n, fx, fy, b),
-            "floor": n.startswith(FLOOR), "deck": deck(n, fx, fy)}
+            "floor": n.startswith(FLOOR), "deck": deck(n, fx, fy), "rule": rule(n)}
            for n, fx, fy, b, _ in placed],
           open(f"{OUT}/props_placement.json", "w", encoding="utf-8"), indent=0)
 from collections import Counter

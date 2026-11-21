@@ -35,12 +35,13 @@ if not (os.path.exists(WORLD) and os.path.exists(ATLAS)):
 def load(p): return json.load(open(p, encoding="utf-8"))
 def pixels(p): im = Image.open(p).convert("RGBA"); return im.size, im.tobytes()
 with tempfile.TemporaryDirectory(prefix="bake_test_") as tmp:
-    run("bake_world.py", LAYOUT, TILES, PROPS, f"{tmp}/world.json", f"{tmp}/atlas.png")
-    # the fresh bake's atlas path points into tmp (bake derives it from OUT_ATLAS); swap it back, compare the rest as bytes
-    fresh = open(f"{tmp}/world.json", "rb").read()
-    tmp_res = ("res://" + os.path.relpath(f"{tmp}/atlas.png", ROOT).replace(os.sep, "/")).encode()
-    check(fresh.count(tmp_res) == 1 and fresh.replace(tmp_res, b"res://assets/map/bigmap/ground_atlas.png") == open(WORLD, "rb").read(),
-          "committed world.json == fresh bake (bytes)")
+    # the temp atlas is outside the repo: the bake refuses to guess its res:// path, so pass the real one
+    out = subprocess.run([sys.executable, "-I", os.path.join(HERE, "bake_world.py"), LAYOUT, TILES, PROPS, f"{tmp}/w.json", f"{tmp}/a.png"],
+                         cwd=ROOT, capture_output=True, text=True)
+    check(out.returncode != 0 and "outside the repo" in out.stderr, "bake refuses an output outside the repo without --atlas-res")
+    run("bake_world.py", LAYOUT, TILES, PROPS, f"{tmp}/world.json", f"{tmp}/atlas.png",
+        "--atlas-res", "res://assets/map/bigmap/ground_atlas.png")
+    check(open(f"{tmp}/world.json", "rb").read() == open(WORLD, "rb").read(), "committed world.json == fresh bake (bytes)")
     check(pixels(f"{tmp}/atlas.png") == pixels(ATLAS), "committed ground_atlas.png == fresh bake (size + pixels)")
     run("assemble.py", LAYOUT, TILES, tmp)
     run("place_props.py", LAYOUT, PROPS, f"{tmp}/bigmap_full.png", tmp)
@@ -102,9 +103,6 @@ some_prop_blocked = sum(1 for x, y in open_cells if not cell_all(x, y, False))
 check(some_prop_blocked > 0, "props add blocked cells on open ground")
 
 # ---- props ---------------------------------------------------------------------------------------------
-STRUCTURES = ("chedi_", "prang_") + tuple(f"ruin_{i:02d}" for i in (2, 3, 4, 7, 8, 9, 10, 13, 14, 16))
-TREES = ("tree_", "banyan_", "raintree_", "deadtree_")
-FLOOR = ("bridge_",) + tuple(f"pond_{i:02d}" for i in (4, 5, 12, 15, 19))
 def base_width(n):  # solid (alpha >= 128) x extent of the bottom 12 rows of the opaque bbox
     bb = man[n]["bbox"]; a = Image.open(f"{PROPS}/{n}.png").convert("RGBA").getchannel("A")
     xs = [x for y in range(bb[3] - 12, bb[3]) for x in range(bb[0], bb[2]) if a.getpixel((x, y)) >= 128]
@@ -114,13 +112,17 @@ check(len(P) == len(placement) and [p["name"] for p in P] == [q["name"] for q in
 check(all((p["box"] is None) == (not q["blocks"]) for p, q in zip(P, placement)), "box iff prop blocks")
 check(all(p["box"] is None for p in P if p["name"].startswith("bridge")), "bridges never block")
 check(all(p["name"] != "chest_01" for p in P), "chest is not a prop")
+check(all(p["rule"] == q["rule"] for p, q in zip(P, placement)) and {p["rule"] for p in P} == {"tree", "structure", "other", "floor"},
+      "every prop carries its box rule (tree / structure / other / floor)")
+check(all(p["rule"] == "structure" for p in P if p["name"].startswith(("chedi_", "prang_"))), "chedi and prang are structures")
 box_ok = True
 for p in P:
     b = p["box"]
     if b is None: continue
     n = p["name"]; bb = man[n]["bbox"]; bw = bb[2] - bb[0]
-    want = max(12, round(base_width(n) * 0.7) if n.startswith(STRUCTURES) else round(bw / 4) if n.startswith(TREES) else round(bw / 3))
-    ok = b[2] == want and 8 <= b[3] <= (12 if n.startswith(TREES) else 16)
+    rl = p["rule"]
+    want = max(12, round(base_width(n) * 0.7) if rl == "structure" else round(bw / 4) if rl == "tree" else round(bw / 3))
+    ok = rl != "floor" and b[2] == want and 8 <= b[3] <= (12 if rl == "tree" else 16)
     ok &= b[1] + b[3] == p["y"] and abs(b[0] + b[2] / 2 - p["x"]) <= bw / 2  # sits on the foot line, under the sprite
     for cy in range(b[1] // C, (b[1] + b[3] - 1) // C + 1):  # every walk cell under the box blocks
         for cx in range(b[0] // C, (b[0] + b[2] - 1) // C + 1):
@@ -128,11 +130,31 @@ for p in P:
     if not ok: print("  bad box", p, "want w", want)
     box_ok &= ok
 check(box_ok, "foot boxes: trees 1/4 bbox, structures 70% base, others 1/3 (min 12); 8..16 high; on the foot; cells blocked")
-check(any(p["box"] for p in P if p["name"].startswith(STRUCTURES)), "structures present with boxes")
-check(all(p["floor"] == p["name"].startswith(FLOOR) for p in P), "floor = bridges + floating pads only")
+check(any(p["box"] for p in P if p["rule"] == "structure"), "structures present with boxes")
+check(all(p["floor"] == (p["rule"] == "floor") for p in P), "floor flag = floor rule")
 check(all(p["box"] is None for p in P if p["floor"]), "floor props never block")
 check(all(p["floor"] for p in P if p["name"].startswith("bridge_")) and sum(p["name"].startswith("bridge_") for p in P) == 2,
       "both bridges are floor props")
+
+# ---- water drawn on walkable ground blocks -----------------------------------------------------------------------
+STD = {}
+for line in open(os.path.join(TILES, "t1_meta.txt"), encoding="utf-8"):
+    pos, cor = line.split(":"); STD[tuple(c == "upper" for c in cor.split())] = tuple(int(v) for v in pos.split(","))
+def full_tile_colours(sheet, upper):
+    im = Image.open(os.path.join(TILES, sheet + ".png")).convert("RGB"); x, y = STD[(upper,) * 4]
+    return {im.getpixel((x + i, y + j)) for j in range(T) for i in range(T)}
+land = full_tile_colours("t3_stream_grass", True) | full_tile_colours("t1_path_grass", True) | full_tile_colours("t1_path_grass", False)
+check(not (full_tile_colours("t3_stream_grass", False) & land), "stream water colours never appear in full grass/path tiles")
+water = (full_tile_colours("t3_stream_grass", False) | full_tile_colours("t8_pond_grass", False)) - land  # pond pads share greens
+deck_rects = [p["deck"] for p in P if p.get("deck")]
+def under_deck(cx, cy):
+    return any(d[0] <= cx * C and cx * C + C <= d[0] + d[2] and d[1] <= cy * C and cy * C + C <= d[1] + d[3] for d in deck_rects)
+rgb = full.convert("RGB").load()
+wet_open = [(cx, cy) for cy in range(W) for cx in range(W) if g[cy // 4][cx // 4] in ".=" and not blk(cx, cy) and not under_deck(cx, cy)
+            and sum(rgb[cx * C + i, cy * C + j] in water for j in range(C) for i in range(C)) * 2 > C * C]
+check(not wet_open, f"no open . / = walk cell is mostly stream/pond pixels ({wet_open[:5]})")
+for tx, ty in ((54, 59), (64, 91)):  # tiles the reviewer saw drawn as open water
+    check(sum(blk(tx * 4 + dx, ty * 4 + dy) for dx, dy in sub) >= 12, f"water-drawn tile ({tx},{ty}) mostly blocked")
 
 # ---- bridges: only the deck is walkable; each deck joins both banks --------------------------------------------
 decks = [p["deck"] for p in P if p.get("deck")]
@@ -231,20 +253,37 @@ check(ar["pack"] == {"kind": boss["kind"], "level": boss["level"], "count": boss
 s0 = (w["start"][0] // C, w["start"][1] // C)
 seen = flood([s0], roomy)
 for name, (x, y) in pts[1:] + [("gate", (gx, gy))]:
-    if name.startswith("p"): continue  # packs: reachable room checked below
+    if name.startswith("p"): continue  # packs: their home is checked below
     check((x // C, y // C) in seen, f"{name} reachable from start")
 check(any((ax * 4 + 2, ay * 4 + 2) in seen for ax, ay in A), "arena floor reachable from start")
 
-# ---- pack room: MonsterPiles.pile_radius(kind, n) = body / sin(PI / n) + 0.5, body = feet width x monster_scale ---
+# ---- pack homes: a ring of count members at MonsterPiles.pile_radius(kind, n) = body / sin(PI / n) + 0.5 ---------
+# (body = feet width x monster_scale) fits on reachable hero-roomy cells round home, at some rotation
 feet = max(float(re.search(r'id="feet"\]\s*size = Vector2\(([\d.]+)', open(os.path.join(ROOT, "scenes", f), encoding="utf-8").read()).group(1))
            for f in ("wolf.tscn", "monster.tscn"))
 body = feet * load(os.path.join(ROOT, "data", "balance.json"))["monster_scale"]
+def ring_fits(c, n, steps=72):
+    rr = body / math.sin(math.pi / n) + 0.5
+    for k in range(steps):
+        a0 = 2 * math.pi / n * k / steps
+        if all(roomy(int(c[0] + rr * math.cos(a0 + 2 * math.pi * i / n)) // C, int(c[1] + rr * math.sin(a0 + 2 * math.pi * i / n)) // C)
+               for i in range(n)): return True
+    return False
+def home_ok(c, n):
+    cell = (int(c[0]) // C, int(c[1]) // C)
+    return g[int(c[1]) // T][int(c[0]) // T] != "#" and cell in seen and roomy(*cell) and ring_fits(c, n)
 for p in pk:
-    rr = body / math.sin(math.pi / p["count"]) + 0.5
-    x, y = p["at"]
-    spots = [(cx, cy) for cy in range(int(y - rr) // C, int(y + rr) // C + 1) for cx in range(int(x - rr) // C, int(x + rr) // C + 1)
-             if math.dist((cx * C + C // 2, cy * C + C // 2), (x, y)) <= rr and roomy(cx, cy) and (cx, cy) in seen]
-    check(len(spots) >= p["count"], f"{p['id']}: {len(spots)} reachable hero-roomy cells within pile radius {rr:.0f} px >= {p['count']}")
+    h, n = p["home"], p["count"]
+    check(g[h[1] // T][h[0] // T] != "#", f"{p['id']} home not on a bridge tile")
+    check(math.dist(h, p["at"]) <= 64, f"{p['id']} home within 64 px of its layout point")
+    check((h[0] // C, h[1] // C) in seen and roomy(h[0] // C, h[1] // C), f"{p['id']} home reachable, room for a body")
+    check(ring_fits(h, n), f"{p['id']} a ring of {n} fits round home")
+    check(h == p["at"] or not home_ok(p["at"], n), f"{p['id']} home moved only because its layout point does not fit")
+shifted = {p["id"] for p in pk if p["home"] != p["at"]}
+check({"p1", "p10", "p24", "p25", "p28", "p39", "p43", "p45", "p47", "p48", "p50", "p56"} <= shifted,
+      f"the reviewer's 12 cramped packs got a shifted home ({sorted(shifted)})")
+p10 = next(p for p in pk if p["id"] == "p10")
+check(g[p10["home"][1] // T][p10["home"][0] // T] in ".=" and p10["home"][0] < 54 * T, "p10 home on the west bank")
 
 # ---- zones -------------------------------------------------------------------------------------------------
 Z = w["zones"]

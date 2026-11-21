@@ -1,21 +1,30 @@
 """Bake the big map into what the game reads: data/bigmap/world.json + one ground atlas PNG.
 
-python3 -I bake_world.py LAYOUT.json TILES_DIR PROPS_DIR OUT_WORLD.json OUT_ATLAS.png
+python3 -I bake_world.py LAYOUT.json TILES_DIR PROPS_DIR OUT_WORLD.json OUT_ATLAS.png [--atlas-res RES] [--props-res RES]
+The res:// paths written into world.json are derived from OUT_ATLAS / PROPS_DIR relative to the repo root; a path
+outside the repo is an error unless its --*-res option gives the res:// path explicitly.
 Runs assemble.py (ground) and place_props.py (props, foot boxes, floor flags, bridge decks) in a temp dir, then:
 - ground atlas: unique 32 px tiles of the assembled 4096 map; a tile that is a mirror of one already kept is
   stored as a flip flag (0 none, 1 h, 2 v, 3 h+v) instead of a new tile;
 - walk grid (8 px cells, 512x512, 1 = blocked): layout F ~ ^ o blocked, . = r s A C open, map edge blocked;
   a bridge (#) cell is open only when it lies inside a bridge prop's deck rect (rails and open water blocked);
-  then every prop foot box blocks the cells it overlaps;
+  a walk cell on . or = whose 8x8 ground pixels are mostly water (stream/pond colours) is blocked unless a bridge
+  deck covers it; then every prop foot box blocks the cells it overlaps;
 - start, stones (layout waypoints w1..w3), chests (landmarks 4, 11, 12; kind/level of the nearest layout
-  pack), packs (layout, arena pack excluded), arena (disc of A cells, its bbox, the gate on the approach path
+  pack), packs (layout, arena pack excluded; home = spawn centre where a ring of the pack fits), arena (disc of A cells, its bbox, the gate on the approach path
   just outside both, the layout's arena pack), zones (layout zones, first match wins).
 Deterministic: same inputs, same bytes.
 """
-import base64, heapq, json, math, os, subprocess, sys, tempfile
+import argparse, base64, heapq, json, math, os, re, subprocess, sys, tempfile
+from collections import deque
 from PIL import Image
 
-LAYOUT, TILES, PROPS, OUT_JSON, OUT_ATLAS = sys.argv[1:6]
+ap = argparse.ArgumentParser()
+for a in ("layout", "tiles", "props", "out_json", "out_atlas"): ap.add_argument(a)
+ap.add_argument("--atlas-res", help="res:// path of the atlas to write into world.json (needed when OUT_ATLAS is outside the repo)")
+ap.add_argument("--props-res", help="res:// path of the props folder (needed when PROPS_DIR is outside the repo)")
+A_ = ap.parse_args()
+LAYOUT, TILES, PROPS, OUT_JSON, OUT_ATLAS = A_.layout, A_.tiles, A_.props, A_.out_json, A_.out_atlas
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 T, C = 32, 8                      # ground tile px, walk cell px
@@ -24,7 +33,13 @@ OPEN_CH = set(".=#rsAC")          # walkable layout chars (# only on a bridge de
 CHEST_IDS = (4, 11, 12)           # spec: dead-end chests at landmarks 4 old well, 11 bamboo, 12 east cliff nook
 CHEST_SPRITE = "chest_01"
 
-def res_path(p): return "res://" + os.path.relpath(os.path.abspath(p), ROOT).replace(os.sep, "/")
+def res_path(p, given):
+    if given: return given
+    rel = os.path.relpath(os.path.abspath(p), ROOT)
+    if rel == ".." or rel.startswith(".." + os.sep) or os.path.isabs(rel):
+        sys.exit(f"{p} is outside the repo {ROOT}: pass its res:// path with --atlas-res / --props-res")
+    return "res://" + rel.replace(os.sep, "/")
+ATLAS_RES, PROPS_RES = res_path(OUT_ATLAS, A_.atlas_res), res_path(PROPS, A_.props_res)  # fail before any work
 def load(p): return json.load(open(p, encoding="utf-8"))
 
 L = load(LAYOUT); g = L["grid"]; N = len(g)
@@ -68,6 +83,30 @@ for cy in range(W):
         if ch not in OPEN_CH or (ch == "#" and not on_deck(cx, cy)): blocked[cy * W + cx] = 1
 for i in range(W):
     blocked[i] = blocked[(W - 1) * W + i] = blocked[i * W] = blocked[i * W + W - 1] = 1
+# water drawn on walkable ground (Wang corners of a stream/pond next to a . or = tile): a pixel is water when its
+# colour is nearer the full-water tiles' palette (t3 stream, t8 pond) than the full grass/path tiles' palette
+STD = {}
+for line in open(os.path.join(TILES, "t1_meta.txt"), encoding="utf-8"):
+    pos, cor = line.split(":"); STD[tuple(c == "upper" for c in cor.split())] = tuple(int(v) for v in pos.split(","))
+def palette(sheet, upper):
+    im = Image.open(os.path.join(TILES, sheet + ".png")).convert("RGB"); x, y = STD[(upper,) * 4]
+    t = im.crop((x, y, x + T, y + T)); return {t.getpixel((i, j)) for j in range(T) for i in range(T)}
+WATER_PAL = palette("t3_stream_grass", False) | palette("t8_pond_grass", False)
+LAND_PAL = (palette("t3_stream_grass", True) | palette("t8_pond_grass", True) | palette("t1_path_grass", True)
+            | palette("t1_path_grass", False)) - WATER_PAL
+_wet = {}
+def wet(c):
+    if c not in _wet:
+        d2 = lambda pal: min(sum((a - b) ** 2 for a, b in zip(c, q)) for q in sorted(pal))
+        _wet[c] = d2(WATER_PAL) < d2(LAND_PAL)
+    return _wet[c]
+rgb = full.convert("RGB").load()
+water_cells = 0
+for cy in range(W):
+    for cx in range(W):
+        if g[cy // K][cx // K] not in ".=" or blocked[cy * W + cx] or on_deck(cx, cy): continue
+        if sum(wet(rgb[cx * C + i, cy * C + j]) for j in range(C) for i in range(C)) * 2 > C * C:
+            blocked[cy * W + cx] = 1; water_cells += 1
 props = []
 for p in placement:
     n = p["name"]; bb = man[n]["bbox"]; box = p["box"]
@@ -75,7 +114,8 @@ for p in placement:
         for cy in range(max(0, box[1] // C), min(W, (box[1] + box[3] - 1) // C + 1)):
             for cx in range(max(0, box[0] // C), min(W, (box[0] + box[2] - 1) // C + 1)):
                 blocked[cy * W + cx] = 1
-    e = {"name": n, "x": p["x"], "y": p["y"], "foot": [p["size"][0] // 2, bb[3]], "box": box, "floor": p["floor"]}
+    e = {"name": n, "x": p["x"], "y": p["y"], "foot": [p["size"][0] // 2, bb[3]], "box": box, "floor": p["floor"],
+         "rule": p["rule"]}
     if p.get("deck"): e["deck"] = p["deck"]
     props.append(e)
 bits = bytearray(W * W // 8)
@@ -87,8 +127,40 @@ def roomy(cx, cy): return all(not blk(cx + dx, cy + dy) for dx in (-1, 0, 1) for
 
 # ---- points ------------------------------------------------------------------------------------------------------
 packs_l = [p for p in L["packs"] if not p.get("arena")]
+# reachable for a hero-sized body from the start (4-way flood over roomy cells)
+s_cell = (L["start"][0] // C, L["start"][1] // C)
+reach = {s_cell}; q = deque([s_cell])
+while q:
+    x, y = q.popleft()
+    for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+        if n not in reach and roomy(*n): reach.add(n); q.append(n)
+# pile radius as MonsterPiles.pile_radius(kind, n) = body / sin(PI / n) + RADIUS_SLACK, body = feet width x monster_scale
+FEET = max(float(re.search(r'id="feet"\]\s*size = Vector2\(([\d.]+)', open(os.path.join(ROOT, "scenes", f), encoding="utf-8").read()).group(1))
+           for f in ("wolf.tscn", "monster.tscn"))
+BODY = FEET * load(os.path.join(ROOT, "data", "balance.json"))["monster_scale"]
+def pile_radius(n): return 0.0 if n <= 1 else BODY / math.sin(math.pi / n) + 0.5
+RING_STEPS = 24        # rotations tried per 1/n turn
+HOME_MAX = 64          # px: a pack's home stays this close to its layout point
+def ring_fits(c, n):
+    r = pile_radius(n)
+    for k in range(RING_STEPS):
+        a0 = 2 * math.pi / n * k / RING_STEPS
+        if all(roomy(int(c[0] + r * math.cos(a0 + 2 * math.pi * i / n)) // C, int(c[1] + r * math.sin(a0 + 2 * math.pi * i / n)) // C)
+               for i in range(n)): return True
+    return False
+def home_ok(c, n):
+    cx, cy = int(c[0]) // C, int(c[1]) // C
+    return g[int(c[1]) // T][int(c[0]) // T] != "#" and (cx, cy) in reach and roomy(cx, cy) and ring_fits(c, n)
+def home_of(at, n):
+    if home_ok(at, n): return list(at)
+    cand = sorted(((at[0] + dx, at[1] + dy) for dy in range(-HOME_MAX, HOME_MAX + 1, 2) for dx in range(-HOME_MAX, HOME_MAX + 1, 2)
+                   if dx * dx + dy * dy <= HOME_MAX * HOME_MAX), key=lambda c: (math.dist(c, at), c[1], c[0]))
+    for c in cand:
+        if home_ok(c, n): return list(c)
+    sys.exit(f"no home for the pack at {at}")
 packs = [{"id": f"p{i}", "kind": p["kind"], "level": p["level"], "count": p["count"], "at": p["at"],
-          "elite": bool(p.get("elite"))} for i, p in enumerate(packs_l)]
+          "home": home_of(p["at"], p["count"]), "elite": bool(p.get("elite"))} for i, p in enumerate(packs_l)]
+shifted = [(p["id"], p["at"], p["home"]) for p in packs if p["home"] != p["at"]]
 stones = [{"id": f"w{i + 1}", "at": at} for i, at in enumerate(L["waypoints"])]
 lm = {l["id"]: l for l in L["landmarks"]}
 
@@ -169,15 +241,18 @@ world = {
             "props: x, y = the sprite's foot point in px (bottom of its opaque bbox), foot = that pixel inside the "
             "sprite; box [x,y,w,h] collision or null; floor = draw flat under the y-sorted world (bridges, pads); "
             "deck = a bridge's walkable rect. chests: at = the chest sprite's foot point (bottom of its opaque bbox). "
-            "packs: members must be placed on open, hero-roomy walk cells near at, never on raw ring points. "
+            "packs: at = the layout point (design, unchanged); home = the spawn centre: a ring of count members at "
+            "MonsterPiles.pile_radius fits on open hero-roomy cells round it, it is not on a bridge tile, it is "
+            "reachable and within 64 px of at. Task 4 uses home as spawn centre, leash and respawn point (wolf.gd "
+            "snaps to home); members must be placed on open, hero-roomy walk cells, never on raw ring points. "
             "arena: the fight area is the disc centre/radius (rect = its bounds only); rock surrounds the disc on "
             "every side, so the lock must be a ring barrier round the disc, not a door at the gate; gate = the "
             "approach-path cell just outside disc and rect; pack = the layout's boss pack (not in packs). "
             "zones: first match wins. Ids are frozen (saves use them): stones w1..w3, chests c4 c11 c12; "
             "the game keeps these id sets as constants and must not read them from this file.",
     "size": [N * T, N * T], "tile": T, "cell": C,
-    "atlas": {"file": res_path(OUT_ATLAS), "cols": cols, "count": len(tiles)},
-    "props_dir": res_path(PROPS),
+    "atlas": {"file": ATLAS_RES, "cols": cols, "count": len(tiles)},
+    "props_dir": PROPS_RES,
     "ground": ground, "flip": flip, "walk": base64.b64encode(bytes(bits)).decode(),
     "props": props, "start": L["start"], "stones": stones, "chests": chests, "packs": packs,
     "arena": arena, "zones": zones,
@@ -194,4 +269,5 @@ with open(OUT_JSON, "w", encoding="utf-8") as fh:
 print(f"atlas {len(tiles)} tiles ({cols} cols, {atlas.size[0]}x{atlas.size[1]}), props {len(props)} "
       f"(boxes {sum(1 for p in props if p['box'])}, floor {sum(1 for p in props if p['floor'])}), packs {len(packs)}, "
       f"stones {len(stones)}, chests {[(c['id'], c['at'], c['kind'], c['level']) for c in chests]}, "
-      f"arena {arena}, blocked {sum(blocked)}/{W * W}")
+      f"arena {arena}, blocked {sum(blocked)}/{W * W} (water on open ground {water_cells})")
+print(f"pack homes shifted ({len(shifted)}): " + ", ".join(f"{i} {a}->{h}" for i, a, h in shifted))
