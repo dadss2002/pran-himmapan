@@ -14,6 +14,7 @@ signal gear_changed()
 signal gems_changed()
 signal gem_leveled(gem: Dictionary)
 signal rain_cast(rain: ArrowRain)     # M5b Task 8b: a ห่าศร was laid (TestGround adds nothing: the hero parents it)
+signal trap_placed(trap: ThornTrap)   # M5b Task 8c: a กับดักหนาม was placed (the hero parents it)
 
 const MANIFEST := "res://assets/hero/manifest.json"
 const ARROW_SCENE := preload("res://scenes/arrow.tscn")
@@ -47,6 +48,9 @@ var warping := false
 ## M5b Task 8b: the ห่าศร rains of this hero that are still falling. Never saved; halt_areas() ends them on a warp
 ## (begin_warp), on his death and on a room change (TestGround.go_to), like arrows' halt() (risks.md B20).
 var rains: Array = []
+## M5b Task 8c: the กับดักหนาม traps of this hero (armed: at most skills.thorn_trap.max_traps, the oldest goes; and the
+## sprung ones until their root ends). Never saved; halt_areas() ends them all on a warp, a room change and his death.
+var traps := TrapSet.new()
 
 func _init() -> void:
 	inventory.from_dict(SaveGame.new_state().inventory)   # start kit (save loading replaces it)
@@ -369,7 +373,7 @@ func skill_cooldown_left(id: String) -> float:
 func potion_cooldown_left() -> float:
 	return _potion_cd
 
-## ศรทะลวง / ศรกระจาย / ศรเพลิง / ห่าศร: needs the unlock level, no cooldown, enough MP, and a free hero.
+## ศรทะลวง / ศรกระจาย / ศรเพลิง / ห่าศร / กับดักหนาม: needs the unlock level, no cooldown, enough MP, and a free hero.
 ## Pressed during a basic shot, the skill waits and starts as soon as that arrow is out.
 ## MP and cooldown are taken when the skill's arrow leaves, so a cancelled skill costs nothing.
 func try_skill(id: String) -> bool:
@@ -385,10 +389,10 @@ func try_skill(id: String) -> bool:
 	_start_skill(id)
 	return true
 
-## The kinds of skill that have a cast: arrows (M3) and ห่าศร ("rain", M5b Task 8b). กับดักหนาม ("trap") has numbers,
-## sockets and a row on the skill screen, but its cast is Task 8c: until then a press does nothing (no arrow, no MP,
-## no cooldown) instead of falling into the arrow path. An id with no numbers is refused too.
-const CASTABLE_KINDS := ["arrows", "rain"]
+## The kinds of skill that have a cast: arrows (M3), ห่าศร ("rain", M5b Task 8b) and กับดักหนาม ("trap", Task 8c). A kind
+## without a cast would do nothing (no arrow, no MP, no cooldown) instead of falling into the arrow path, and an id
+## with no numbers is refused too.
+const CASTABLE_KINDS := ["arrows", "rain", "trap"]
 
 func _castable(id: String) -> bool:
 	return Skills.exists(id) and Skills.kind(id) in CASTABLE_KINDS
@@ -482,7 +486,7 @@ func _tick_poison(delta: float) -> void:
 ## Stepping on an exit ring: stand still (idle, not walking or rolling on the spot) until end_warp().
 func begin_warp() -> void:
 	warping = true
-	halt_areas()                 # M5b Task 8b: a rain never outlives the room it was cast in (B20)
+	halt_areas()                 # M5b Task 8b / 8c: a rain or a trap never outlives the room it was cast in (B20)
 	velocity = Vector2.ZERO
 	external_input = Vector2.ZERO
 	if state in ["walk", "roll", "hurt"]:
@@ -513,6 +517,7 @@ func step(delta: float, input: Vector2) -> void:
 		mp = minf(max_mp(), mp + stats().mp_regen * delta)
 	_flash = maxf(0.0, _flash - delta)
 	if not rains.is_empty(): _prune_rains()
+	if traps.size() > 0: _prune_traps()
 	_t += delta
 	match state:
 		"dead":
@@ -586,7 +591,7 @@ func _on_died() -> void:
 	_t = 0.0
 	_released = true
 	velocity = Vector2.ZERO
-	halt_areas()                 # M5b Task 8b: his rains end with him (no kill, EXP or MP after death)
+	halt_areas()                 # M5b Task 8b / 8c: his rains and traps end with him (no kill, EXP or MP after death)
 	died.emit()
 	_refresh(true)
 
@@ -637,7 +642,7 @@ func area_point(range_px: float) -> Vector2:
 	var t := target_within(range_px)
 	return SkillHit.feet(t) if t != null else _pos()
 
-## M5b Task 8b: what every hit of one area press (rain ticks; Task 8c: the trap) is dealt with, built ONCE at the
+## M5b Task 8b: what every hit of one area press (rain ticks; the trap's trigger, Task 8c) is dealt with, built ONCE at the
 ## press (SkillHit.hit reads it): the hero's ATK and crit damage then, the build's crit chance, the build with its
 ## ledger (b.cast, the press's ComboCast: Hero._release) and the hit multiplier with ราหู's +30 % folded in, as for
 ## arrows. `targets` = the monsters the press can hit (the lightning gem's chain looks there too).
@@ -648,13 +653,35 @@ func hit_source(b: Dictionary) -> Dictionary:
 	return {"atk": st.atk, "crit": float(b.get("crit", st.crit)), "crit_mult": st.crit_mult, "build": b, "shooter": self,
 		"cast": cast, "mult": float(b.arrow_mult) * (1.0 + bonus), "targets": _enemies()}
 
-## Ends every rain now: no further tick (warp, death, room change). One not in a tree (tests) is freed here.
+## Ends every rain and every trap (armed or sprung) now: no further tick or trigger (warp, death, room change). One
+## not in a tree (tests) is freed here.
 func halt_areas() -> void:
 	for r in rains:
 		if not is_instance_valid(r): continue
 		r.halt()
 		if not r.is_inside_tree(): r.free()
 	rains.clear()
+	for t in traps.clear(): _end_trap(t)
+
+func _end_trap(t) -> void:
+	if not is_instance_valid(t): return
+	t.halt()
+	if not t.is_inside_tree(): t.free()
+
+## Lets go of the traps that are over (a sprung one after its root; in a tree it frees itself).
+func _prune_traps() -> void:
+	for t in traps.prune():
+		if is_instance_valid(t) and not t.is_inside_tree(): t.free()
+
+## กับดักหนาม (M5b Task 8c): one ThornTrap at area_point(cast_range) (D2: the feet of the nearest monster within
+## 160 px, else the hero's), a sibling of the hero (the world's Y-sort). The oldest armed trap goes when this one makes
+## more than max_traps (2).
+func _cast_trap(b: Dictionary) -> void:
+	var trap := ThornTrap.new()
+	trap.setup(area_point(float(b.cast_range)), b, hit_source(b), _enemies())
+	_end_trap(traps.add(trap, int(b.max_traps)))
+	if is_inside_tree(): get_parent().add_child(trap)
+	trap_placed.emit(trap)
 
 ## Drops the rains that are over (one outside a tree, in tests, is freed here; in a tree it frees itself).
 func _prune_rains() -> void:
@@ -714,6 +741,11 @@ func _release() -> void:
 		b["cast"] = cast
 		if String(b.get("kind", "arrows")) == "rain":     # M5b Task 8b: no arrow leaves; the rain falls at the target (D2)
 			_cast_rain(b)
+			Sfx.play("bow_shot", start)
+			_pending_skill = ""
+			return
+		if String(b.get("kind", "arrows")) == "trap":     # M5b Task 8c: no arrow leaves; the trap is placed (D2)
+			_cast_trap(b)
 			Sfx.play("bow_shot", start)
 			_pending_skill = ""
 			return

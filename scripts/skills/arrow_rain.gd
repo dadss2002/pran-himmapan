@@ -115,6 +115,7 @@ func time() -> float:
 
 ## Ends it now (warp, room change, the hero's death): no further tick, no fade.
 func halt() -> void:
+	src["halted"] = true           # SkillHit deals nothing more for this press, also mid-tick (8b review)
 	_end(false)
 	if is_inside_tree(): queue_free()
 

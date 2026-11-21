@@ -596,7 +596,7 @@ func test_rain_not_overlapping():        # extend at gem Lv20 (0.49) → duratio
 
 FX (0 gen): the owner-picked trap sprite (or the placeholder). On trigger, `spread_burst` tinted `#8a6a3a`. The monster's ordinary hit spark plays. No new root overlay: the closed trap under the feet shows the root. The cast reuses the bow-shot animation.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```gdscript
 # test_status_combo.gd
@@ -618,8 +618,10 @@ func test_trap_cost_and_cooldown():      # mp −12, cooldown 8; locked at Lv9 (
 func test_trap_placeholder_without_art():# with no trap PNG present the trap still builds and draws (no error); with one, it uses the texture
 ```
 
-- [ ] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes**, then run `test_status_combo`, `test_monsters` and `test_elite`.
-- [ ] **Step 5: Commit** `git commit -m "M5b Task 8c: กับดักหนาม (≤160 px, root 2 s + 150%, max 2) + root status"`
+- [x] **Step 2: Run and check it fails.** **Step 3: Implement.** **Step 4: Run and check it passes**, then run `test_status_combo`, `test_monsters` and `test_elite`.
+- [x] **Step 5: Commit** `git commit -m "M5b Task 8c: กับดักหนาม (≤160 px, root 2 s + 150%, max 2) + root status"`
+
+**Done (2026-11-21):** `StatusEffects` root (`apply_root` keeps the longer time, `is_rooted`, `speed_mult` 0, `clear`), `Wolf.apply_root` / `is_rooted` (dead → false; movement only through `_move`; windups go on, bites / throws land; AI decision 19: not knocked back or pushed by the crowd while rooted, `WolfPack._separate` skips it), dummy same API (+ `roots`); `is_chilled` unchanged (root is not "ช้า"). `scripts/rules/trap_set.gd` (`TrapSet.add(trap, max) -> oldest armed or null`, `armed`, `all`, `size`, `prune`, `clear`; sprung traps held but not counted). `scripts/skills/thorn_trap.gd` (`ThornTrap`: `setup`, `step`, `halt`, `armed` / `spent` / `done`, `caught`, `hits_done`; fires once on the step a live, unrooted monster's feet are within `trigger_radius`: root first, then `SkillHit.hit` 150 % with the press's src; closed for `root_secs`, 0.3 s fade, frees itself; in a tree reads the `enemies` group live every step (8b review ②, AI decision 22); owner art C3 at 1:1 in the world's Y-sort (sort line = back edge), placeholder ring + 6 spikes without art; brown `spread_burst` on trigger; expand ring; nothing shed by PerfSaver). `Hero`: `traps`, `CASTABLE_KINDS` + trap (the `_castable` block for กับดักหนาม is gone), `_release` trap branch (MP, cooldown, ledger as arrows; one `bow_shot`; no arrow), `_cast_trap` at `area_point(160)`, `halt_areas` ends traps (warp, death), `trap_placed` signal. `TestGround`: go_to / warp dark halt traps. 8b review ①: `ArrowRain.halt` / `ThornTrap.halt` set `src.halted`; `SkillHit.hit` / `_deal` deal, chain and show nothing once set (also mid-tick / mid-trigger). Tests: test_status_combo +7 (the plan's 5 + `test_rooted_monster_is_not_pushed`, `test_dummy_has_root_api`; `test_respawn_outlasts_every_dot_window` extended: a trap ledger's window starts at its trigger = (root + burn) × extend top, one SkillHit call in thorn_trap.gd), test_arrow_combos +1 (`test_root_is_not_chilled`), test_area_skills +16 (the plan's 10 + `test_trap_set_rules`, `test_trap_waits_and_pays_through_the_press` (5 min wait, press ATK kept, bloodthirst cap 6 on 4 kills), `test_trap_leech_and_no_arrow_only_effects`, `test_trap_marker_stays_with_perf_saver`, `test_halted_area_deals_nothing_more` (rain + trap, with and without lightning), `test_trap_reads_live_monsters_in_a_tree`, `test_trap_in_game_roots_and_goes_with_the_room` (TestGround, real monsters, not saved, warp and go_to)); `test_non_arrow_skill_press_is_refused` → `test_unknown_skill_press_is_refused` (every kind casts now). Seen failing first (missing API / ThornTrap not declared); 5 test-setup errors fixed in the tests. The sim does not model กับดักหนาม (no game-vs-sim test). Screenshots: `tests/screenshots_m5b_trap.gd` (TRAP_GEMS=expand) → `docs/preview/m5b/t8c_trap_{light,dark}_{placed,trigger,rooted}[_expand][_x3].png`. AI decisions 19–25; risks B35. No button casts กับดักหนาม in game until Task 8e. Full suite: `RESULT passed=736 failed=0` (711 + 25), 0 SCRIPT ERROR, no leak at exit.
 
 ---
 

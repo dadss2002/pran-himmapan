@@ -15,6 +15,7 @@ var hits: Array = []   # [atk, mult, from]
 var crit_chances: Array = []   # the crit chance of each hit, in step with hits (M5b Task 7: sure crits)
 var status := StatusEffects.new()
 var freezes := 0       # successful apply_freeze calls
+var roots := 0         # apply_root calls on a live dummy (Task 8c)
 var statuses: Array = []   # [kind, value, cast] from apply_status
 var die_on_hit := false
 var deal := 1
@@ -56,6 +57,16 @@ func apply_trail(raw_per_tick: float, hold: float, source: Object = null, cast: 
 
 func apply_zone(slow: float, taken: float, hold: float, cast: ComboCast = null) -> void:
 	if alive: status.apply_zone(slow, taken, hold, cast)
+
+## M5b Task 8c: the root (ตรึง), as Wolf.apply_root; `roots` counts the calls that landed.
+func apply_root(secs: float) -> bool:
+	if not alive: return false
+	status.apply_root(secs)
+	roots += 1
+	return status.is_rooted()
+
+func is_rooted() -> bool:
+	return alive and status.is_rooted()
 
 func is_frozen() -> bool:
 	return alive and status.is_frozen()

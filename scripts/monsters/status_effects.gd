@@ -15,6 +15,9 @@ extends RefCounted
 ##   exactly round(secs / tick) ticks (as long as hold + the arrow's flight past it < 1 tick: 0.25 + 0.61 s).
 ##   Overlapping trails keep the highest per_tick, so three lines through one monster burn once a second.
 ## - zone: speed × (1 − slow), damage taken × (1 + taken) while held; the highest of each.
+## M5b Task 8c (owner D3): root (ตรึง, กับดักหนาม): speed 0 for its time and nothing else (the monster still turns,
+## bites, throws and finishes its windups; no damage, no taken bonus, not "ช้า" for the frost combos). Roots do not
+## stack: the longer remaining time is kept. Bosses and elites are rooted like any monster.
 ## taken_mult() = 1 + mark + zone taken (they ADD, owner 2026-11-09) applies to hits AND to burn / trail ticks.
 ## Ledger (risks.md B25, owner 2026-11-09 "นับทุกแบบ"): every status keeps the ComboCast of the press that applied
 ## it (*_cast; null = no press, e.g. tests). Burn / trail: the newer application's ledger, like burn_source. A refused
@@ -43,6 +46,7 @@ var zone_slow := 0.0
 var zone_taken := 0.0
 var zone_hold := 0.0
 var zone_cast: ComboCast = null
+var root_left := 0.0         # seconds of root (ตรึง) left; 0 = not rooted
 ## The ledger of the DoT (burn or trail) that dealt damage on the last tick(); null when nothing ticked. Both on
 ## one step: the larger tick's, ties the burn's. tick_source = that DoT's source (the hero). Valid until the next
 ## tick(): clear() (on death) leaves both alone, so the kill hook can read them after the killing tick.
@@ -104,8 +108,12 @@ func apply_zone(slow: float, taken: float, hold: float, cast: ComboCast = null) 
 	zone_hold = maxf(zone_hold, hold)
 	zone_cast = cast
 
+## Roots for `secs`: keeps the longer of what is left and `secs` (never the sum, never shorter). D3.
+func apply_root(secs: float) -> void:
+	root_left = maxf(root_left, secs)
+
 func speed_mult() -> float:
-	if freeze_left > 0.0: return 0.0
+	if freeze_left > 0.0 or root_left > 0.0: return 0.0
 	var m := 1.0 - Balance.num("elements.ice.slow") if slow_left > 0.0 else 1.0
 	if zone_hold > 0.0: m *= 1.0 - zone_slow
 	return m
@@ -126,6 +134,9 @@ func is_frozen() -> bool:
 
 func is_marked() -> bool:
 	return mark_left > 0.0
+
+func is_rooted() -> bool:
+	return root_left > 0.0
 
 func in_trail() -> bool:
 	return trail_hold > 0.0
@@ -150,6 +161,8 @@ func tick(delta: float) -> int:
 	slow_left = maxf(0.0, slow_left - delta)
 	freeze_left = maxf(0.0, freeze_left - delta)
 	freeze_lock = maxf(0.0, freeze_lock - delta)
+	root_left = maxf(0.0, root_left - delta)
+	if root_left <= 1e-6: root_left = 0.0
 	mark_left = maxf(0.0, mark_left - delta)
 	if mark_left <= 0.0:
 		mark_taken = 0.0
@@ -238,6 +251,7 @@ func clear() -> void:
 	zone_slow = 0.0
 	zone_taken = 0.0
 	zone_cast = null
+	root_left = 0.0
 	_burn_t = 0.0
 	_trail_t = 0.0
 	_carry = 0.0

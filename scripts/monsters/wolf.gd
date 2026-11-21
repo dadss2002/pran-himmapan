@@ -248,10 +248,24 @@ func stats_tag() -> String:
 func apply_zone(slow: float, taken: float, hold: float, cast: ComboCast = null) -> void:
 	if is_alive(): status.apply_zone(slow, taken, hold, cast)
 
+## M5b Task 8c (owner D3, "หยุดเดินอย่างเดียว ยังตีได้ถ้าอยู่ใกล้"): roots this monster for `secs` (the longer of
+## what is left and `secs`). False when dead. Movement only: walk, chase, flee, hop and lunge all go through _move ×
+## speed_mult (0 while rooted), so a lunge moves 0 px; nothing is cancelled (unlike the freeze): windups go on, it
+## still turns, bites in reach and throws. Elites and bosses are rooted too (no monster script may override this).
+## AI decision 19: while rooted it is not knocked back or pushed by the crowd either (_push), so it stays on the trap.
+func apply_root(secs: float) -> bool:
+	if not is_alive(): return false
+	status.apply_root(secs)
+	return status.is_rooted()
+
+func is_rooted() -> bool:
+	return is_alive() and status.is_rooted()
+
 func is_frozen() -> bool:
 	return is_alive() and status.is_frozen()
 
-## Slowed or frozen (frost combos: bonus / sure crit / shatter vs a chilled target).
+## Slowed or frozen (frost combos: bonus / sure crit / shatter vs a chilled target). Owner 2026-11-10 ("นับเฉพาะ
+## น้ำแข็ง"): the ice slow and the freeze only: never a zone slow, never a trap root (is_rooted).
 func is_chilled() -> bool:
 	return is_alive() and (status.is_slowed() or status.is_frozen())
 
@@ -298,7 +312,7 @@ func receive_hit(atk: float, mult: float, from: Vector2, crit_chance := -1.0, cr
 	if lands and is_alive(): Sfx.play_monster(sound_kind(), "hurt")
 	if not is_alive(): return r.amount
 	_flash = n("hit_flash")
-	if state != "bite" and not elite and not status.is_frozen():   # elites do not get knocked back (M3h)
+	if state != "bite" and not elite and not status.is_frozen() and not status.is_rooted():   # elites do not get knocked back (M3h); frozen / rooted stay put
 		var away := _pos() - from
 		if away.length() > 0.01:
 			_push(away.normalized() * n("hit_knockback"))
@@ -755,7 +769,7 @@ func _set_pos(p: Vector2) -> void:
 	else: position = p
 
 func _move(v: Vector2, dt: float) -> void:
-	v *= status.speed_mult()         # ice gem slow: walk, run and lunge
+	v *= status.speed_mult()         # ice gem slow: walk, run and lunge; 0 while frozen or rooted (Task 8c)
 	velocity = v
 	_face(v)
 	if v.length() > 1.0: _wanted_move = true
@@ -768,9 +782,9 @@ func _move(v: Vector2, dt: float) -> void:
 func push(v: Vector2) -> void:
 	_push(v)
 
-## Every push (hit knockback, the crowd's separation) stops here while frozen: a frozen monster stays put.
+## Every push (hit knockback, the crowd's separation) stops here while frozen or rooted (Task 8c): it stays put.
 func _push(v: Vector2) -> void:
-	if status.is_frozen(): return
+	if status.is_frozen() or status.is_rooted(): return
 	if is_inside_tree(): move_and_collide(v)
 	else: position += v
 

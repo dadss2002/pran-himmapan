@@ -1,5 +1,5 @@
 class_name SkillHit
-## M5b Task 8b: ONE hit of an area skill press on one monster (a ห่าศร tick; Task 8c: a thorn trap's trigger), shared
+## M5b Task 8b: ONE hit of an area skill press on one monster (a ห่าศร tick; a กับดักหนาม trigger, Task 8c), shared
 ## so every area skill deals damage, leeches, applies its element gem and reports kills / crits the same way.
 ## Area hits are PRIMARY hits of the press (plan Global Constraints): they roll the press's crit chance, leech, apply
 ## the element gem's status and report to THE one kill / crit hook (Hero.combo_hit) with the press's ledger (the
@@ -16,6 +16,9 @@ class_name SkillHit
 ##   quiet (per tick)       true after the first hit of the tick that landed: the rest play no hit sound (Sfx.hit_quiet)
 ##   zapped (per tick)      true after the tick's one chain_zap effect
 ##   fx_parent              where the chain_zap is shown (null = none: tests, no tree)
+##   halted                 true once the area was halted (ArrowRain / ThornTrap.halt: warp, room change, the hero's
+##                          death, also from INSIDE one of its own hits: a kill that moves the hero on): from then
+##                          on this source deals nothing, chains nothing and shows nothing (8b review)
 
 ## A monster's feet: its node origin (global in a tree, plain position outside one, as in tests).
 static func feet(t: Node2D) -> Vector2:
@@ -23,10 +26,10 @@ static func feet(t: Node2D) -> Vector2:
 
 ## One hit of `mult` × ATK on t, pushed from `at` (the area's centre). Returns the damage dealt (0: dead / freed).
 static func hit(t: Node2D, src: Dictionary, mult: float, at: Vector2) -> int:
-	if not is_instance_valid(t) or not t.is_alive(): return 0
+	if src.get("halted", false) or not is_instance_valid(t) or not t.is_alive(): return 0
 	var b: Dictionary = src.get("build", {})
 	var amount := _deal(t, src, mult, at)
-	if amount <= 0 or not is_instance_valid(t): return amount
+	if amount <= 0 or not is_instance_valid(t) or src.get("halted", false): return amount
 	match String(b.get("element", "")):
 		"fire":
 			if t.has_method("apply_status"):
@@ -38,10 +41,10 @@ static func hit(t: Node2D, src: Dictionary, mult: float, at: Vector2) -> int:
 			# the chained hit applies nothing further
 			var from: Vector2 = t.hurt_point()
 			var other := _nearest(src.get("targets", []), from, Balance.num("elements.lightning.range"), t)
-			if other != null:
+			if other != null and not src.get("halted", false):
 				_deal(other, src, mult * Balance.num("elements.lightning.mult"), from)
 				var parent = src.get("fx_parent")
-				if not src.get("zapped", false) and is_instance_valid(parent) and is_instance_valid(other):
+				if not src.get("zapped", false) and not src.get("halted", false) and is_instance_valid(parent) and is_instance_valid(other):
 					src["zapped"] = true                       # plan: at most one chain_zap per tick
 					var z := FxSprite.make("chain_zap")
 					z.position = other.hurt_point()
@@ -52,6 +55,7 @@ static func hit(t: Node2D, src: Dictionary, mult: float, at: Vector2) -> int:
 ## The damage itself: receive_hit (the target's taken_mult applies inside), then the kill / crit hook and the leech.
 ## A sustain recipe's press tints the hit spark for this one hit, as Arrow._receive does (owner 2026-11-11).
 static func _deal(t: Node2D, src: Dictionary, mult: float, from: Vector2) -> int:
+	if src.get("halted", false): return 0
 	var b: Dictionary = src.get("build", {})
 	var shooter = src.get("shooter")
 	var was: bool = t.is_alive()

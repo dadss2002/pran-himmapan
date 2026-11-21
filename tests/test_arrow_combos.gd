@@ -1794,6 +1794,34 @@ func test_zone_slow_is_not_chilled():
 	_free([a1, a2, d, e, near, w] + _spawned)
 	return r
 
+## Plan Task 8c note (owner 2026-11-10 "นับเฉพาะน้ำแข็ง"): a trap's root (ตรึง) is not "ช้า" either: a rooted monster is
+## not chilled, so ศรเกล็ดน้ำแข็ง gives no +25 %, ศรผลึกอโนดาต no sure crit and no shatter. The real Wolf agrees.
+func test_root_is_not_chilled():
+	var r := ""
+	var fb := _build(["ice", "split"])
+	var d := _dummy(Vector2(60, 0))
+	d.apply_root(5.0)
+	_spawned = []
+	if not d.is_rooted(): r = "setup: the dummy is not rooted"
+	elif d.is_chilled(): r = "the root made the dummy chilled"
+	var a1 := _shoot(fb, [d])
+	if r != "": pass
+	elif d.hits.size() != 1 or not is_equal_approx(float(d.hits[0][1]), float(fb.arrow_mult)): r = "frost_shard on a rooted target: mult %s, want %s (no × 1.25)" % [d.hits, fb.arrow_mult]
+	var ab := _build(["ice", "split", "execute"])
+	var e := _dummy(Vector2(60, 0))
+	var near := _dummy(Vector2(60, 20))
+	e.apply_root(5.0)
+	var a2 := _shoot(ab, [e, near])
+	if r == "" and (e.hits.size() != 1 or not is_equal_approx(float(e.crit_chances[0]), float(ab.crit))): r = "anodard on a rooted target: hits %s crit %s, want 1 hit at the build's %s" % [e.hits, e.crit_chances, ab.crit]
+	elif r == "" and not near.hits.is_empty(): r = "anodard on a rooted target shattered (neighbour hit %s)" % [near.hits]
+	var w: Wolf = load("res://scenes/wolf.tscn").instantiate()
+	w.setup()
+	w.apply_root(5.0)
+	if r == "" and (w.is_chilled() or not w.is_rooted() or w.status.speed_mult() != 0.0): r = "rooted wolf: chilled %s rooted %s speed %s (want false, true, 0)" % [w.is_chilled(), w.is_rooted(), w.status.speed_mult()]
+	if r == "" and w._frost_fx != null and w._frost_fx.visible: r = "a rooted wolf wears the frost overlay"
+	_free([a1, a2, d, e, near, w] + _spawned)
+	return r
+
 ## The tier-3 row replaces its base (owner ②, rows read literally): ศรผลึกอโนดาต has no +25 % vs chilled.
 func test_anodard_has_no_frost_bonus():
 	var b := _build(["ice", "split", "execute"])

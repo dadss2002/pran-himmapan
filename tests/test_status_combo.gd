@@ -829,6 +829,15 @@ func test_respawn_outlasts_every_dot_window():
 	for f in found:
 		if float(f[1]) <= window: return "%s = %s s is not longer than a ledger's damage window %.2f s (flight %.2f + DoT %.2f)" % [f[0], f[1], window, flight, dot]
 	print("  ledger damage window %.2f s (flight %.2f + DoT %.2f, extend ×%.2f) < respawns %s" % [window, flight, dot, ext_mult, found])
+	# M5b Task 8c: a trap can wait for minutes (D4), but its ledger holds no kill until its first damage: the window
+	# that matters starts at the trigger (one step: every hit of it) and ends with what the trigger left behind: the
+	# root time (Task 9: the spent trap is a zone for root_secs) plus a burn from it, both at the extend gem's top.
+	var trap_window := (Balance.num("skills.thorn_trap.root") + Balance.num("elements.fire.duration")) * ext_mult
+	for f in found:
+		if float(f[1]) <= trap_window: return "%s = %s s is not longer than a trap ledger's damage window %.2f s (from its trigger)" % [f[0], f[1], trap_window]
+	var code := FileAccess.get_file_as_string("res://scripts/skills/thorn_trap.gd")
+	if not ("armed = false" in code) or code.count("SkillHit.hit(") != 1: return "thorn_trap.gd: a trap must deal its hits in ONE trigger (found %d SkillHit.hit calls)" % code.count("SkillHit.hit(")
+	print("  trap ledger window %.2f s from the trigger (root + burn, extend ×%.2f)" % [trap_window, ext_mult])
 	return ""
 
 func _find_key(node, key: String, path: String, out: Array) -> void:
@@ -839,3 +848,183 @@ func _find_key(node, key: String, path: String, out: Array) -> void:
 			else: _find_key(node[k], key, p, out)
 	elif typeof(node) == TYPE_ARRAY:
 		for i in node.size(): _find_key(node[i], key, "%s[%d]" % [path, i], out)
+
+# ---------- root (ตรึง; M5b Task 8c, owner D3) ----------
+
+## D3: a root stops movement only: speed × 0 for its time, then gone.
+func test_root_speed_zero_and_ends():
+	var s := StatusEffects.new()
+	if s.is_rooted(): return "rooted before any root"
+	s.apply_root(2.0)
+	if not s.is_rooted() or s.speed_mult() != 0.0: return "rooted %s, speed %s after apply_root(2.0)" % [s.is_rooted(), s.speed_mult()]
+	s.tick(1.99)
+	if not s.is_rooted() or s.speed_mult() != 0.0: return "the root ended before 2.0 s"
+	s.tick(0.02)
+	if s.is_rooted() or not is_equal_approx(s.speed_mult(), 1.0): return "after 2.01 s: rooted %s, speed %s" % [s.is_rooted(), s.speed_mult()]
+	# a root is not a freeze, a slow or a zone, deals nothing, and clear() ends it
+	s.apply_root(2.0)
+	if s.is_frozen() or s.is_slowed() or s.in_zone() or not is_equal_approx(s.taken_mult(), 1.0): return "a root set another status"
+	if s.tick(0.5) != 0: return "a root dealt damage"
+	s.clear()
+	if s.is_rooted() or s.speed_mult() != 1.0: return "clear() left the root"
+	s.apply_root(0.0)
+	if s.is_rooted(): return "apply_root(0) rooted"
+	return ""
+
+## D3: roots don't stack: the longer remaining time is kept, never the sum, never a shorter one.
+func test_root_keeps_longer_not_sum():
+	var s := StatusEffects.new()
+	s.apply_root(2.0)
+	s.tick(0.5)
+	s.apply_root(1.0)
+	if not is_equal_approx(s.root_left, 1.5): return "root left %.3f after 2.0, 0.5 s, then 1.0; want 1.5" % s.root_left
+	s.apply_root(2.6)
+	if not is_equal_approx(s.root_left, 2.6): return "a longer root did not replace: %.3f, want 2.6" % s.root_left
+	return ""
+
+## D3 on real monsters: a chasing wolf does not move while rooted (and is not sent home as "stuck"); its bite in
+## reach still lands; a boar's lunge windup is NOT cancelled (unlike a freeze) and the lunge itself moves 0 px.
+func test_rooted_wolf_does_not_move():
+	var world: Node2D = await _world()
+	var h := _hero(world, Vector2(400, 300))
+	var p := _pack(world, "wolf", Vector2(300, 300))
+	await tree.physics_frame
+	var w: Wolf = p.wolves[0]
+	w.global_position = Vector2(300, 300)
+	w.health.setup(100000)
+	w._lunge_cd = 99.0                               # this part is the walk, not the lunge
+	var r := ""
+	if not await _frames(p, h, 60, func(): return w.state == "chase" and w.global_position.x > 302.0): r = "setup: the wolf never chased (state %s)" % w.state
+	var at := w.global_position
+	if r == "" and not w.apply_root(2.0): r = "apply_root refused on a live wolf"
+	if r == "" and (not w.is_rooted() or w.is_frozen() or w.is_chilled()): r = "rooted %s frozen %s chilled %s" % [w.is_rooted(), w.is_frozen(), w.is_chilled()]
+	if r == "":
+		await _frames(p, h, 60)                      # 1.0 s
+		if w.global_position.distance_to(at) > 0.01: r = "a rooted wolf moved %s in 1 s" % (w.global_position - at)
+		elif w.state != "chase": r = "a rooted wolf left the chase (state %s): a root is not 'stuck'" % w.state
+		elif not w.body.is_playing(): r = "a rooted wolf's body is paused (that is the freeze)"
+	if r == "":
+		await _frames(p, h, 66)                      # past 2.0 s
+		if w.is_rooted(): r = "still rooted after 2.1 s"
+		elif w.global_position.distance_to(at) < 1.0: r = "the wolf did not move again after the root"
+	# a bite in reach still lands while rooted
+	if r == "":
+		w._bite_cd = 0.0
+		w.global_position = h.global_position + Vector2(-15, 0)
+		w.apply_root(2.0)
+		at = w.global_position
+		var hp := h.health.hp
+		await _frames(p, h, 60)
+		if h.health.hp >= hp: r = "a rooted wolf in reach did not bite (state %s)" % w.state
+		elif w.global_position.distance_to(at) > 0.01: r = "the biting rooted wolf moved %s" % (w.global_position - at)
+	world.queue_free()
+	if r != "": return r
+	# the boar: rooted during the lunge warning: the warning stays, the lunge runs its time and moves 0 px
+	world = await _world()
+	h = _hero(world, Vector2(400, 300))
+	p = _pack(world, "boar", Vector2(300, 300))
+	await tree.physics_frame
+	var m: Monster = p.wolves[0]
+	m.global_position = Vector2(300, 300)
+	m.health.setup(100000)
+	m.receive_hit(1, 1.0, Vector2(200, 300))         # provoke the passive boar
+	m.global_position = Vector2(300, 300)
+	if not await _frames(p, h, 120, func(): return m.state == "lunge_warn"): r = "boar never warned a lunge (state %s)" % m.state
+	if r == "":
+		m.apply_root(2.0)
+		at = m.global_position
+		if m.state != "lunge_warn" or not m.telegraph_visible(): r = "the root cancelled the windup (state %s, warning %s)" % [m.state, m.telegraph_visible()]
+	if r == "":
+		if not await _frames(p, h, 90, func(): return m.state == "lunge"): r = "the rooted boar never lunged (state %s)" % m.state
+	if r == "":
+		await _frames(p, h, int(m.n("lunge_time") / DT) + 3)
+		if m.global_position.distance_to(at) > 0.01: r = "a rooted boar's lunge moved %s" % (m.global_position - at)
+		elif m.state == "lunge": r = "the rooted lunge never ended"
+	world.queue_free()
+	return r
+
+func test_dead_ignores_root():
+	var w := _wolf()
+	w.health.take_hit(999999, false)
+	var r := ""
+	if w.is_alive(): r = "setup: the wolf is alive"
+	elif w.apply_root(2.0): r = "a dead wolf took a root"
+	elif w.is_rooted(): r = "a dead wolf is rooted"
+	w.free()
+	if r != "": return r
+	# a monster that dies while rooted is no longer rooted, and comes back unrooted
+	var v := _wolf()
+	v.apply_root(2.0)
+	v.health.take_hit(999999, false)
+	if v.is_rooted(): r = "a wolf that died is still rooted"
+	v.revive()
+	if r == "" and (v.is_rooted() or v.status.is_rooted()): r = "a revived wolf is rooted"
+	v.free()
+	return r
+
+## D3: elites (and bosses: no monster script may override the root, as for the freeze) are rooted too.
+func test_elite_rooted():
+	var world: Node2D = await _world()
+	var p := _pack(world, "wolf", Vector2(300, 300), 3)
+	await tree.physics_frame
+	var w: Wolf = p.wolves[0]
+	w.set_elite(true)
+	var r := "" if w.apply_root(2.0) and w.is_rooted() else "an elite was not rooted"
+	world.queue_free()
+	if r != "": return r
+	for path in _monster_scripts():
+		if path.get_file() in ["wolf.gd", "status_effects.gd"] and path.get_base_dir() == "res://scripts/monsters": continue
+		var text := FileAccess.get_file_as_string(path)
+		for f in ["func apply_root", "func is_rooted", "func _move("]:
+			if f in text: return "%s has its own %s (D3: bosses and elites are rooted like the others)" % [path, f]
+	return ""
+
+## AI decision 19 (ตรึง = pinned on the trap): a rooted monster is not knocked back by a hit and is not pushed by the
+## crowd, like a frozen one, so it stays on the closed trap that shows the root; unrooted ones still are (control).
+func test_rooted_monster_is_not_pushed():
+	var a := _wolf()
+	var b := _wolf()
+	a.health.setup(100000)
+	b.health.setup(100000)
+	b.apply_root(2.0)
+	var pa := a.position
+	var pb := b.position
+	a.receive_hit(5.0, 1.0, pa + Vector2(-40, 0))
+	b.receive_hit(5.0, 1.0, pb + Vector2(-40, 0))
+	b.push(Vector2(3, 0))
+	var r := ""
+	if a.position.distance_to(pa) < 1.0: r = "control: an unrooted wolf was not knocked back"
+	elif b.position != pb: r = "a rooted wolf was moved by %s" % (b.position - pb)
+	a.free()
+	b.free()
+	if r != "": return r
+	var world: Node2D = await _world()
+	var p := _pack(world, "wolf", Vector2(300, 300), 1, 3)
+	await tree.physics_frame
+	for w in p.wolves:
+		w.global_position = Vector2(300, 300)
+		w.health.setup(100000)
+	var f: Wolf = p.wolves[0]
+	var o: Wolf = p.wolves[1]
+	f.apply_root(2.0)
+	for i in 30:
+		await tree.physics_frame
+		p._separate(DT)
+	if f.global_position != Vector2(300, 300): r = "the crowd pushed a rooted wolf to %s" % f.global_position
+	elif o.global_position.distance_to(Vector2(300, 300)) < 1.0: r = "control: the crowd did not push the unrooted wolf"
+	world.queue_free()
+	return r
+
+## The dummy has the same root API on its real StatusEffects (trap tests use it).
+func test_dummy_has_root_api():
+	var d: Node2D = load("res://tests/dummy_enemy.gd").new()
+	var r := ""
+	if d.is_rooted(): r = "rooted before a root"
+	elif not d.apply_root(2.0) or not d.is_rooted() or d.roots != 1: r = "apply_root on a live dummy: rooted %s roots %s" % [d.is_rooted(), d.get("roots")]
+	elif d.is_chilled(): r = "a rooted dummy is chilled"
+	d.tick_status(2.01)
+	if r == "" and d.is_rooted(): r = "the dummy's root never ended"
+	d.alive = false
+	if r == "" and (d.apply_root(2.0) or d.is_rooted()): r = "a dead dummy took a root"
+	d.free()
+	return r

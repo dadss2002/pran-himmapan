@@ -2,7 +2,8 @@ extends RefCounted
 ## M5b Task 8a: the three area skills' data (ห่าศร / กับดักหนาม / ศรเพลิง, docs/skills.md approved 2026-11-06, combos
 ## spec D1–D8), the data-driven skill list, the area build keys, the icons, and the save rules at the edge of each
 ## unlock (Review Focus 8). Task 8b: ห่าศร itself (ArrowRain, SkillHit, Hero.area_point / hit_source; the tests after
-## "# ---------- ห่าศร (Task 8b) ----------"). กับดักหนาม's cast is Task 8c: until then its press is refused.
+## "# ---------- ห่าศร (Task 8b) ----------"). Task 8c: กับดักหนาม (ThornTrap, TrapSet, the root; the tests after
+## "# ---------- กับดักหนาม (Task 8c) ----------").
 
 const DT := 1.0 / 60.0
 const TMP := "user://test_area_skills.json"
@@ -275,33 +276,24 @@ func test_socket_rules_on_new_skills():
 	_done(h)
 	return r
 
-## Until Tasks 8b / 8c build them, a rain / trap press must do nothing at all: no arrow, no MP, no cooldown.
-func test_non_arrow_skill_press_is_refused():
-	for id in ["thorn_trap"]:      # ห่าศร casts since Task 8b (test_rain_costs_and_cooldown)
-		var h := _hero(10)
-		h.facing = 2
-		var mp0: float = h.mp
-		var r := ""
-		if h.try_skill(id): r = "%s: try_skill returned true" % id
-		for i in 90: h.step(DT, Vector2.ZERO)
-		if r == "":
-			if not _shots.is_empty(): r = "%s fired %d arrow(s)" % [id, _shots.size()]
-			elif h.mp < mp0: r = "%s spent MP (%.1f → %.1f)" % [id, mp0, h.mp]
-			elif h.skill_cooldown_left(id) > 0.0: r = "%s went on cooldown" % id
-			elif h.state == "shoot": r = "%s left the hero drawing the bow" % id
-		if r == "":
-			# also when it is pressed during a basic shot (the queued path)
-			h.try_shoot()
-			if h.try_skill(id): r = "%s queued during a basic shot" % id
-			for i in 90: h.step(DT, Vector2.ZERO)
-			if r == "" and (_shots.size() != 1 or h.skill_cooldown_left(id) > 0.0 or h.mp < mp0): r = "%s ran after the basic shot (%d arrows)" % [id, _shots.size()]
-		_done(h)
-		if r != "": return r
-	# an id with no numbers is refused too (no crash)
-	var h2 := _hero(10)
-	var bad := h2.try_skill("no_such_skill")
-	_done(h2)
-	return "an unknown skill id was accepted" if bad else ""
+## Every skill kind has a cast now (arrows, ห่าศร since Task 8b, กับดักหนาม since Task 8c: test_trap_cost_and_cooldown).
+## Only an id with no numbers is still refused (no crash, no arrow, no MP), also when queued during a basic shot.
+func test_unknown_skill_press_is_refused():
+	for id in ALL:
+		var h0 := _hero(10)
+		var ok := h0._castable(id)
+		_done(h0)
+		if not ok: return "%s has no cast" % id
+	var h := _hero(10)
+	var mp0: float = h.mp
+	var r := ""
+	if h.try_skill("no_such_skill"): r = "an unknown skill id was accepted"
+	h.try_shoot()
+	if r == "" and h.try_skill("no_such_skill"): r = "an unknown skill id queued during a basic shot"
+	for i in 90: h.step(DT, Vector2.ZERO)
+	if r == "" and (_shots.size() != 1 or h.mp < mp0): r = "the unknown skill ran after the basic shot (%d arrows)" % _shots.size()
+	_done(h)
+	return r
 
 ## ศรเพลิง is an arrow skill: its press already goes through the arrow path (one arrow, MP 14, CD 6, the arrow's own
 ## fire burns on a hit). Its r32 blast comes with Task 8d.
@@ -1110,6 +1102,643 @@ func test_rain_in_game_hits_and_goes_with_the_room():
 		if r == "" and rains.call().size() != 1: r = "no rain after the second press"
 		g.go_to("c1r0", "", false)
 		if r == "" and (not rains.call().is_empty() or not h.rains.is_empty()): r = "go_to left a rain (%d in the world, %d listed)" % [rains.call().size(), h.rains.size()]
+	g.queue_free()
+	await tree.process_frame
+	if FileAccess.file_exists(TMP): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP))
+	return r
+
+# ---------- กับดักหนาม (Task 8c) ----------
+
+const TRAP := "thorn_trap"
+
+## A trap of hero h's build (its gems, its ledger) at `at`, not in a tree: stepped by the test. `targets` is read live.
+func _trap(h: Hero, at: Vector2, targets: Array) -> ThornTrap:
+	h.test_enemies = targets
+	var b := h.build(TRAP)
+	b["cast"] = ComboCast.from_build(b, 1.0)
+	var trap := ThornTrap.new()
+	trap.setup(at, b, h.hit_source(b), targets)
+	_made.append(trap)
+	return trap
+
+## Presses กับดักหนาม for real (try_skill, the bow animation, the release); returns the trap it placed (null: none).
+func _place(h: Hero, targets: Array) -> ThornTrap:
+	h.test_enemies = targets
+	var before: Array = h.traps.all()
+	h.mp = h.max_mp()
+	h._skill_cd.clear()
+	if not h.try_skill(TRAP): return null
+	for i in 40:
+		h.step(DT, Vector2.ZERO)
+		for t in h.traps.all():
+			if not (t in before): return t
+	return null
+
+func _steps(trap: ThornTrap, secs: float, ds := []) -> void:
+	for i in int(round(secs / DT)):
+		if is_instance_valid(trap): trap.step(DT)
+		for d in ds: d.tick_status(DT)
+
+## The pure rule: at most `max` armed traps, the oldest armed one goes; spent traps do not count; freed ones drop out.
+func test_trap_set_rules():
+	var set := TrapSet.new()
+	var mk := func() -> Node2D:
+		var t := ThornTrap.new()
+		t.armed = true                       # as a placed trap (setup)
+		_made.append(t)
+		return t
+	var a: ThornTrap = mk.call()
+	var b: ThornTrap = mk.call()
+	var c: ThornTrap = mk.call()
+	var d: ThornTrap = mk.call()
+	var r := ""
+	if set.add(a, 2) != null or set.add(b, 2) != null: r = "a trap was removed under the limit"
+	elif set.armed() != [a, b]: r = "armed %s" % [set.armed()]
+	elif set.add(c, 2) != a: r = "the third trap did not push out the oldest"
+	elif set.armed() != [b, c] or set.all() != [b, c]: r = "after the third: %s" % [set.armed()]
+	if r == "":
+		b.armed = false                      # sprung: still held (it shows the root), no longer counted
+		b.spent = true
+		if set.add(d, 2) != null: r = "a spent trap counted against the limit"
+		elif set.armed() != [c, d] or set.all() != [b, c, d]: r = "armed %s all %s" % [set.armed(), set.all()]
+	if r == "":
+		b.done = true
+		var gone: Array = set.prune()
+		if gone != [b] or set.all() != [c, d]: r = "prune gave %s, left %s" % [gone, set.all()]
+	if r == "":
+		_made.erase(c)
+		c.free()
+		if set.armed() != [d] or set.all() != [d]: r = "a freed trap is still listed"
+		var held: Array = set.clear()
+		if r == "" and (held != [d] or not set.all().is_empty() or set.size() != 0): r = "clear() gave %s, left %d" % [held, set.size()]
+	_free_made()
+	return r
+
+## D2: the trap goes to the FEET of the nearest live monster within 160 px, else to the hero's own feet.
+func test_trap_placed_on_target_within_160():
+	var cases := [
+		["one at 150 px", [Vector2(150, 0)], [], Vector2(150, 0)],
+		["one at 170 px", [Vector2(170, 0)], [], Vector2.ZERO],
+		["nearest of two", [Vector2(160, 40), Vector2(-90, 40)], [], Vector2(-90, 40)],
+		["a dead one is skipped", [Vector2(60, 40), Vector2(140, 40)], [0], Vector2(140, 40)],
+		["no monster", [], [], Vector2(30, 40)],
+	]
+	for c in cases:
+		var h := _hero(10)
+		h.position = Vector2(30, 40) if c[1].size() != 1 else Vector2.ZERO
+		var ds: Array = []
+		for p in c[1]: ds.append(_dummy(p))
+		for i in c[2]: ds[i].alive = false
+		var trap := _place(h, ds)
+		var r := ""
+		if trap == null: r = "%s: no trap was placed" % c[0]
+		elif trap.at != c[3]: r = "%s: trap at %s, want %s" % [c[0], trap.at, c[3]]
+		elif not trap.armed or trap.spent: r = "%s: a new trap is not armed" % c[0]
+		elif not _shots.is_empty(): r = "%s: the press fired %d arrow(s)" % [c[0], _shots.size()]
+		_done(h)
+		_free_made()
+		if r != "": return r
+	return ""
+
+## docs/skills.md: ตรึง 2 วิ + 150 %; D4: trigger radius 16 px (feet). At 17 px nothing; at 15 px ONE hit of 150 % from
+## the trap, rooted 2.0 s, the trap is spent and never fires again; the closed trap is gone after the root.
+func test_trap_triggers_150_root_2():
+	var h := _hero(10)
+	var d := _dummy(Vector2(17, 0))
+	var edge := _dummy(Vector2(0, -16.5))
+	var all := [d, edge]
+	var trap := _trap(h, Vector2.ZERO, all)
+	var r := ""
+	_steps(trap, 1.0)
+	if not d.hits.is_empty() or not trap.armed or trap.spent or d.is_rooted(): r = "a monster at 17 px triggered the trap"
+	d.position = Vector2(15, 0)
+	trap.step(DT)
+	if r == "":
+		if d.hits.size() != 1: r = "%d hits at 15 px, want 1" % d.hits.size()
+		elif not _near(d.hits[0][1], 1.5) or d.hits[0][2] != Vector2.ZERO or not _near(d.hits[0][0], float(h.stats().atk)): r = "hit %s, want ATK %.1f × 1.5 from the trap" % [d.hits[0], h.stats().atk]
+		elif not _near(d.crit_chances[0], float(h.build(TRAP).crit)): r = "crit chance %.3f, want the build's" % d.crit_chances[0]
+		elif not d.is_rooted() or not _near(d.status.root_left, 2.0): r = "root %.3f s, want 2.0" % d.status.root_left
+		elif trap.armed or not trap.spent or trap.caught != [d]: r = "armed %s spent %s caught %s" % [trap.armed, trap.spent, trap.caught]
+		elif not edge.hits.is_empty() or edge.is_rooted(): r = "a monster outside r16 was caught"
+	if r == "":
+		edge.position = Vector2(3, 0)                    # walks on to the spent trap: nothing
+		_steps(trap, 1.9, [d])
+		if d.hits.size() != 1 or not edge.hits.is_empty(): r = "a spent trap hit again (%d / %d)" % [d.hits.size(), edge.hits.size()]
+		elif not d.is_rooted(): r = "the root ended before 2.0 s"
+		elif trap.done: r = "the closed trap went before the root ended"
+		_steps(trap, 0.12, [d])
+		if r == "" and d.is_rooted(): r = "still rooted after 2.03 s"
+		_steps(trap, ThornTrap.FADE + 0.05, [d])
+		if r == "" and not trap.done: r = "the spent trap never finished"
+	_free_made()
+	_done(h)
+	return r
+
+## Everything standing in it on the step it fires is hit and rooted once; a dead one neither triggers nor is hit.
+func test_trap_hits_all_inside():
+	var h := _hero(10)
+	var dead := _dummy(Vector2(2, 2))
+	dead.alive = false
+	var a := _dummy(Vector2(40, 0))
+	var b := _dummy(Vector2(40, 0))
+	var out := _dummy(Vector2(40, 0))
+	var all := [dead, a, b, out]
+	var trap := _trap(h, Vector2.ZERO, all)
+	_steps(trap, 0.5)
+	var r := "" if trap.armed and dead.hits.is_empty() else "a dead monster triggered the trap"
+	a.position = Vector2(10, 0)
+	b.position = Vector2(-8, 9)
+	out.position = Vector2(12, 12)                       # 16.97 px
+	_steps(trap, 0.5)
+	if r == "":
+		if a.hits.size() != 1 or b.hits.size() != 1: r = "hits %d / %d, want 1 each" % [a.hits.size(), b.hits.size()]
+		elif a.roots != 1 or b.roots != 1 or not a.is_rooted() or not b.is_rooted(): r = "roots %d / %d" % [a.roots, b.roots]
+		elif not out.hits.is_empty() or out.is_rooted() or not dead.hits.is_empty(): r = "one outside / dead was caught"
+		elif trap.hits_done != 2: r = "hits_done %d" % trap.hits_done
+	_free_made()
+	_done(h)
+	return r
+
+## วางค้างได้ 2 อัน: the third press removes the oldest armed trap (freed); a spent trap does not count.
+func test_max_two_traps_oldest_goes():
+	var h := _hero(10)
+	var ds: Array = []
+	h.position = Vector2(0, 0)
+	var t1 := _place(h, ds)
+	h.position = Vector2(100, 0)
+	var t2 := _place(h, ds)
+	var r := ""
+	if t1 == null or t2 == null: r = "no trap"
+	elif h.traps.armed() != [t1, t2]: r = "after two presses: %s" % [h.traps.armed()]
+	h.position = Vector2(200, 0)
+	var t3 := _place(h, ds) if r == "" else null
+	if r == "":
+		if t3 == null: r = "the third press placed nothing"
+		elif is_instance_valid(t1): r = "the oldest trap is still there"
+		elif h.traps.armed() != [t2, t3]: r = "armed %s, want the 2nd and 3rd" % [h.traps.armed()]
+	if r == "":
+		var d := _dummy(Vector2(100, 0))                 # springs the 2nd: it no longer counts
+		ds.append(d)
+		t2.step(DT)
+		h.position = Vector2(300, 0)
+		var t4 := _place(h, ds)
+		if t4 == null: r = "the 4th press placed nothing"
+		elif not is_instance_valid(t3) or h.traps.armed() != [t3, t4]: r = "a spent trap counted: armed %s" % [h.traps.armed()]
+		elif not is_instance_valid(t2) or not (t2 in h.traps.all()): r = "the spent trap was dropped before its root ended"
+	_done(h)
+	_free_made()
+	return r
+
+## D3: a trap ignores a monster already rooted: two traps on one spot, one monster steps in: ONE hit; when its root
+## ends (2.01 s) and it still stands there, the second fires.
+func test_second_trap_ignores_rooted():
+	var h := _hero(10)
+	var d := _dummy(Vector2(50, 0))
+	var all := [d]
+	var t1 := _trap(h, Vector2.ZERO, all)
+	var t2 := _trap(h, Vector2.ZERO, all)
+	d.position = Vector2(4, 0)
+	t1.step(DT)
+	t2.step(DT)
+	var r := ""
+	if d.hits.size() != 1 or d.roots != 1: r = "two traps, one step: %d hits %d roots, want 1 / 1" % [d.hits.size(), d.roots]
+	elif not t2.armed: r = "the second trap fired on a rooted monster"
+	if r == "":
+		for i in int(1.9 / DT):
+			d.tick_status(DT)
+			t2.step(DT)
+		if d.hits.size() != 1 or not t2.armed: r = "the second trap fired during the root"
+		for i in 9:
+			d.tick_status(DT)
+			t2.step(DT)
+			if not t2.armed: break
+		if r == "" and (d.hits.size() != 2 or t2.armed or not _near(d.status.root_left, 2.0, 0.02)): r = "after the root: %d hits, 2nd armed %s, root %.2f; want 2 / false / 2.0" % [d.hits.size(), t2.armed, d.status.root_left]
+	# a rooted monster and a free one in the same trap: only the free one is caught
+	var held := _dummy(Vector2(3, 3))
+	held.apply_root(5.0)
+	var free := _dummy(Vector2(-3, 3))
+	var t3 := _trap(h, Vector2(0, 3), [held, free])
+	t3.step(DT)
+	if r == "" and (not held.hits.is_empty() or held.roots != 1 or free.hits.size() != 1): r = "rooted + free in one trap: %d / %d hits" % [held.hits.size(), free.hits.size()]
+	_free_made()
+	_done(h)
+	return r
+
+## D6: the extend gem: root 2 → 2.6 s.
+func test_trap_extend_root():
+	var h := _hero(10)
+	h.set_skill_gems({TRAP: [_g("extend")]})
+	var d := _dummy(Vector2(5, 0))
+	var trap := _trap(h, Vector2.ZERO, [d])
+	trap.step(DT)
+	var r := ""
+	if not _near(d.status.root_left, 2.6): r = "root %.3f, want 2.6" % d.status.root_left
+	_steps(trap, 2.55, [d])
+	if r == "" and (not d.is_rooted() or trap.done): r = "the extended root / closed trap ended early"
+	_steps(trap, 0.1, [d])
+	if r == "" and d.is_rooted(): r = "rooted past 2.65 s"
+	_free_made()
+	_done(h)
+	return r
+
+## D4: the expand gem: trigger radius 16 × 1.3 = 20.8 px.
+func test_trap_expand_radius():
+	var h := _hero(10)
+	h.set_skill_gems({TRAP: [_g("expand")]})
+	var d := _dummy(Vector2(21, 0))
+	var trap := _trap(h, Vector2.ZERO, [d])
+	_steps(trap, 0.2)
+	var r := "" if trap.armed and d.hits.is_empty() else "triggered at 21 px (radius 20.8)"
+	d.position = Vector2(20, 0)
+	trap.step(DT)
+	if r == "" and (d.hits.size() != 1 or trap.armed): r = "not triggered at 20 px"
+	if r == "" and not _near(trap.trigger_radius, 20.8): r = "radius %.2f" % trap.trigger_radius
+	_free_made()
+	_done(h)
+	return r
+
+## Review Focus 7 / B20: warp and death end every trap (armed and spent) at once; nothing fires afterwards.
+func test_traps_cleared_on_warp_death_room():
+	for how in ["warp", "death"]:
+		var h := _hero(10)
+		var ds: Array = []
+		var t1 := _place(h, ds)
+		var d := _dummy(Vector2(2, 0))
+		ds.append(d)
+		if t1 != null: t1.step(DT)                       # spent, showing the root
+		h.position = Vector2(80, 0)
+		var t2 := _place(h, ds)
+		var r := ""
+		if t1 == null or t2 == null: r = "no trap"
+		elif not t1.spent or not t2.armed or h.traps.size() != 2: r = "setup: spent %s armed %s held %d" % [t1.spent, t2.armed, h.traps.size()]
+		if how == "warp": h.begin_warp()
+		else: h.health.take_hit(999999, false)
+		if r == "":
+			if is_instance_valid(t1) or is_instance_valid(t2): r = "%s: a trap is still there" % how
+			elif h.traps.size() != 0 or not h.traps.armed().is_empty(): r = "%s: the hero still lists a trap" % how
+		_done(h)
+		_free_made()
+		if r != "": return r
+	# in a tree: halted at once (no hit after), freed by the tree
+	var world := Node2D.new()
+	tree.root.add_child(world)
+	var h2 := _hero(10)
+	world.add_child(h2)
+	h2.set_physics_process(false)
+	var trap := _place(h2, [])
+	var r2 := ""
+	if trap == null or trap.get_parent() != world: r2 = "in a tree the trap is not the hero's sibling"
+	else:
+		trap.set_physics_process(false)
+		h2.begin_warp()
+		var d2 := _dummy(trap.at)
+		d2.add_to_group("enemies")
+		world.add_child(d2)
+		for i in 30: trap.step(DT)
+		if not trap.done or not trap.is_queued_for_deletion(): r2 = "in a tree: done %s queued %s after the warp" % [trap.done, trap.is_queued_for_deletion()]
+		elif not d2.hits.is_empty() or d2.is_rooted(): r2 = "a halted trap fired"
+		_made.erase(d2)
+	_shots = []
+	world.free()
+	_free_made()
+	return r2
+
+## MP 12, cooldown 8 at Lv10 (skill Lv1); refused on cooldown, without the MP, and at Lv9. No arrow leaves.
+func test_trap_cost_and_cooldown():
+	var h := _hero(10)
+	var mp0: float = h.mp
+	var r := ""
+	if not h.try_skill(TRAP): r = "Lv10 press refused"
+	for i in 36: h.step(DT, Vector2.ZERO)
+	var after := 0.6 - 5.0 / 14.0
+	if r == "":
+		if h.traps.armed().size() != 1: r = "%d traps, want 1" % h.traps.armed().size()
+		elif absf(h.mp - (mp0 - 12.0 + float(h.stats().mp_regen) * after)) > 0.3: r = "MP %.2f → %.2f, want 12 spent" % [mp0, h.mp]
+		elif absf(h.skill_cooldown_left(TRAP) - (8.0 - after)) > 0.05: r = "cooldown %.2f, want 8" % h.skill_cooldown_left(TRAP)
+		elif h.try_skill(TRAP): r = "a second press during the cooldown was accepted"
+		elif not _shots.is_empty(): r = "the trap press fired an arrow"
+	if r == "":
+		# pressed during a basic shot it waits, then is placed (the queued path)
+		h._skill_cd.clear()
+		h.mp = h.max_mp()
+		for i in 60: h.step(DT, Vector2.ZERO)
+		h.try_shoot()
+		if not h.try_skill(TRAP): r = "not queued during a basic shot"
+		for i in 90: h.step(DT, Vector2.ZERO)
+		if r == "" and (h.traps.armed().size() != 2 or _shots.size() != 1): r = "queued press: %d traps, %d arrows" % [h.traps.armed().size(), _shots.size()]
+	_done(h)
+	if r != "": return r
+	var poor := _hero(10)
+	poor.mp = 11.0
+	if poor.try_skill(TRAP): r = "pressed with 11 MP (needs 12)"
+	_done(poor)
+	var low := _hero(9)
+	if r == "" and low.try_skill(TRAP): r = "กับดักหนาม usable at Lv9"
+	_done(low)
+	return r
+
+## The owner's sprite when the file is there, else a drawn placeholder; both build and draw without an error.
+func test_trap_placeholder_without_art():
+	var world := Node2D.new()
+	tree.root.add_child(world)
+	var h := _hero(10)
+	var r := ""
+	var paths: Array = ThornTrap.art_paths
+	for with_art in [true, false]:
+		ThornTrap.art_paths = paths if with_art else ["res://assets/props/no_such_trap.png"]
+		ThornTrap.forget_art()
+		var trap := _trap(h, Vector2(40, 40), [])
+		_made.erase(trap)
+		world.add_child(trap)
+		trap.set_physics_process(false)
+		await tree.process_frame
+		await tree.process_frame
+		if with_art:
+			if trap.placeholder or trap._sprite == null or trap._sprite.texture == null: r = "the trap art is installed but not used"
+			elif trap._sprite.texture.resource_path != "res://assets/props/thorn_trap.png": r = "trap texture %s" % trap._sprite.texture.resource_path
+			elif trap._sprite.texture_filter != CanvasItem.TEXTURE_FILTER_NEAREST: r = "the trap sprite is filtered"
+		elif not trap.placeholder or trap._sprite != null: r = "without the file: placeholder %s" % trap.placeholder
+		if r == "" and not trap.visible: r = "the trap is hidden"
+		trap.free()
+		if r != "": break
+	ThornTrap.art_paths = paths
+	ThornTrap.forget_art()
+	world.free()
+	_done(h)
+	return r
+
+## D4: no time limit. A trap pressed long ago (5 min, far longer than any respawn) still fires, with the PRESS's
+## numbers (AI decision 21: ATK / crit / ราหู frozen at the press, as the rain) and the press's ONE ledger: ศรกระหาย
+## เลือด refunds 2 MP a kill, at most 6 for the press (4 kills = +6), heals per kill; the ledger held no kill before
+## its first damage, so a monster that died and came back while the trap waited still pays.
+func test_trap_waits_and_pays_through_the_press():
+	var h := _hero(10)
+	h.set_skill_gems({TRAP: [_g("leech"), _g("multiply")]})
+	var ds: Array = []
+	var trap := _place(h, ds)
+	var r := ""
+	if trap == null:
+		_done(h)
+		return "no trap"
+	var cast: ComboCast = trap.src.cast
+	var atk0: float = float(trap.src.atk)
+	if cast == null or cast.id != "bloodthirst": r = "the trap's ledger is %s, want the press's bloodthirst" % [cast.id if cast else "null"]
+	for i in int(300.0 / DT): trap.step(DT)
+	if r == "" and (not trap.armed or trap.done): r = "the trap went away by itself (D4: it stays until stepped on)"
+	# monsters that arrive long after the press (the list is read live), one of them back from the dead
+	for i in 4:
+		var d := _dummy(Vector2(-6 + 4 * i, 3) + trap.at)
+		d.die_on_hit = true
+		ds.append(d)
+	h.set_progress(12, 0)                            # stronger now: the trap keeps the press's ATK
+	h.mp = 0.0
+	h.health.hp = 1
+	trap.step(DT)
+	if r == "":
+		var heal := 4 * int(floor(0.03 * h.health.max_hp + 1e-6))
+		if trap.hits_done != 4: r = "%d hits, want 4" % trap.hits_done
+		elif not _near(h.mp, 6.0): r = "4 kills by one trap: MP +%.2f, want +6 (the cap), not +8" % h.mp
+		elif not _near(cast.mp_refunded(), 6.0): r = "ledger refunded %.2f" % cast.mp_refunded()
+		elif h.health.hp < 1 + heal: r = "HP 1 → %d, want at least +%d (3 %% a kill)" % [h.health.hp, heal]
+		elif not _near(ds[0].hits[0][0], atk0) or _near(atk0, float(h.stats().atk)): r = "hit ATK %.1f, press ATK %.1f, now %.1f: want the press's" % [ds[0].hits[0][0], atk0, h.stats().atk]
+		elif not _near(ds[0].hits[0][1], float(h.build(TRAP).arrow_mult) / (1.0 + 0.05 * 2), 0.01): r = "hit mult %.3f" % ds[0].hits[0][1]
+	_done(h)
+	_free_made()
+	return r
+
+## A trigger is a primary hit: it leeches (3 %), and never does the arrow-only effects (mark, freeze, trail).
+func test_trap_leech_and_no_arrow_only_effects():
+	var h := _hero(10)
+	h.set_skill_gems({TRAP: [_g("leech")]})
+	var d := _dummy(Vector2(5, 0))
+	d.deal = 1000
+	h.health.hp = 10
+	var trap := _trap(h, Vector2.ZERO, [d])
+	trap.src.build["combo_p"] = {"mark_secs": 5.0, "mark_taken": 0.3, "freeze_hits": 1, "freeze_secs": 1.0, "trail_secs": 2.0, "trail_frac": 0.2}
+	trap.step(DT)
+	var r := ""
+	if d.hits.size() != 1: r = "%d hits" % d.hits.size()
+	elif h.health.hp != 10 + 30: r = "HP 10 → %d, want +30 (3 %% of 1000)" % h.health.hp
+	elif d.is_marked() or d.is_frozen() or d.freezes != 0 or d.status.in_trail(): r = "a trap hit marked / froze / trailed"
+	elif d.is_chilled(): r = "a trapped monster is chilled (ช้า = ice only)"
+	_free_made()
+	_done(h)
+	return r
+
+## The trap is a marker the player must see: in the world's Y-sort (z 0, sorted by its back edge, so whoever stands on
+## it is drawn over it), never hidden or faded while armed, and nothing of it is shed by the PerfSaver (its trigger
+## burst included). Its look does not depend on the saver at all.
+func test_trap_marker_stays_with_perf_saver():
+	var world := Node2D.new()
+	world.y_sort_enabled = true
+	tree.root.add_child(world)
+	var h := _hero(10)
+	var d := _dummy(Vector2(300, 300))
+	d.add_to_group("enemies")                        # in a tree a trap reads the group (live)
+	world.add_child(d)
+	var all := [d]
+	var was := PerfSaver.active
+	var r := ""
+	for on in [false, true]:
+		PerfSaver.active = on
+		var trap := _trap(h, Vector2(100, 100), all)
+		_made.erase(trap)
+		world.add_child(trap)
+		trap.set_physics_process(false)
+		trap.targets = all
+		for i in 20: trap.step(DT)
+		if not trap.visible or trap.modulate.a < 1.0 or trap._sprite == null or not trap._sprite.visible: r = "saver %s: the armed trap is hidden / faded" % on
+		elif trap.z_index != 0 or not trap.z_as_relative: r = "saver %s: z %d (want the world's Y-sort, z 0)" % [on, trap.z_index]
+		elif not _near(trap.position.y, 100.0 - ThornTrap.SORT_BACK) or not _near(trap._sprite.global_position.y, 100.0) or not _near(trap._sprite.global_position.x, 100.0): r = "saver %s: sort line %.1f, sprite at %s" % [on, trap.position.y, trap._sprite.global_position]
+		if r == "":
+			d.position = Vector2(102, 100)
+			var before := world.get_child_count()
+			trap.step(DT)
+			var bursts := world.get_children().filter(func(c): return c is FxSprite and c.animation == ThornTrap.BURST_FX)
+			if d.hits.size() < 1: r = "saver %s: not sprung" % on
+			elif bursts.is_empty(): r = "saver %s: no trigger burst" % on
+			elif not trap.visible or not trap._sprite.visible: r = "saver %s: the closed trap is hidden" % on
+			for b in bursts: b.free()
+		d.position = Vector2(300, 300)
+		d.status.clear()
+		trap.free()
+		if r != "": break
+	PerfSaver.active = was
+	if r == "" and PerfSaver.decorative(ThornTrap.BURST_FX): r = "the trigger burst is listed as decoration"
+	var text := FileAccess.get_file_as_string("res://scripts/skills/thorn_trap.gd")
+	var code := ""
+	for line in text.split("\n"):
+		if not line.strip_edges().begins_with("#"): code += line.split("  #")[0] + "\n"
+	if r == "" and "PerfSaver" in code: r = "thorn_trap.gd reads the PerfSaver: a trap must never be shed"
+	_made.erase(d)
+	world.free()
+	_done(h)
+	return r
+
+## Coordinator review of 8b: an area that is halted from inside one of its own hits (a kill that moves the hero on:
+## TestGround.go_to runs inside the hit, halt_areas) deals nothing more in that same call: no further monster of the
+## tick / trigger is hit, no lightning chain, no chain_zap in the room left. For the rain and for the trap.
+class HaltOnKill extends Node2D:
+	var hero: Hero
+	var alive := true
+	var hits := 0
+	var last_hit_crit := false
+	func is_alive() -> bool: return alive
+	func hurt_point() -> Vector2: return position + Vector2(0, -14)
+	func receive_hit(_atk: float, _mult: float, _from: Vector2, _c := -1.0, _cm := -1.0) -> int:
+		hits += 1
+		alive = false
+		hero.halt_areas()                # as go_to inside the kill's callback
+		return 5
+
+func test_halted_area_deals_nothing_more():
+	for kind in ["rain", "trap"]:
+		for gem in ["", "lightning"]:
+			var world := Node2D.new()
+			tree.root.add_child(world)
+			var h := _hero(10)
+			var id: String = RAIN if kind == "rain" else TRAP
+			if gem != "": h.set_skill_gems({id: [_g("element", gem)]})
+			var k := HaltOnKill.new()
+			k.hero = h
+			k.position = Vector2(2, 0)
+			_made.append(k)
+			var after := [_dummy(Vector2(-3, 0)), _dummy(Vector2(0, 4)), _dummy(Vector2(40, 0))]
+			var all: Array = [k] + after
+			var area: Node2D = _rain(h, Vector2.ZERO, all) if kind == "rain" else _trap(h, Vector2.ZERO, all)
+			if kind == "rain": h.rains.append(area)
+			else: h.traps.add(area, 2)
+			_made.erase(area)
+			world.add_child(area)
+			area.set_physics_process(false)
+			for n2 in all:                           # in a tree a trap reads the "enemies" group (live), in this order
+				n2.add_to_group("enemies")
+				world.add_child(n2)
+			area.targets = all
+			area.src["targets"] = all
+			for i in 40: if is_instance_valid(area) and not area.done: area.step(DT)
+			var r := ""
+			var n := 0
+			for d in after: n += d.hits.size()
+			var zaps := world.get_children().filter(func(c): return c is FxSprite)
+			if k.hits != 1: r = "%s %s: setup, the killer was hit %d times" % [kind, gem, k.hits]
+			elif n != 0: r = "%s %s: %d hit(s) dealt after the halt in the same call" % [kind, gem, n]
+			elif after.any(func(d): return d.is_rooted()): r = "%s %s: a monster was rooted after the halt" % [kind, gem]
+			elif not zaps.is_empty(): r = "%s %s: an effect was added to the room left" % [kind, gem]
+			elif area.src.get("halted") != true: r = "%s %s: halt() did not mark the press's source" % [kind, gem]
+			world.free()
+			_free_made()
+			_done(h)
+			if r != "": return r
+	# SkillHit itself: a halted source deals nothing
+	var h2 := _hero(10)
+	var d2 := _dummy(Vector2(5, 0))
+	var b := h2.build(RAIN)
+	var src := h2.hit_source(b)
+	var r2 := "" if SkillHit.hit(d2, src, 1.0, Vector2.ZERO) > 0 else "control: no hit"
+	src["halted"] = true
+	if r2 == "" and (SkillHit.hit(d2, src, 1.0, Vector2.ZERO) != 0 or d2.hits.size() != 1): r2 = "a halted source still hit"
+	_free_made()
+	_done(h2)
+	return r2
+
+## Coordinator review of 8b: a trap has no time limit, so in the game it reads the LIVE list of monsters: one that
+## joins the room after the press triggers it, and the lightning gem's chain reaches monsters that came later.
+func test_trap_reads_live_monsters_in_a_tree():
+	var world := Node2D.new()
+	tree.root.add_child(world)
+	var h := _hero(10)
+	h.set_skill_gems({TRAP: [_g("element", "lightning")]})
+	world.add_child(h)
+	h.set_physics_process(false)
+	var trap := _place(h, [])
+	var r := ""
+	if trap == null: r = "no trap"
+	else:
+		trap.set_physics_process(false)
+		for i in 30: trap.step(DT)
+		var late := _dummy(trap.at + Vector2(3, 0))      # joins the room after the press
+		var chained := _dummy(trap.at + Vector2(60, 0))
+		for d in [late, chained]:
+			d.add_to_group("enemies")
+			world.add_child(d)
+			_made.erase(d)
+		trap.step(DT)
+		if late.hits.size() != 1 or not late.is_rooted(): r = "a monster that came after the press did not trigger the trap"
+		elif chained.hits.size() != 1 or not _near(chained.hits[0][1], float(late.hits[0][1]) * 0.8): r = "the lightning chain did not reach a monster that came later (%s)" % [chained.hits]
+		elif chained.is_rooted(): r = "the chained monster was rooted"
+	_shots = []
+	world.free()
+	_free_made()
+	return r
+
+## In the game (TestGround, real monsters): a real press puts the trap in the world's Y-sort on the locked monster's
+## feet; the real monster is hurt, rooted and does not move while the others go on; the trap is not in the save; the
+## warp's dark and the room change (go_to) leave no trap behind and none in the hero's list (Review Focus 7, B20).
+func test_trap_in_game_roots_and_goes_with_the_room():
+	if FileAccess.file_exists(TMP): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP))
+	var g = load("res://scenes/test_ground.tscn").instantiate()
+	g.save_path = TMP
+	g.layout_seed = 1
+	tree.root.add_child(g)
+	await tree.process_frame
+	await tree.process_frame
+	g.go_to("c1r0", "", false)
+	var h: Hero = g.hero
+	h.set_physics_process(false)
+	h.set_progress(10, 0)
+	var wolves: Array = []
+	for p in g.packs:
+		p.set_physics_process(false)             # held still, bodies kept in the physics space (knockback works)
+		for w in p.wolves: wolves.append(w)
+	var r := "" if not g.warps.is_empty() and not wolves.is_empty() else "setup: no warp / monster in c1r0"
+	var traps := func() -> Array: return g.world.get_children().filter(func(c): return c is ThornTrap and not c.is_queued_for_deletion())
+	if r == "":
+		for x in wolves: x.health.setup(100000)
+		h.global_position = wolves[0].global_position + Vector2(-100, 0)
+		var w: Wolf = h.target_within(160.0)
+		if w == null: r = "setup: no monster within 160 px"
+		var hp0: int = w.hp if w != null else 0
+		if r == "" and not h.try_skill(TRAP): r = "press refused"
+		for i in 30: h.step(DT, Vector2.ZERO)
+		var laid: Array = traps.call()
+		if r == "" and (laid.size() != 1 or h.traps.armed().size() != 1): r = "%d traps in the world, %d armed in the hero's list; want 1 / 1" % [laid.size(), h.traps.armed().size()]
+		if r == "":
+			var trap: ThornTrap = laid[0]
+			var at: Vector2 = w.global_position
+			if trap.at.distance_to(at) > 0.5: r = "the trap is at %s, want the locked monster's feet %s" % [trap.at, at]
+			elif trap.get_parent() != g.world or trap.z_index != 0: r = "the trap is not in the world's Y-sort"
+			for i in 3: await tree.physics_frame
+			if r == "":
+				if not trap.spent or w.hp >= hp0: r = "the monster on the trap: spent %s, HP %d / %d" % [trap.spent, w.hp, hp0]
+				elif not w.is_rooted(): r = "the monster is not rooted"
+				elif w.global_position.distance_to(at) > 0.01: r = "the trap's own hit pushed the monster off it (%s)" % (w.global_position - at)
+			g.save_now()
+			var saved := FileAccess.get_file_as_string(TMP)
+			if r == "" and (saved == "" or "trap\"" in saved.replace("thorn_trap\"", "") or "traps" in saved): r = "the save mentions a trap"
+			h.mp = h.max_mp()
+			h._skill_cd.clear()
+			h.state = "idle"
+			h.global_position += Vector2(-200, 0)
+			if r == "" and not h.try_skill(TRAP): r = "second press refused"
+			for i in 30: h.step(DT, Vector2.ZERO)
+			if r == "" and (traps.call().size() != 2 or h.traps.armed().size() != 1): r = "after the second press: %d in the world, %d armed" % [traps.call().size(), h.traps.armed().size()]
+			g.warp_through(g.warps[0])
+			g._fade_tween.pause()
+			if r == "" and (h.traps.size() != 0 or not traps.call().is_empty()): r = "traps left during the warp's dark (%d listed, %d in the world)" % [h.traps.size(), traps.call().size()]
+			g._fade_tween.custom_step(g.FADE_OUT + 0.01)
+			await tree.process_frame
+			if r == "" and not traps.call().is_empty(): r = "an old-room trap is left in %s" % g.room_id
+	if r == "":
+		h.end_warp()
+		h.mp = h.max_mp()
+		h._skill_cd.clear()
+		h.state = "idle"
+		if not h.try_skill(TRAP): r = "third press refused"
+		for i in 30: h.step(DT, Vector2.ZERO)
+		if r == "" and traps.call().size() != 1: r = "no trap after the third press"
+		g.go_to("c1r0", "", false)
+		if r == "" and (not traps.call().is_empty() or h.traps.size() != 0): r = "go_to left a trap (%d in the world, %d listed)" % [traps.call().size(), h.traps.size()]
 	g.queue_free()
 	await tree.process_frame
 	if FileAccess.file_exists(TMP): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP))
