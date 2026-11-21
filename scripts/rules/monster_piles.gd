@@ -135,10 +135,10 @@ static func arrival_floor(kind: String, near_ok: bool) -> float:
 	if near_ok: return NEAR_ARRIVAL_MIN
 	return aggro_of(kind) + ARRIVAL_EXTRA if attacks_first(kind) else PASSIVE_ARRIVAL
 
-## Room data for place(): the PaintedLayout, the arrivals (every exit's arrival + the room's spawn), the
+## Room data for place(): the walk grid (a PaintedLayout or BigWorld), the arrivals (every exit's arrival + the room's spawn), the
 ## main open ground (flood from the room's spawn over cells a hero-sized body fits in). RoomSet.pile_room
 ## builds it (arrivals from RoomSet.arrival_on) and keeps it.
-static func prepare(d: Dictionary, l: PaintedLayout, arrivals: Array) -> Dictionary:
+static func prepare(d: Dictionary, l: WalkGrid, arrivals: Array) -> Dictionary:
 	var open := PackedByteArray()
 	open.resize(l.cols * l.rows)
 	var cells := PackedVector2Array()
@@ -161,7 +161,7 @@ static func prepare(d: Dictionary, l: PaintedLayout, arrivals: Array) -> Diction
 
 ## Whether p is on the room's main open ground.
 static func is_open(room: Dictionary, p: Vector2) -> bool:
-	var l: PaintedLayout = room.layout
+	var l: WalkGrid = room.layout
 	if p.x < 0 or p.y < 0: return false
 	var cx := int(p.x) / l.cell
 	var cy := int(p.y) / l.cell

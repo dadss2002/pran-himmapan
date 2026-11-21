@@ -1,23 +1,22 @@
 class_name BigWorld
-extends RefCounted
+extends WalkGrid
 ## The one 4096 x 4096 big map as data (data/bigmap/world.json, baked by tools/bigmap/bake_world.py; its `_doc`
-## key describes every field). Pure rules, no scene access: the 8 px walk grid, route finding, monster packs by
-## home, zone level, the boss arena disc, and read-only start / stones / chests / arena / props / zones.
-## Stands in for PaintedLayout where hero, monsters and loot take a `layout`: same size / cell / cols / rows /
-## hero_spawn fields and size_px / cell_blocked / blocked_at / roomy / reachable / make_nav with the same
-## signatures and the same hero-sized body rule (PaintedLayout.CLEAR_X / CLEAR_UP).
+## key describes every field). Pure rules, no scene access: the 8 px walk grid (WalkGrid: blocked_at, roomy,
+## reachable, make_nav, same rules as PaintedLayout), monster packs by home, zone level, the boss arena disc,
+## the ground tiles for the map scene, and read-only start / stones / chests / arena / props / zones.
+## The walk bits stay packed as in the file. A missing or malformed file gives null, never a script error.
 
 ## Frozen ids (saves use them). The game keeps these sets in code and never widens them from world.json (a
-## modded data file must not add waypoints or chests); tests check world.json carries exactly these ids.
+## modded data file must not add waypoints or chests): other ids in the file are skipped with a warning, and
+## tests check world.json carries exactly these ids.
 const STONE_IDS := ["w1", "w2", "w3"]
 const CHEST_IDS := ["c4", "c11", "c12"]
 
-var size := Vector2.ZERO
-var cell := 8
-var cols := 0
-var rows := 0
-var hero_spawn := Vector2.ZERO     # = start(); the field PaintedLayout callers read
-var _blocked := PackedByteArray()  # cols*rows, 1 = blocked (decoded once from the base64 bits)
+var tile := 32                     # ground tile size in px
+var props_dir := ""                # res:// folder of the prop sprites
+var _atlas: Dictionary = {}        # {file, cols, count}
+var _ground := PackedInt32Array()  # (size/tile)^2 atlas indices, row-major
+var _flip := PackedByteArray()     # same cells: 0 none, 1 h, 2 v, 3 h+v
 var _stones: Array = []            # [{id, at: Vector2}]
 var _chests: Array = []            # [{id, at: Vector2, kind, level}]
 var _packs: Array = []             # [{id, kind, level, count, at: Vector2, home: Vector2, elite}]
@@ -34,102 +33,129 @@ static func open(path := "res://data/bigmap/world.json") -> BigWorld:
 	if typeof(d) != TYPE_DICTIONARY: return null
 	return from_dict(d)
 
+# ---- checks on untrusted data ---------------------------------------------------------------------------------
+
+static func _num_ok(v) -> bool:
+	return (typeof(v) == TYPE_INT or typeof(v) == TYPE_FLOAT) and is_finite(float(v))
+
+static func _vec_ok(a) -> bool:
+	return typeof(a) == TYPE_ARRAY and a.size() == 2 and _num_ok(a[0]) and _num_ok(a[1])
+
+static func _str_ok(v) -> bool:
+	return typeof(v) == TYPE_STRING and v != ""
+
 static func _v(a) -> Vector2:
 	return Vector2(float(a[0]), float(a[1]))
 
-## Builds from the parsed world.json; null when the walk grid does not match size / cell.
+## text is plain base64 (A-Z a-z 0-9 + /, '=' padding) of exactly n bytes; checked before decoding.
+static func _walk_bits(text, n: int) -> PackedByteArray:
+	if typeof(text) != TYPE_STRING or text.length() != 4 * ((n + 2) / 3): return PackedByteArray()
+	var re := RegEx.create_from_string("^[A-Za-z0-9+/]*={0,2}$")
+	if re.search(text) == null: return PackedByteArray()
+	var bits := Marshalls.base64_to_raw(text)
+	return bits if bits.size() == n else PackedByteArray()
+
+## A pack / boss pack entry: kind, level, count, at (and id for layout packs).
+static func _group_ok(p, need_id: bool) -> bool:
+	if typeof(p) != TYPE_DICTIONARY: return false
+	if need_id and not _str_ok(p.get("id")): return false
+	if not _str_ok(p.get("kind")) or not _num_ok(p.get("level")) or not _num_ok(p.get("count")): return false
+	if not _vec_ok(p.get("at")): return false
+	return p.get("home") == null or _vec_ok(p.get("home"))
+
+# ---- building ------------------------------------------------------------------------------------------------
+
+## Builds from the parsed world.json; null when anything the game needs is missing or has the wrong type.
 static func from_dict(d: Dictionary) -> BigWorld:
 	var w := BigWorld.new()
-	w.size = _v(d.size)
-	w.cell = int(d.get("cell", 8))
-	w.cols = int(w.size.x) / w.cell
-	w.rows = int(w.size.y) / w.cell
-	var n := w.cols * w.rows
-	var bits := Marshalls.base64_to_raw(String(d.get("walk", "")))
-	if n <= 0 or bits.size() != (n + 7) / 8: return null
-	w._blocked.resize(n)
-	for i in n:
-		w._blocked[i] = (bits[i >> 3] >> (i & 7)) & 1
+	if not _vec_ok(d.get("size")) or not _num_ok(d.get("cell")) or not _num_ok(d.get("tile")): return null
+	var sz := _v(d.size)
+	var c := int(d.cell)
+	var t := int(d.tile)
+	if c <= 0 or t <= 0 or sz.x <= 0 or sz.y <= 0: return null
+	if int(sz.x) % c != 0 or int(sz.y) % c != 0 or int(sz.x) % t != 0 or int(sz.y) % t != 0: return null
+	w.size = sz
+	w.cell = c
+	w.tile = t
+	var cc := int(sz.x) / c
+	var rr := int(sz.y) / c
+	if not w._take_bits(cc, rr, _walk_bits(d.get("walk"), (cc * rr + 7) / 8)): return null
+	if not _vec_ok(d.get("start")): return null
 	w.hero_spawn = _v(d.start)
-	for s in d.get("stones", []): w._stones.append({"id": String(s.id), "at": _v(s.at)})
-	for c in d.get("chests", []):
-		w._chests.append({"id": String(c.id), "at": _v(c.at), "kind": String(c.kind), "level": int(c.level)})
-	for p in d.get("packs", []):
-		w._pack_by_id[String(p.id)] = w._packs.size()
-		w._packs.append({"id": String(p.id), "kind": String(p.kind), "level": int(p.level), "count": int(p.count),
-			"at": _v(p.at), "home": _v(p.get("home", p.at)), "elite": bool(p.get("elite", false))})
-	var a: Dictionary = d.get("arena", {})
-	if not a.is_empty():
-		var r: Array = a.rect
-		var bp: Dictionary = a.pack
-		w._arena = {"centre": _v(a.centre), "radius": float(a.radius),
-			"rect": Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3])), "gate": _v(a.gate),
-			"pack": {"kind": String(bp.kind), "level": int(bp.level), "count": int(bp.count), "at": _v(bp.at),
-				"elite": bool(bp.get("elite", false))}}
-	w._props = d.get("props", []).duplicate(true)
-	w._zones = d.get("zones", []).duplicate(true)
+	if not w._read_ground(d): return null
+	if not w._read_points(d): return null
+	if not w._read_arena(d.get("arena")): return null
+	if typeof(d.get("props")) != TYPE_ARRAY or typeof(d.get("zones")) != TYPE_ARRAY: return null
+	w._props = d.props.duplicate(true)
+	w._zones = d.zones.duplicate(true)
 	return w
 
-# ---- the layout PaintedLayout callers use -------------------------------------------------------------------
-
-func size_px() -> Vector2:
-	return size
-
-func cell_blocked(x: int, y: int) -> bool:
-	if x < 0 or y < 0 or x >= cols or y >= rows: return true
-	return _blocked[y * cols + x] == 1
-
-## Outside the map (or not a finite point) counts as blocked.
-func blocked_at(p: Vector2) -> bool:
-	if not p.is_finite(): return true
-	if p.x < 0 or p.y < 0 or p.x >= size.x or p.y >= size.y: return true
-	return cell_blocked(int(p.x) / cell, int(p.y) / cell)
-
-## Room for a hero-sized body with its feet in cell x, y (PaintedLayout.roomy).
-func roomy(x: int, y: int) -> bool:
-	for dy in range(-PaintedLayout.CLEAR_UP, 1):
-		for dx in range(-PaintedLayout.CLEAR_X, PaintedLayout.CLEAR_X + 1):
-			if cell_blocked(x + dx, y + dy): return false
+func _read_ground(d: Dictionary) -> bool:
+	var a = d.get("atlas")
+	if typeof(a) != TYPE_DICTIONARY or not _str_ok(a.get("file")) or not _num_ok(a.get("cols")) or not _num_ok(a.get("count")):
+		return false
+	if int(a.cols) <= 0 or int(a.count) <= 0 or not _str_ok(d.get("props_dir")): return false
+	_atlas = {"file": String(a.file), "cols": int(a.cols), "count": int(a.count)}
+	props_dir = String(d.props_dir)
+	var n := (int(size.x) / tile) * (int(size.y) / tile)
+	var g = d.get("ground")
+	var fl = d.get("flip")
+	if typeof(g) != TYPE_ARRAY or typeof(fl) != TYPE_ARRAY or g.size() != n or fl.size() != n: return false
+	_ground.resize(n)
+	_flip.resize(n)
+	var count: int = _atlas.count
+	for i in n:
+		var gi = g[i]
+		var fi = fl[i]
+		if not _num_ok(gi) or not _num_ok(fi): return false
+		if gi < 0 or gi >= count or gi != floorf(gi) or fi < 0 or fi > 3 or fi != floorf(fi): return false
+		_ground[i] = int(gi)
+		_flip[i] = int(fi)
 	return true
 
-## Whether a hero-sized body can walk from a to b (4-way flood over roomy cells, PaintedLayout.reachable).
-func reachable(a: Vector2, b: Vector2) -> bool:
-	if blocked_at(a) or blocked_at(b): return false
-	var start := Vector2i(int(a.x) / cell, int(a.y) / cell)
-	var goal := Vector2i(int(b.x) / cell, int(b.y) / cell)
-	if not roomy(start.x, start.y) or not roomy(goal.x, goal.y): return false
-	var seen := PackedByteArray()
-	seen.resize(cols * rows)
-	var queue: Array[Vector2i] = [start]
-	seen[start.y * cols + start.x] = 1
-	var i := 0
-	while i < queue.size():
-		var c := queue[i]
-		i += 1
-		if c == goal: return true
-		for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			var n: Vector2i = c + o
-			if n.x < 0 or n.y < 0 or n.x >= cols or n.y >= rows: continue
-			if seen[n.y * cols + n.x] == 1 or not roomy(n.x, n.y): continue
-			seen[n.y * cols + n.x] = 1
-			queue.append(n)
-	return false
+## Stones, chests (ids outside the frozen sets or repeated are skipped with a warning) and layout packs.
+func _read_points(d: Dictionary) -> bool:
+	var ss = d.get("stones")
+	var cs = d.get("chests")
+	var ps = d.get("packs")
+	if typeof(ss) != TYPE_ARRAY or typeof(cs) != TYPE_ARRAY or typeof(ps) != TYPE_ARRAY: return false
+	var seen := {}
+	for s in ss:
+		if typeof(s) != TYPE_DICTIONARY or not _str_ok(s.get("id")) or not _vec_ok(s.get("at")): return false
+		if not STONE_IDS.has(s.id) or seen.has(s.id):
+			push_warning("BigWorld: stone id %s skipped (not in STONE_IDS or repeated)" % s.id)
+			continue
+		seen[s.id] = true
+		_stones.append({"id": String(s.id), "at": _v(s.at)})
+	seen = {}
+	for ch in cs:
+		if typeof(ch) != TYPE_DICTIONARY or not _str_ok(ch.get("id")) or not _vec_ok(ch.get("at")): return false
+		if not _str_ok(ch.get("kind")) or not _num_ok(ch.get("level")): return false
+		if not CHEST_IDS.has(ch.id) or seen.has(ch.id):
+			push_warning("BigWorld: chest id %s skipped (not in CHEST_IDS or repeated)" % ch.id)
+			continue
+		seen[ch.id] = true
+		_chests.append({"id": String(ch.id), "at": _v(ch.at), "kind": String(ch.kind), "level": int(ch.level)})
+	for p in ps:
+		if not _group_ok(p, true) or _pack_by_id.has(p.id): return false
+		_pack_by_id[String(p.id)] = _packs.size()
+		_packs.append({"id": String(p.id), "kind": String(p.kind), "level": int(p.level), "count": int(p.count),
+			"at": _v(p.at), "home": _v(p.get("home", p.at)), "elite": bool(p.get("elite", false))})
+	return true
 
-## A walk grid for route finding (same settings as PaintedLayout.make_nav): a cell is solid unless a
-## hero-sized body fits with its feet there.
-func make_nav() -> AStarGrid2D:
-	var g := AStarGrid2D.new()
-	g.region = Rect2i(0, 0, cols, rows)
-	g.cell_size = Vector2(cell, cell)
-	g.offset = Vector2(cell, cell) / 2.0
-	g.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
-	g.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
-	g.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
-	g.update()
-	for y in rows:
-		for x in cols:
-			if not roomy(x, y): g.set_point_solid(Vector2i(x, y))
-	return g
+func _read_arena(a) -> bool:
+	if typeof(a) != TYPE_DICTIONARY or not _vec_ok(a.get("centre")) or not _num_ok(a.get("radius")): return false
+	if float(a.radius) <= 0 or not _vec_ok(a.get("gate")) or not _group_ok(a.get("pack"), false): return false
+	var r = a.get("rect")
+	if typeof(r) != TYPE_ARRAY or r.size() != 4: return false
+	for v in r:
+		if not _num_ok(v): return false
+	var bp: Dictionary = a.pack
+	_arena = {"centre": _v(a.centre), "radius": float(a.radius),
+		"rect": Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3])), "gate": _v(a.gate),
+		"pack": {"kind": String(bp.kind), "level": int(bp.level), "count": int(bp.count), "at": _v(bp.at),
+			"elite": bool(bp.get("elite", false))}}
+	return true
 
 # ---- packs, zones, arena -------------------------------------------------------------------------------------
 
@@ -145,6 +171,11 @@ func pack(id: String) -> Dictionary:
 	if not _pack_by_id.has(id): return {}
 	return _packs[_pack_by_id[id]].duplicate(true)
 
+## Spawn centre of pack id (no copy; for hot paths), or Vector2.INF if there is no such pack.
+func pack_home(id: String) -> Vector2:
+	if not _pack_by_id.has(id): return Vector2.INF
+	return _packs[_pack_by_id[id]].home
+
 ## Level of the pack whose home is nearest p (first in world.json order on a tie); 0 with no packs.
 ## The boss arena's pack is not a layout pack and never counts.
 func zone_level(p: Vector2) -> int:
@@ -159,13 +190,36 @@ func zone_level(p: Vector2) -> int:
 
 ## Whether p is inside the arena's fight disc (centre / radius, edge included); the rect is only its bounds.
 func in_arena(p: Vector2) -> bool:
-	if _arena.is_empty() or not p.is_finite(): return false
+	if not p.is_finite(): return false
 	return p.distance_to(_arena.centre) <= _arena.radius
 
-# ---- read-only data (copies) ---------------------------------------------------------------------------------
+func arena_centre() -> Vector2:
+	return _arena.centre
+
+func arena_radius() -> float:
+	return _arena.radius
+
+## Where stone id stands (no copy), or Vector2.INF if there is no such stone.
+func stone_at(id: String) -> Vector2:
+	for s in _stones:
+		if s.id == id: return s.at
+	return Vector2.INF
+
+# ---- read-only data: every call returns a fresh copy, so callers should keep what they need ------------------
 
 func start() -> Vector2:
 	return hero_spawn
+
+func atlas() -> Dictionary:
+	return _atlas.duplicate()
+
+## Atlas index of every ground tile, row-major ((size/tile)^2 entries).
+func ground() -> PackedInt32Array:
+	return _ground.duplicate()
+
+## Flip of every ground tile (0 none, 1 h, 2 v, 3 h+v).
+func flip() -> PackedByteArray:
+	return _flip.duplicate()
 
 func stones() -> Array:
 	return _stones.duplicate(true)
