@@ -7,3 +7,11 @@
 - ตัวเลขเกม (ดาเมจ EXP ดรอป ตีบวก สกิล) ต้องมี spec ใน docs/ ที่เจ้าของอนุมัติก่อนเขียนโค้ด
 - ไม่อ้างว่าผ่านถ้าไม่ได้รันเทสต์จริง; ไม่ใช้เงินหรือบริการเสียเงินโดยไม่ได้รับอนุมัติ
 - งานเข้า main ผ่าน branch + PR เว้นแต่เจ้าของสั่ง
+
+## ประหยัด context (เจ้าของสั่ง 2026-11-22)
+- Before reading a whole file, grep first and only read the parts you need.
+- To understand the whole project, send a subagent to look and bring back only the summary.
+- Show me the diff, not the whole file.
+- Don't restate anything we've already decided in this session.
+- When we switch tasks, suggest /compact or a new session.
+- Keep answers short by default.
