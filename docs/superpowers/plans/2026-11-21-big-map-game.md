@@ -66,9 +66,9 @@
 
 **Interfaces — Consumes:** `BigWorld`. **Produces:** `BigMap.build(w: BigWorld) -> void`, `BigMap.ground: TileMapLayer`, props under the y-sorted `world` node.
 
-- [ ] Test (headless): after `build()`, hero at `world.start`, `ground.get_used_cells().size() == 16384`, blocker count == props with a box; hero cannot walk into water at (56,40).
-- [ ] Implement: TileSet from atlas (32 px, flips via alternative tiles), one TileMapLayer z below world; `floor: true` props (bridges, pads) on a layer under the y-sorted world; terrain colliders (water/forest/cliff/rock cells) from the walk grid by reusing PaintedMap's rect merge (pull `_build_blockers` into a static helper taking a WalkGrid; ~494 rects); build `make_nav()` exactly once; commit the `.import` files for the atlas and bigmap props; props as Sprite2D offset so the foot sits on `(x,y)`; StaticBody2D boxes from `box`; camera limits 0..4096.
-- [ ] Screenshot `docs/preview/bigmap/game_start.png` (xvfb, opengl3) + `game_bridge.png`. Commit.
+- [x] Test (headless, `tests/test_big_map.gd`): after `build()`, hero at `world.start`, `ground.get_used_cells().size() == 16384`, blocker count == props with a box; hero cannot walk into water at (56,40). *(Done: colliders = merged walk-grid cells only, checked cell for cell; prop boxes are inside blocked cells so they get no extra colliders — ai-decisions แผนที่-5. Water at (59,40) + off the bridge deck; bridge crossed east→west.)*
+- [x] Implement: TileSet from atlas (32 px, flips via alternative tiles), one TileMapLayer z below world; `floor: true` props (bridges, pads) on a layer under the y-sorted world; terrain colliders (water/forest/cliff/rock cells) from the walk grid by reusing PaintedMap's rect merge (pull `_build_blockers` into a static helper taking a WalkGrid; ~494 rects); build `make_nav()` exactly once; commit the `.import` files for the atlas and bigmap props; props as Sprite2D offset so the foot sits on `(x,y)`; StaticBody2D boxes from `box`; camera limits 0..4096.
+- [x] Screenshot `docs/preview/bigmap/game_start.png` (xvfb, opengl3) + `game_bridge.png` (+ `game_temple.png`, `game_arena.png`; `tests/screenshots_bigmap.gd` also checks the ground pixel for pixel and canvas culling). Commit.
 
 ### Task 4: Pack streaming with kept state
 

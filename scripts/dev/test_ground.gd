@@ -74,8 +74,21 @@ var warping := false             # between touching a ring and the new room appe
 var _hero_was_on := true
 var _fade_tween: Tween
 var _navs := {}
-var layout: PaintedLayout
+## The walk grid the hero stands on: the current room's PaintedLayout, or the BigWorld on the big map.
+var layout: WalkGrid
 var forest: PaintedMap
+## Big map Task 3 (docs/superpowers/plans/2026-11-21-big-map-game.md): build() draws the one big map (BigWorld +
+## BigMap) instead of the rooms: no RoomSet, warps, room monsters, room waypoints or room fog; the hero starts at
+## the map's start; the route grid is made once (big_nav). Off by default until the big map replaces the rooms
+## (Task 10); set it before build().
+var use_big_map := false
+var big: BigWorld
+var big_map: BigMap
+var big_nav: AStarGrid2D
+## On the big map the view shows what a room showed: the screen's longer side covers BIG_VIEW px (AI decision,
+## Task 3: keeps the rooms' pixel scale; a 4096 px map would otherwise be drawn 1:1, tiny on a phone).
+const BIG_VIEW := Vector2(512, 512)
+var _saved_waypoints: Array = []   # big map: the save's room waypoints, written back untouched (Task 9 migrates)
 var hero: Hero
 var hud: Hud
 var saver := PerfSaver.new()                 # M3k: drops decoration while fps stays under 60
@@ -135,10 +148,16 @@ func build() -> void:
 	world = Node2D.new()
 	world.name = "World"
 	world.y_sort_enabled = true
-	rooms = RoomSet.open()
+	if use_big_map:
+		big = BigWorld.open()
+		if big == null:
+			push_error("test ground: data/bigmap/world.json missing or malformed; using the rooms")
+			use_big_map = false
 	session_seed = layout_seed if layout_seed >= 0 else int(randi() & 0x7fffffff)
-	rooms.use_layout(RoomLayout.generate(session_seed, rooms.exit_table()))
-	reset.reroll_all(session_seed)          # Task 4: a new game re-rolls every room (piles from the layout seed)
+	if not use_big_map:
+		rooms = RoomSet.open()
+		rooms.use_layout(RoomLayout.generate(session_seed, rooms.exit_table()))
+		reset.reroll_all(session_seed)          # Task 4: a new game re-rolls every room (piles from the layout seed)
 	arena_set = -1
 	stage.add_child(world)
 	hero = HERO_SCENE.instantiate()
@@ -152,9 +171,13 @@ func build() -> void:
 	# M5b Task 1 (owner 2026-11-09): gems stay where they are; one in a slot that is not open goes to the bag (a full
 	# bag keeps it socketed and inert until there is room). go_to() below saves the result.
 	hero.return_closed_gems()
-	waypoints = Waypoints.from_rooms(rooms, state.get("waypoints"))   # Task 5: c1r1's stone is always unlocked
-	waypoints.traveller = travel_to_waypoint
-	fog = FogGrid.from_rooms(rooms)          # owner 2026-11-08: a new game = all fog (never loaded from the save)
+	if use_big_map:
+		var sw = state.get("waypoints")
+		_saved_waypoints = sw.duplicate() if typeof(sw) == TYPE_ARRAY else []
+	else:
+		waypoints = Waypoints.from_rooms(rooms, state.get("waypoints"))   # Task 5: c1r1's stone is always unlocked
+		waypoints.traveller = travel_to_waypoint
+		fog = FogGrid.from_rooms(rooms)          # owner 2026-11-08: a new game = all fog (never loaded from the save)
 	hero.gear_changed.connect(func(): save_now())
 	hero.gems_changed.connect(func(): save_now())
 	hero.leveled_up.connect(func(_l): save_now())
@@ -175,7 +198,7 @@ func build() -> void:
 	add_child(hud)
 	if hud.hp_label == null: hud.build()
 	hud.bind(hero)
-	hud.waypoint_list.chosen.connect(func(id): waypoints.travel(id))
+	hud.waypoint_list.chosen.connect(_on_waypoint_chosen)
 	hud.waypoint_list.closed.connect(func(): _stone_armed = false)
 	hud.minimap.bind_fog(fog)                # Task 7: the minimap's fog layer follows this game's fog
 	hud.map_source = world_map_info          # Task 8: what the full map shows
@@ -193,12 +216,39 @@ func build() -> void:
 	_fade_gate.on_frame = _on_fade_gate
 	_fade_gate.set_process(false)
 	add_child(_fade_gate)
+	if use_big_map:
+		_enter_big_map()
+		return
 	# M4d: the map is new every session, so the saved room is not used: always start in c1r1.
 	go_to(rooms.start, "", false)
+
+## Big map: the map under the y-sorted world (ground and floor props below, props sorted with the hero), the
+## hero at the start, camera limits on the map, the route grid made once, a save.
+func _enter_big_map() -> void:
+	layout = big
+	big_map = BigMap.new()
+	world.add_child(big_map)
+	big_map.build(big)
+	big_nav = big.make_nav()             # once per map: Task 4's packs share it
+	var sz := big.size_px()
+	cam.limit_left = 0
+	cam.limit_top = 0
+	cam.limit_right = int(sz.x)
+	cam.limit_bottom = int(sz.y)
+	_fit_camera()
+	hero.spawn_point = big.start()
+	hero.position = big.start()
+	hero.velocity = Vector2.ZERO
+	if hero.is_inside_tree():
+		hero.reset_physics_interpolation()
+		cam.reset_physics_interpolation()
+	show_minimap_room()
+	save_now()
 
 ## Swap to room id. via_warp = the warp you come out of there ("" = the room's spawn). The old room's
 ## map, monsters, drops and warps go; the new room's are built fresh; the game saves.
 func go_to(id: String, via_warp := "", with_fade := true) -> void:
+	if use_big_map: return               # no rooms on the big map
 	# Any fade still running belongs to the old room: stop it, so its callback cannot move us again.
 	if _fade_tween and _fade_tween.is_valid(): _fade_tween.kill()
 	_fade_tween = null
@@ -235,11 +285,12 @@ func go_to(id: String, via_warp := "", with_fade := true) -> void:
 	if hud: hud.close_waypoints()
 	var from_id := room_id
 	room_id = id
-	layout = rooms.layout(id)
+	var room_layout := rooms.layout(id)
+	layout = room_layout
 	forest = PaintedMap.new()
 	stage.add_child(forest)
 	stage.move_child(forest, 0)
-	forest.build(layout)
+	forest.build(room_layout)
 	forest.set_ambient(not saver.on)
 	var sz := layout.size_px()
 	cam.limit_left = 0
@@ -378,7 +429,7 @@ func warp_through(w: Warp) -> void:
 ## left too), the warp gong, the same fade as an exit, and the hero lands next to room id's stone (go_to with
 ## WAYPOINT_ARRIVAL) with the arrival calm. The room the hero stands in may be chosen too: that resets it.
 func travel_to_waypoint(id: String) -> void:
-	if warping or not rooms.has(id) or rooms.waypoint(id) == Vector2.INF: return
+	if warping or rooms == null or not rooms.has(id) or rooms.waypoint(id) == Vector2.INF: return
 	if hud: hud.close_waypoints()
 	reroll(-1, id)
 	_trip(id, WAYPOINT_ARRIVAL)
@@ -390,6 +441,9 @@ func free_one_shots() -> void:
 		if parent == null: continue
 		for c in parent.get_children():
 			if c is FxSprite and not c.keep: c.free()
+
+func _on_waypoint_chosen(id: String) -> void:
+	if waypoints: waypoints.travel(id)
 
 ## The fade out to room to_room (coming out of to_warp there), shared by exits and waypoints.
 func _trip(to_room: String, to_warp: String) -> void:
@@ -443,11 +497,16 @@ func step_fog() -> void:
 ## once (then every frame, _process).
 func show_minimap_room() -> void:
 	if hud == null or hud.minimap == null: return
+	if use_big_map:                          # Task 8 draws the big map's minimap; until then only the dot
+		hud.minimap.show_room("", big.size_px(), null, [], Vector2.INF, false)
+		track_minimap()
+		return
 	var ex: Array = []
 	for w in rooms.room(room_id).get("warps", []):
 		var to := String(w.to)
 		ex.append({"side": String(w.id), "at": Vector2(w.at[0], w.at[1]), "arena": rooms.has(to) and bool(rooms.room(to).get("arena", false))})
-	var pic: Texture2D = load(String(layout.chunks[0].file)) if not layout.chunks.is_empty() else null
+	var pl := layout as PaintedLayout
+	var pic: Texture2D = load(String(pl.chunks[0].file)) if pl and not pl.chunks.is_empty() else null
 	hud.minimap.show_room(room_id, layout.size_px(), pic, ex, rooms.waypoint(room_id), waypoints != null and waypoints.is_unlocked(room_id))
 	track_minimap()
 
@@ -462,6 +521,9 @@ func track_minimap() -> void:
 ## (this layout's warps; arena flag), waypoint stone and the arena flag. WorldMap draws only the visited ones.
 func world_map_info() -> Dictionary:
 	var out := {}
+	if rooms == null:                        # big map: Task 8 gives the full map its data
+		return {"fog": null, "current": "", "hero": hero.global_position if hero else Vector2.ZERO,
+			"facing": BowLayer.dir_vector(hero.facing) if hero else Vector2.DOWN, "rooms": out}
 	for id in rooms.active.get("pos", {}):
 		id = String(id)
 		if not rooms.has(id): continue
@@ -481,7 +543,7 @@ func world_map_info() -> Dictionary:
 ## its layout level (RoomLevels.groups), e0's set at the level of any room joined to it + 1 (max Lv11; addendum 3,
 ## the set's own levels when nothing is joined); a room without monsters shows its layout level.
 func level_range(id: String) -> Vector2i:
-	if not rooms.has(id): return Vector2i.ZERO
+	if rooms == null or not rooms.has(id): return Vector2i.ZERO
 	var groups: Array = []
 	var kept := reset.state(id)
 	if id == room_id and not _room_groups.is_empty(): groups = _room_groups
@@ -514,6 +576,7 @@ func level_range(id: String) -> Vector2i:
 ## The travel list's rows: the unlocked stones in list order with their rooms' Thai names.
 func waypoint_entries() -> Array:
 	var out: Array = []
+	if waypoints == null or rooms == null: return out
 	for id in waypoints.list():
 		if rooms.has(id): out.append({"id": id, "name": String(rooms.room(id).get("name", id))})
 	return out
@@ -562,7 +625,7 @@ func _new_fade() -> Tween:
 func _fit_camera() -> void:
 	if cam == null or layout == null or not is_inside_tree(): return
 	var v := get_viewport().get_visible_rect().size
-	_scale = ScreenFit.camera_zoom(v, layout.size_px())
+	_scale = ScreenFit.camera_zoom(v, BIG_VIEW if use_big_map else layout.size_px())
 	var px := Vector2i(ceili(v.x / _scale), ceili(v.y / _scale))
 	world_vp.size = px
 	view.position = Vector2.ZERO
@@ -615,7 +678,7 @@ func _on_wolf_hit(w: Wolf, amount: int, crit: bool) -> void:
 
 func save_now() -> bool:
 	return SaveGame.save({"level": hero.level, "exp": hero.exp, "inventory": hero.inventory.to_dict(), "equipped": hero.equipped, "skills": hero.sockets_to_save(), "room": room_id, "seed": session_seed,
-		"waypoints": waypoints.to_save() if waypoints else []}, save_path)
+		"waypoints": waypoints.to_save() if waypoints else _saved_waypoints}, save_path)
 
 func tick_autosave(delta: float) -> void:
 	_autosave_t += delta

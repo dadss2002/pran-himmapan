@@ -45,41 +45,49 @@ func _sprite(c: Dictionary) -> Sprite2D:
 	add_child(s)
 	return s
 
-## Blocked cells as few rectangles: runs along each row, stacked down while the next row has the same run.
+## The room's blocked cells as StaticBody2D boxes (merge_rects) plus a BORDER-thick wall round the room.
 func _build_blockers() -> void:
 	blockers = StaticBody2D.new()
 	blockers.name = "Blockers"
 	add_child(blockers)
-	var c := float(layout.cell)
+	for r in merge_rects(layout): _box(r)
+	for r in border_rects(layout.size_px()): _box(r)
+
+## Blocked cells of grid as few rectangles (px): runs along each row, stacked down while the next row has the
+## same run. Shared by the rooms and the big map (BigMap), so both collide exactly where blocked_at says.
+static func merge_rects(grid: WalkGrid) -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	var c := float(grid.cell)
 	var open := {}           # Vector2i(x0, x1) -> Rect2 (in cells) still growing downward
-	for y in layout.rows + 1:
+	for y in grid.rows + 1:
 		var runs := {}
-		if y < layout.rows:
+		if y < grid.rows:
 			var x := 0
-			while x < layout.cols:
-				if not layout.cell_blocked(x, y):
+			while x < grid.cols:
+				if not grid.cell_blocked(x, y):
 					x += 1
 					continue
 				var x0 := x
-				while x < layout.cols and layout.cell_blocked(x, y): x += 1
+				while x < grid.cols and grid.cell_blocked(x, y): x += 1
 				runs[Vector2i(x0, x)] = true
 		var still := {}
 		for k in open:
+			var r: Rect2 = open[k]
 			if runs.has(k):
-				var r: Rect2 = open[k]
 				r.size.y += 1
 				still[k] = r
 			else:
-				var r: Rect2 = open[k]
-				_box(Rect2(r.position * c, r.size * c))
+				out.append(Rect2(r.position * c, r.size * c))
 		for k in runs:
 			if not still.has(k): still[k] = Rect2(k.x, y, k.y - k.x, 1)
 		open = still
-	var sz := layout.size_px()
-	_box(Rect2(-BORDER, -BORDER, sz.x + 2 * BORDER, BORDER))
-	_box(Rect2(-BORDER, sz.y, sz.x + 2 * BORDER, BORDER))
-	_box(Rect2(-BORDER, 0, BORDER, sz.y))
-	_box(Rect2(sz.x, 0, BORDER, sz.y))
+	return out
+
+## Four BORDER-thick walls just outside a map of size sz.
+static func border_rects(sz: Vector2) -> Array[Rect2]:
+	var out: Array[Rect2] = [Rect2(-BORDER, -BORDER, sz.x + 2 * BORDER, BORDER), Rect2(-BORDER, sz.y, sz.x + 2 * BORDER, BORDER),
+		Rect2(-BORDER, 0, BORDER, sz.y), Rect2(sz.x, 0, BORDER, sz.y)]
+	return out
 
 func _box(r: Rect2) -> void:
 	var cs := CollisionShape2D.new()
