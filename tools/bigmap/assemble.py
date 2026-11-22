@@ -67,6 +67,11 @@ for terr, keep in ((STONE, [0, 1, 2, 3, 4, 6, 8, 10, 11, 12, 14, 15]), (ARENA, N
         keep = keep if keep is not None else json.load(open(f[:-4] + "_keep.json")) if os.path.exists(f[:-4] + "_keep.json") else list(range(n))
         VAR[terr] = [vs.crop(((i % (vs.width // T)) * T, (i // (vs.width // T)) * T, (i % (vs.width // T)) * T + T, (i // (vs.width // T)) * T + T)) for i in keep]
 VAR_RATE = 0.35
+# owner 2026-11-22 ("แก้พื้น 0 gen"): temple and arena floors read as a repeating grid, so they take variants more
+# often and mirror: STONE only left-right (a vertical flip breaks the brick courses, checked by eye), ARENA both ways
+# (flagstones without a clear light direction). ARENA at 0.5: 0.6 looked cluttered with dark cracks and twigs.
+RATE = {STONE: 0.6, ARENA: 0.5}
+FLIPS = {STONE: 1, ARENA: 3}       # allowed flip bits for base and variant tiles
 cliff_sheet = Image.open(f"{TILES}/t5_rock_cliff.png").convert("RGBA")
 CLIFF_TILES = []
 for line in open(f"{TILES}/t5_meta.txt"):
@@ -128,6 +133,19 @@ for y in range(N):
             h = (x * 73856093 ^ y * 19349663) & 3
             img = sheets[key].crop((pos[0], pos[1], pos[0] + T, pos[1] + T))
             r = random.Random(x * 1009 + y * 7919)
+            if c[0] in FLIPS:
+                # base tile or a variant, mirrored by FLIPS; re-rolled once when it equals the left or upper cell
+                left = row[x - 1] if x > 0 else None
+                up = choice[y - 1][x] if y > 0 else None
+                for _ in range(2):
+                    k = r.randrange(len(VAR[c[0]])) if c[0] in VAR and r.random() < RATE[c[0]] else -1
+                    f = r.randrange(4) & FLIPS[c[0]]
+                    tag = f"var_{c[0]}:{k}:f{f}" if k >= 0 else f"{SETS[key]}:{pos[0]},{pos[1]}:f{f}"
+                    if tag not in (left, up): break
+                img = VAR[c[0]][k] if k >= 0 else img
+                if f & 1: img = img.transpose(Image.FLIP_LEFT_RIGHT)
+                if f & 2: img = img.transpose(Image.FLIP_TOP_BOTTOM)
+                out.paste(img, (x * T, y * T)); row.append(tag); continue
             if c[0] in VAR and r.random() < VAR_RATE:
                 k = r.randrange(len(VAR[c[0]]))
                 out.paste(VAR[c[0]][k], (x * T, y * T)); row.append(f"var_{c[0]}:{k}"); continue

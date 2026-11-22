@@ -24,7 +24,7 @@ func _watchdog() -> void:
 	quit(1)
 
 func _clean() -> void:
-	for f in [SAVE, SETTINGS]:
+	for f in [SAVE, SETTINGS, SaveGame.marker_path(SAVE)]:
 		if FileAccess.file_exists(f): DirAccess.remove_absolute(ProjectSettings.globalize_path(f))
 
 func _snap(name: String) -> void:

@@ -14,9 +14,13 @@ var _g: Node2D = null
 func setup(t: SceneTree) -> void:
 	tree = t
 
+static func _clean(path: String) -> void:
+	for f in [path, SaveGame.marker_path(path)]:
+		if FileAccess.file_exists(f): DirAccess.remove_absolute(ProjectSettings.globalize_path(f))
+
 func _ground() -> Node2D:
 	if _g != null: return _g
-	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	_clean(TMP_SAVE)
 	_g = load("res://scenes/test_ground.tscn").instantiate()
 	_g.save_path = TMP_SAVE
 	_g.use_big_map = true
@@ -60,6 +64,7 @@ func test_big_map_hero_at_start_no_rooms() -> String:
 	if g.rooms != null or not g.warps.is_empty() or not g.packs.is_empty() or g.forest != null:
 		return "room parts built on the big map: rooms %s warps %d packs %d forest %s" % [g.rooms, g.warps.size(), g.packs.size(), g.forest]
 	if g.big_nav == null or g.big_nav.region != Rect2i(0, 0, w.cols, w.rows): return "route grid missing or wrong: %s" % g.big_nav
+	if not g._navs.is_empty(): return "room route grids made on the big map: %s" % [g._navs.keys()]
 	var c: Camera2D = g.cam
 	if [c.limit_left, c.limit_top, c.limit_right, c.limit_bottom] != [0, 0, 4096, 4096]:
 		return "camera limits %s" % [[c.limit_left, c.limit_top, c.limit_right, c.limit_bottom]]
@@ -234,11 +239,64 @@ static func _deck(w: BigWorld, prefix: String) -> Rect2:
 			return Rect2(p.deck[0], p.deck[1], p.deck[2], p.deck[3])
 	return Rect2()
 
+## A v4 save (level, exp, bag, room waypoints) loaded into the big map and saved again keeps everything; a second
+## big map built from that file has the same hero. Room waypoints are written back untouched (Task 9 migrates them).
+func test_big_map_save_round_trip() -> String:
+	const PATH := "user://test_big_map_round_trip.json"
+	_clean(PATH)
+	var inv := Inventory.new()
+	inv.add("gold", 77)
+	inv.add("potion_hp", 4)
+	var ids: Array = SaveGame.stone_ids().slice(0, 2)
+	if ids.size() < 2: return "need two room waypoint ids"
+	if not SaveGame.save({"level": 5, "exp": 40, "inventory": inv.to_dict(), "waypoints": ids}, PATH): return "seed save failed"
+	var before := SaveGame.load_or_new(PATH)
+	var r := ""
+	for round in 2:
+		var g = load("res://scenes/test_ground.tscn").instantiate()
+		g.save_path = PATH
+		g.use_big_map = true
+		g.build()                                  # saves once on arrival
+		if g.hero.level != 5 or g.hero.exp != 40 or g.hero.inventory.to_dict() != inv.to_dict():
+			r = "round %d: hero L%d exp %d bag %s" % [round, g.hero.level, g.hero.exp, g.hero.inventory.to_dict()]
+		elif not g.save_now(): r = "round %d: save failed" % round
+		g.free()
+		if r != "": break
+		var after := SaveGame.load_or_new(PATH)
+		for k in ["level", "exp", "inventory", "equipped", "waypoints", "skills"]:
+			if after.get(k) != before.get(k):
+				r = "round %d: %s %s -> %s" % [round, k, before.get(k), after.get(k)]
+				break
+		if r != "": break
+	_clean(PATH)
+	return r
+
+## Frames-driven smoke test of the big map: physics on, the full map opened and shut, a travel-list pick and a
+## re-roll (both are room features: nothing happens), and the game is never left warping, paused or in a room.
+func test_big_map_smoke_frames() -> String:
+	var g := await _ground()
+	var h: Hero = g.hero
+	h.set_physics_process(true)
+	h.global_position = g.big.start()
+	for i in 30: await tree.physics_frame
+	if not h.global_position.is_finite() or g.big.blocked_at(h.global_position): return "hero at %s after 30 frames" % h.global_position
+	g.hud.open_map()
+	if not g.hud.map_open() or not tree.paused: return "full map did not open (open %s, paused %s)" % [g.hud.map_open(), tree.paused]
+	g.hud.close_map()
+	if g.hud.map_open() or tree.paused: return "full map did not shut"
+	g._on_waypoint_chosen("c1r1")
+	var s: int = g.reroll(-1, "")
+	for i in 10: await tree.physics_frame
+	if g.warping or g.room_id != "" or g.rooms != null or g.stone != null: return "big map entered room mode: warping %s room '%s'" % [g.warping, g.room_id]
+	if s < 0: return "reroll seed %d" % s
+	h.set_physics_process(false)
+	return ""
+
 ## Last in the file: frees the shared test ground.
 func test_big_map_zz_free() -> String:
 	if _g != null:
 		_g.queue_free()
 		await tree.process_frame
 		_g = null
-	if FileAccess.file_exists(TMP_SAVE): DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SAVE))
+	_clean(TMP_SAVE)
 	return ""

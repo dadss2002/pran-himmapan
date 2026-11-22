@@ -95,6 +95,8 @@ func _read_ground(d: Dictionary) -> bool:
 	if typeof(a) != TYPE_DICTIONARY or not _str_ok(a.get("file")) or not _num_ok(a.get("cols")) or not _num_ok(a.get("count")):
 		return false
 	if int(a.cols) <= 0 or int(a.count) <= 0 or not _str_ok(d.get("props_dir")): return false
+	# both are loaded from: only paths inside the game's own files (res://), never user:// or the disk
+	if not String(a.file).begins_with("res://") or not String(d.props_dir).begins_with("res://"): return false
 	_atlas = {"file": String(a.file), "cols": int(a.cols), "count": int(a.count)}
 	props_dir = String(d.props_dir)
 	var n := (int(size.x) / tile) * (int(size.y) / tile)

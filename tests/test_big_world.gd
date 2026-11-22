@@ -317,6 +317,10 @@ func test_big_world_broken_dicts_give_null() -> String:
 		"pack id repeated": func(d): d.packs.append(d.packs[0].duplicate()),
 		"stone not a dict": func(d): d.stones.append("w2"),
 		"props not array": func(d): d.props = {},
+		"props_dir not res": func(d): d.props_dir = "/etc",
+		"props_dir user": func(d): d.props_dir = "user://p",
+		"props_dir text res inside": func(d): d.props_dir = "../res://p",
+		"atlas file not res": func(d): d.atlas.file = "/tmp/x.png",
 	}
 	for k in cases:
 		var d := _small()
